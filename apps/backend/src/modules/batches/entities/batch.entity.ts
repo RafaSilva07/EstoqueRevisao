@@ -23,11 +23,14 @@ export class BatchEntity {
   @JoinColumn({ name: 'product_id' })
   product!: ProductEntity;
 
-  @Column({ type: 'varchar', length: 100 })
+  @Column({ type: 'varchar', length: 6 })
   code!: string;
 
-  @Column({ name: 'expiration_date', type: 'date', nullable: true })
-  expirationDate!: string | null;
+  @Column({ name: 'manufacturing_date', type: 'date' })
+  manufacturingDate!: string;
+
+  @Column({ name: 'expiration_date', type: 'date' })
+  expirationDate!: string;
 
   @Column({ name: 'created_by', type: 'uuid' })
   createdById!: string;

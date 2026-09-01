@@ -2,7 +2,7 @@ import { Transform } from 'class-transformer';
 import { IsDateString, IsOptional, IsString, Matches } from 'class-validator';
 import { uppercaseString } from '../../../shared/validation/transforms';
 
-export class UpdateBatchDto {
+export class ResolveBatchCodeDto {
   @IsOptional()
   @Transform(uppercaseString)
   @IsString()
@@ -13,9 +13,4 @@ export class UpdateBatchDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   @IsDateString({ strict: true })
   manufacturingDate?: string;
-
-  @IsOptional()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/)
-  @IsDateString({ strict: true })
-  expirationDate?: string;
 }

@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import { getPostgresError } from '../../shared/database/postgres-error';
 import { PaginatedResult, paginate } from '../../shared/pagination/paginated-result.interface';
 import { AuditService } from '../audit/audit.service';
@@ -10,6 +10,12 @@ import { BatchQueryDto } from './dto/batch-query.dto';
 import { CreateBatchDto } from './dto/create-batch.dto';
 import { UpdateBatchDto } from './dto/update-batch.dto';
 import { BatchEntity } from './entities/batch.entity';
+import {
+  BatchCodeCodec,
+  BatchCodeError,
+  ResolvedBatchCode,
+} from './domain/batch-code.codec';
+import { ResolveBatchCodeDto } from './dto/resolve-batch-code.dto';
 
 @Injectable()
 export class BatchesService {
@@ -18,7 +24,12 @@ export class BatchesService {
     private readonly productsRepository: ProductsRepository,
     private readonly auditService: AuditService,
     private readonly dataSource: DataSource,
+    private readonly batchCodeCodec: BatchCodeCodec,
   ) {}
+
+  resolveCode(dto: ResolveBatchCodeDto): ResolvedBatchCode {
+    return this.resolveBatch(dto.code, dto.manufacturingDate);
+  }
 
   async list(query: BatchQueryDto): Promise<PaginatedResult<BatchEntity>> {
     const [items, total] = await this.batchesRepository.findAndCount(query);
@@ -38,6 +49,9 @@ export class BatchesService {
     userId: string,
     metadata: AuditRequestMetadata,
   ): Promise<BatchEntity> {
+    const resolved = this.resolveBatch(dto.code, dto.manufacturingDate);
+    this.validateExpiration(resolved.manufacturingDate, dto.expirationDate);
+
     return this.dataSource.transaction(async (manager) => {
       const product = await this.productsRepository.findById(dto.productId, manager);
       if (!product) {
@@ -49,14 +63,20 @@ export class BatchesService {
           message: 'Nao e permitido cadastrar lote para produto inativo.',
         });
       }
-      if (await this.batchesRepository.existsByCode(dto.productId, dto.code, undefined, manager)) {
+      if (await this.batchesRepository.existsByCode(
+        dto.productId,
+        resolved.code,
+        undefined,
+        manager,
+      )) {
         throw this.duplicate();
       }
 
       const batch = new BatchEntity();
       batch.productId = dto.productId;
-      batch.code = dto.code;
-      batch.expirationDate = dto.expirationDate ?? null;
+      batch.code = resolved.code;
+      batch.manufacturingDate = resolved.manufacturingDate;
+      batch.expirationDate = dto.expirationDate;
       batch.createdById = userId;
       batch.updatedById = userId;
       await this.save(batch, manager);
@@ -89,14 +109,17 @@ export class BatchesService {
         throw this.notFound();
       }
       const before = this.snapshot(batch);
-      const code = dto.code ?? batch.code;
-      if (await this.batchesRepository.existsByCode(batch.productId, code, id, manager)) {
+      const resolved = dto.code || dto.manufacturingDate
+        ? this.resolveBatch(dto.code, dto.manufacturingDate)
+        : { code: batch.code, manufacturingDate: batch.manufacturingDate };
+      const expirationDate = dto.expirationDate ?? batch.expirationDate;
+      this.validateExpiration(resolved.manufacturingDate, expirationDate);
+      if (await this.batchesRepository.existsByCode(batch.productId, resolved.code, id, manager)) {
         throw this.duplicate();
       }
-      batch.code = code;
-      if (dto.expirationDate !== undefined) {
-        batch.expirationDate = dto.expirationDate;
-      }
+      batch.code = resolved.code;
+      batch.manufacturingDate = resolved.manufacturingDate;
+      batch.expirationDate = expirationDate;
       batch.updatedById = userId;
       await this.save(batch, manager);
       await this.auditService.record({
@@ -114,7 +137,7 @@ export class BatchesService {
     });
   }
 
-  private async save(batch: BatchEntity, manager: Parameters<BatchesRepository['save']>[1]): Promise<void> {
+  private async save(batch: BatchEntity, manager: EntityManager): Promise<void> {
     try {
       await this.batchesRepository.save(batch, manager);
     } catch (error: unknown) {
@@ -129,6 +152,7 @@ export class BatchesService {
     return {
       productId: batch.productId,
       code: batch.code,
+      manufacturingDate: batch.manufacturingDate,
       expirationDate: batch.expirationDate,
     };
   }
@@ -142,5 +166,25 @@ export class BatchesService {
       code: 'BATCH_CODE_ALREADY_EXISTS',
       message: 'Ja existe um lote com esse codigo para o produto.',
     });
+  }
+
+  private resolveBatch(code?: string, manufacturingDate?: string): ResolvedBatchCode {
+    try {
+      return this.batchCodeCodec.resolve(code, manufacturingDate);
+    } catch (error: unknown) {
+      if (error instanceof BatchCodeError) {
+        throw new BadRequestException({ code: error.code, message: error.message });
+      }
+      throw error;
+    }
+  }
+
+  private validateExpiration(manufacturingDate: string, expirationDate: string): void {
+    if (expirationDate < manufacturingDate) {
+      throw new BadRequestException({
+        code: 'EXPIRATION_BEFORE_MANUFACTURING',
+        message: 'A data de validade nao pode ser anterior a data de fabricacao.',
+      });
+    }
   }
 }

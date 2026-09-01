@@ -1,20 +1,23 @@
 import { Transform } from 'class-transformer';
-import { IsDateString, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
-import { emptyStringToNull, trimString } from '../../../shared/validation/transforms';
+import { IsDateString, IsOptional, IsString, IsUUID, Matches } from 'class-validator';
+import { uppercaseString } from '../../../shared/validation/transforms';
 
 export class CreateBatchDto {
   @IsUUID()
   productId!: string;
 
-  @Transform(trimString)
+  @IsOptional()
+  @Transform(uppercaseString)
   @IsString()
-  @MinLength(1)
-  @MaxLength(100)
-  code!: string;
+  @Matches(/^[CONSERVADI]{6}$/)
+  code?: string;
 
   @IsOptional()
-  @Transform(emptyStringToNull)
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   @IsDateString({ strict: true })
-  expirationDate?: string | null;
+  manufacturingDate?: string;
+
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  @IsDateString({ strict: true })
+  expirationDate!: string;
 }

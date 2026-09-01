@@ -1,10 +1,11 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import { ProductEntity } from '../products/entities/product.entity';
 import { ProductsRepository } from '../products/products.repository';
 import { BatchesRepository } from './batches.repository';
 import { BatchesService } from './batches.service';
+import { BatchCodeCodec } from './domain/batch-code.codec';
 
 describe('BatchesService', () => {
   const manager = {} as EntityManager;
@@ -19,10 +20,12 @@ describe('BatchesService', () => {
     products as unknown as ProductsRepository,
     audit as unknown as AuditService,
     dataSource as unknown as DataSource,
+    new BatchCodeCodec(),
   );
   const dto = {
     productId: '10000000-0000-4000-8000-000000000001',
-    code: 'L001',
+    code: 'SOCDNV',
+    manufacturingDate: '2026-08-31',
     expirationDate: '2027-01-31',
   };
 
@@ -58,5 +61,37 @@ describe('BatchesService', () => {
       productId: dto.productId,
       code: dto.code,
     }), manager);
+  });
+
+  it('gera o lote quando somente a data de fabricacao e informada', async () => {
+    products.findById.mockResolvedValue(Object.assign(new ProductEntity(), { active: true }));
+    batches.existsByCode.mockResolvedValue(false);
+    batches.save.mockImplementation((batch: unknown) => Promise.resolve(batch));
+
+    const result = await service.create({
+      productId: dto.productId,
+      manufacturingDate: '2026-08-31',
+      expirationDate: '2027-01-31',
+    }, 'user-id', { requestId: 'request-2', ipAddress: null, userAgent: null });
+
+    expect(result.code).toBe('SOCDNV');
+    expect(result.manufacturingDate).toBe('2026-08-31');
+  });
+
+  it('rejeita lote divergente da data de fabricacao', async () => {
+    await expect(service.create({
+      ...dto,
+      manufacturingDate: '2026-08-30',
+    }, 'user-id', { requestId: 'request-3', ipAddress: null, userAgent: null }))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(products.findById).not.toHaveBeenCalled();
+  });
+
+  it('rejeita validade anterior a fabricacao', async () => {
+    await expect(service.create({
+      ...dto,
+      expirationDate: '2026-08-30',
+    }, 'user-id', { requestId: 'request-4', ipAddress: null, userAgent: null }))
+      .rejects.toBeInstanceOf(BadRequestException);
   });
 });

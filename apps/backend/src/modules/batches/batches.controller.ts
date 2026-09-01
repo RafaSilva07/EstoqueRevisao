@@ -9,10 +9,18 @@ import { BatchQueryDto } from './dto/batch-query.dto';
 import { CreateBatchDto } from './dto/create-batch.dto';
 import { UpdateBatchDto } from './dto/update-batch.dto';
 import { BatchEntity } from './entities/batch.entity';
+import { ResolveBatchCodeDto } from './dto/resolve-batch-code.dto';
+import { ResolvedBatchCode } from './domain/batch-code.codec';
 
 @Controller('batches')
 export class BatchesController {
   constructor(private readonly service: BatchesService) {}
+
+  @Post('resolve-code')
+  @RequirePermissions('batches.read')
+  resolveCode(@Body() dto: ResolveBatchCodeDto): ResolvedBatchCode {
+    return this.service.resolveCode(dto);
+  }
 
   @Get()
   @RequirePermissions('batches.read')

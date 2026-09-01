@@ -11,6 +11,8 @@ import { BatchEntity } from '../modules/batches/entities/batch.entity';
 import { StockLocationEntity } from '../modules/stocks/entities/stock-location.entity';
 import { InitialFoundation1788134400000 } from './migrations/1788134400000-initial-foundation';
 import { BaseRegistries1788220800000 } from './migrations/1788220800000-base-registries';
+import { StockPositionEntity } from '../modules/stocks/entities/stock-position.entity';
+import { BatchManufacturingAndStockPositions1788307200000 } from './migrations/1788307200000-batch-manufacturing-and-stock-positions';
 
 export const databaseEntities = [
   UserEntity,
@@ -22,11 +24,13 @@ export const databaseEntities = [
   ProductUnitConversionEntity,
   BatchEntity,
   StockLocationEntity,
+  StockPositionEntity,
 ];
 
 export const databaseMigrations = [
   InitialFoundation1788134400000,
   BaseRegistries1788220800000,
+  BatchManufacturingAndStockPositions1788307200000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {
