@@ -1,0 +1,127 @@
+export interface UserSession {
+  id: string;
+  username: string;
+  roles: string[];
+  permissions: string[];
+}
+
+export interface AuthenticationResult {
+  accessToken: string;
+  user: UserSession;
+}
+
+export interface Paginated<T> {
+  items: T[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
+export interface Product {
+  id: string;
+  code: string;
+  name: string;
+  defaultUnit: string;
+  active: boolean;
+}
+
+export interface Batch {
+  id: string;
+  productId: string;
+  code: string;
+  expirationDate: string | null;
+  product?: Product;
+}
+
+export interface UnitConversion {
+  id: string;
+  productId: string;
+  fromUnit: string;
+  toUnit: string;
+  factor: number;
+  active: boolean;
+}
+
+export type StockLocationKind = 'STOCK' | 'SUBSTOCK' | 'EXTERNAL';
+
+export interface StockLocation {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  kind: StockLocationKind;
+  parentId: string | null;
+  active: boolean;
+}
+
+interface ErrorEnvelope {
+  error?: { message?: string };
+}
+
+const configuredUrl: unknown = import.meta.env.VITE_API_URL;
+const apiUrl = typeof configuredUrl === 'string'
+  ? configuredUrl
+  : 'http://localhost:3000/api/v1';
+
+export class ApiClient {
+  private accessToken: string | null = null;
+
+  async login(username: string, password: string): Promise<AuthenticationResult> {
+    const result = await this.request<AuthenticationResult>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    }, false);
+    this.accessToken = result.accessToken;
+    return result;
+  }
+
+  async refresh(): Promise<AuthenticationResult | null> {
+    try {
+      const result = await this.request<AuthenticationResult>('/auth/refresh', {
+        method: 'POST',
+      }, false);
+      this.accessToken = result.accessToken;
+      return result;
+    } catch {
+      return null;
+    }
+  }
+
+  async logout(): Promise<void> {
+    await this.request<void>('/auth/logout', { method: 'POST' }, false);
+    this.accessToken = null;
+  }
+
+  get<T>(path: string): Promise<T> {
+    return this.request<T>(path);
+  }
+
+  post<T>(path: string, body: unknown): Promise<T> {
+    return this.request<T>(path, { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  patch<T>(path: string, body: unknown): Promise<T> {
+    return this.request<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
+  }
+
+  private async request<T>(path: string, options: RequestInit = {}, authenticated = true): Promise<T> {
+    const headers = new Headers(options.headers);
+    if (options.body) headers.set('Content-Type', 'application/json');
+    if (authenticated && this.accessToken) headers.set('Authorization', `Bearer ${this.accessToken}`);
+    const response = await fetch(`${apiUrl}${path}`, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({})) as ErrorEnvelope;
+      throw new Error(payload.error?.message ?? 'Nao foi possivel concluir a operacao.');
+    }
+    return response.status === 204 ? undefined as T : response.json() as Promise<T>;
+  }
+}
+
+export const api = new ApiClient();

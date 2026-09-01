@@ -10,6 +10,9 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from './modules/auth/guards/permissions.guard';
 import { HealthModule } from './modules/health/health.module';
 import { UsersModule } from './modules/users/users.module';
+import { ProductsModule } from './modules/products/products.module';
+import { BatchesModule } from './modules/batches/batches.module';
+import { StocksModule } from './modules/stocks/stocks.module';
 import { GlobalExceptionFilter } from './shared/http/global-exception.filter';
 import { LoggingModule } from './shared/logging/logging.module';
 import { RequestContextMiddleware } from './shared/logging/request-context.middleware';
@@ -30,6 +33,9 @@ import { RequestContextMiddleware } from './shared/logging/request-context.middl
     UsersModule,
     AuditModule,
     AuthModule,
+    ProductsModule,
+    BatchesModule,
+    StocksModule,
     HealthModule,
   ],
   providers: [

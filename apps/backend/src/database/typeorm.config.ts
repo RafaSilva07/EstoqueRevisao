@@ -5,7 +5,12 @@ import { AuthSessionEntity } from '../modules/auth/entities/auth-session.entity'
 import { PermissionEntity } from '../modules/users/entities/permission.entity';
 import { RoleEntity } from '../modules/users/entities/role.entity';
 import { UserEntity } from '../modules/users/entities/user.entity';
+import { ProductEntity } from '../modules/products/entities/product.entity';
+import { ProductUnitConversionEntity } from '../modules/products/entities/product-unit-conversion.entity';
+import { BatchEntity } from '../modules/batches/entities/batch.entity';
+import { StockLocationEntity } from '../modules/stocks/entities/stock-location.entity';
 import { InitialFoundation1788134400000 } from './migrations/1788134400000-initial-foundation';
+import { BaseRegistries1788220800000 } from './migrations/1788220800000-base-registries';
 
 export const databaseEntities = [
   UserEntity,
@@ -13,9 +18,16 @@ export const databaseEntities = [
   PermissionEntity,
   AuthSessionEntity,
   AuditLogEntity,
+  ProductEntity,
+  ProductUnitConversionEntity,
+  BatchEntity,
+  StockLocationEntity,
 ];
 
-export const databaseMigrations = [InitialFoundation1788134400000];
+export const databaseMigrations = [
+  InitialFoundation1788134400000,
+  BaseRegistries1788220800000,
+];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {
   const useSsl = configService.getOrThrow<boolean>('DATABASE_SSL');

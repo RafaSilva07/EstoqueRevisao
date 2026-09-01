@@ -5,6 +5,7 @@ import { AuditLogEntity } from '../../modules/audit/entities/audit-log.entity';
 import { PasswordHasherService } from '../../modules/auth/password-hasher.service';
 import { UserStatus } from '../../modules/users/domain/user-status.enum';
 import { UserEntity } from '../../modules/users/entities/user.entity';
+import { RoleEntity } from '../../modules/users/entities/role.entity';
 import dataSource from '../data-source';
 
 function requiredEnvironment(name: string): string {
@@ -26,6 +27,7 @@ function numberEnvironment(name: string, fallback: number): number {
 async function createUser(): Promise<void> {
   const username = requiredEnvironment('BOOTSTRAP_USERNAME');
   const password = requiredEnvironment('BOOTSTRAP_PASSWORD');
+  const roleCode = process.env.BOOTSTRAP_ROLE_CODE?.trim() || 'ADMIN';
 
   if (username.length > 100) {
     throw new Error('BOOTSTRAP_USERNAME deve ter no maximo 100 caracteres.');
@@ -58,7 +60,22 @@ async function createUser(): Promise<void> {
     user.status = UserStatus.Active;
 
     await dataSource.transaction(async (manager) => {
+      const role = await manager
+        .getRepository(RoleEntity)
+        .createQueryBuilder('role')
+        .where('UPPER(role.code) = UPPER(:roleCode)', { roleCode })
+        .getOne();
+      if (!role) {
+        throw new Error(`O perfil ${roleCode} nao existe. Execute as migrations antes.`);
+      }
+
       await manager.save(user);
+      await manager
+        .createQueryBuilder()
+        .insert()
+        .into('user_roles')
+        .values({ user_id: user.id, role_id: role.id })
+        .execute();
 
       const audit = new AuditLogEntity();
       audit.userId = null;
@@ -67,14 +84,14 @@ async function createUser(): Promise<void> {
       audit.entityId = user.id;
       audit.result = 'SUCCESS';
       audit.oldValues = null;
-      audit.newValues = { username: user.username, status: user.status };
+      audit.newValues = { username: user.username, status: user.status, role: role.code };
       audit.ipAddress = null;
       audit.userAgent = 'database-script';
       audit.requestId = randomUUID();
       await manager.save(audit);
     });
 
-    process.stdout.write(`Usuario criado com id ${user.id}. Nenhuma permissao foi atribuida.\n`);
+    process.stdout.write(`Usuario criado com id ${user.id} e perfil ${roleCode}.\n`);
   } finally {
     await dataSource.destroy();
   }

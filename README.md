@@ -1,90 +1,86 @@
 # EstoqueRevisao
 
-Fundacao tecnica do Sistema Web de Controle do Estoque da Revisao. O projeto segue a arquitetura oficial registrada em `documentos/`: frontend React/Vite e API NestJS em monolito modular, com PostgreSQL.
+Sistema web para controle do estoque da Revisao, estruturado como monolito modular. A stack oficial e React com TypeScript/Vite no frontend, NestJS com TypeScript no backend e PostgreSQL 17, executado localmente por Docker Compose.
 
-Esta etapa entrega infraestrutura. Os modulos completos de estoque, movimentacoes e revisoes ainda nao foram implementados.
+Esta etapa entrega os cadastros base de produtos, lotes, conversoes de unidade e estoques/locais logicos. Saldos, movimentacoes, revisoes, transferencias e relatorios operacionais ainda nao fazem parte do sistema.
 
 ## Estrutura
 
 ```text
 apps/
-  backend/
-    src/
-      config/       validacao das variaveis de ambiente
-      database/     TypeORM, migrations e scripts operacionais
-      modules/
-        auth/       login, refresh, logout e guards
-        users/      usuarios, perfis e permissoes
-        audit/      trilha de auditoria persistente
-        health/     verificacao da API e do PostgreSQL
-      shared/       erros, logs, request ID e seguranca transversal
-  frontend/         shell React/Vite e verificacao do health check
-documentos/         fonte oficial de decisoes do sistema
+  backend/src/
+    config/             configuracao e validacao do ambiente
+    database/           TypeORM, migrations e scripts operacionais
+    modules/
+      auth/             login, sessao rotativa, guards e permissoes
+      users/            usuarios e perfis
+      audit/            trilha de auditoria persistente
+      products/         produtos e conversoes de unidade
+      batches/          lotes vinculados a produtos
+      stocks/           estoques, subestoques e pontos externos
+      health/           saude da API e do banco
+    shared/             erros, logs, paginacao e validacao
+  frontend/src/         cliente da API e telas dos cadastros base
+documentos/             decisoes oficiais, ADRs e relatorios das etapas
+docker-compose.yml      PostgreSQL para desenvolvimento
 ```
-
-O npm workspace na raiz executa os dois aplicativos sem acoplar suas responsabilidades.
 
 ## Pre-requisitos
 
 - Node.js 22 ou superior;
 - npm 11 ou superior;
-- PostgreSQL acessivel localmente ou por URL.
+- Docker Desktop com Docker Compose.
 
-Docker nao e necessario para desenvolvimento. O codigo usa configuracao externa e escuta em `0.0.0.0`, portanto podera ser empacotado em container sem alterar o dominio.
+Nao e preciso instalar PostgreSQL diretamente na maquina.
 
-## Configuracao local
+## Configuracao e banco
 
-1. Copie o arquivo de exemplo:
+1. Crie o arquivo local de configuracao:
 
    ```powershell
    Copy-Item .env.example .env
    ```
 
-2. Edite `.env`, principalmente `DATABASE_URL`, `JWT_ACCESS_SECRET` e `BOOTSTRAP_PASSWORD`. O segredo JWT deve ter no minimo 32 caracteres e nao deve ser versionado.
+2. Troque no `.env` pelo menos `POSTGRES_PASSWORD`, `DATABASE_URL`, `JWT_ACCESS_SECRET` e `BOOTSTRAP_PASSWORD`. A senha presente na `DATABASE_URL` deve ser igual a `POSTGRES_PASSWORD`. Use um segredo JWT aleatorio com no minimo 32 caracteres.
 
-3. Instale as dependencias:
+3. Instale as dependencias e suba o PostgreSQL:
 
    ```powershell
    npm install
+   npm run docker:up
    ```
 
-## PostgreSQL
+   O comando aguarda o health check do container. Por padrao, o PostgreSQL fica disponivel apenas em `127.0.0.1:5432` e os dados persistem no volume nomeado `postgres_data`. Se a porta estiver ocupada, altere `POSTGRES_PORT` e a porta da `DATABASE_URL` no `.env`.
 
-No PostgreSQL, crie um usuario e um banco dedicados. O exemplo abaixo deve ser executado por um administrador do banco, trocando a senha:
+4. Aplique e confira as migrations:
 
-```sql
-CREATE ROLE estoque_revisao_app WITH LOGIN PASSWORD 'troque_esta_senha';
-CREATE DATABASE estoque_revisao OWNER estoque_revisao_app;
-```
+   ```powershell
+   npm run db:migration:run
+   npm run db:migration:show
+   ```
 
-Confirme que a `DATABASE_URL` do `.env` aponta para esse banco e aplique o schema:
+   `synchronize` permanece desativado. O schema so evolui por migrations versionadas. Datas e horarios persistentes usam `timestamptz` e trafegam em ISO 8601/UTC; a validade de lote usa o tipo `date`, pois nao representa um instante do dia.
 
-```powershell
-npm run db:migration:run
-npm run db:migration:show
-```
+5. Crie o primeiro usuario:
 
-Para desfazer somente a ultima migration em ambiente de desenvolvimento:
+   ```powershell
+   npm run db:user:create
+   ```
 
-```powershell
-npm run db:migration:revert
-```
+   O script usa `BOOTSTRAP_USERNAME`, `BOOTSTRAP_PASSWORD` e `BOOTSTRAP_ROLE_CODE`. O perfil `ADMIN`, criado pela migration, recebe as permissoes desta etapa. A senha e armazenada exclusivamente como hash Argon2id com salt e o bootstrap e auditado sem expor credenciais.
 
-`synchronize` esta desativado. Toda alteracao de schema deve ser versionada por migration. As colunas de data usam `timestamptz`; a aplicacao trafega datas em ISO 8601/UTC.
-
-## Primeiro usuario
-
-Depois das migrations, defina `BOOTSTRAP_USERNAME` e `BOOTSTRAP_PASSWORD` no `.env` e execute:
+Comandos operacionais do container:
 
 ```powershell
-npm run db:user:create
+npm run docker:logs
+npm run docker:down
 ```
 
-O comando gera um hash Argon2id com salt, cria o usuario em transacao e registra a acao na auditoria sem gravar a senha. Nenhum perfil ou permissao e atribuido automaticamente, pois a matriz funcional ainda precisa ser definida. Nao existe cadastro publico de usuarios.
+`docker:down` preserva o volume do banco. A exclusao do volume deve ser uma decisao explicita do operador.
 
 ## Execucao
 
-Em terminais separados:
+Em dois terminais:
 
 ```powershell
 npm run dev:backend
@@ -92,15 +88,23 @@ npm run dev:frontend
 ```
 
 - Frontend: `http://localhost:5173`
-- API: `http://localhost:3000/api/v1`
+- API REST: `http://localhost:3000/api/v1`
 - Health check: `GET http://localhost:3000/api/v1/health`
 
-Rotas de autenticacao preparadas:
+O frontend restaura a sessao pelo refresh token HttpOnly, mantem o access token apenas em memoria e apresenta telas de consulta, criacao e edicao de produtos, lotes e estoques/locais.
 
-- `POST /api/v1/auth/login` com `username` e `password`;
-- `POST /api/v1/auth/refresh` usando cookie HttpOnly rotativo;
-- `POST /api/v1/auth/logout`, que revoga a sessao;
-- `GET /api/v1/auth/me` com access token Bearer.
+## API preparada nesta etapa
+
+- produtos: listagem paginada com busca/status, detalhe, criacao, edicao e ativacao/inativacao;
+- conversoes: listagem por produto, criacao, edicao e ativacao/inativacao;
+- lotes: listagem paginada com filtros, detalhe, criacao e edicao, sempre vinculados a um produto;
+- estoques/locais: listagem paginada com filtros, detalhe, criacao, edicao e ativacao/inativacao;
+- autenticacao: login, refresh rotativo, logout e consulta da sessao;
+- autorizacao: permissoes especificas aplicadas em todas as rotas de cadastro;
+- auditoria: usuario, acao, entidade, identificador, data/hora, valores anteriores e novos;
+- validacao e erros: DTOs com whitelist e envelope de erro padronizado.
+
+Os locais iniciais sao configuracao persistida no banco: Revisao, Revisar, Lata Boa, Varejo, TUF, Expedicao e Producao. Nenhum saldo foi adicionado a produto, lote ou local.
 
 ## Verificacoes
 
@@ -108,17 +112,18 @@ Rotas de autenticacao preparadas:
 npm run build
 npm run lint
 npm test
+npm run db:migration:show
+docker compose config
 ```
 
-## Decisoes de seguranca e rastreabilidade
+Para validar reversibilidade em ambiente descartavel, use `npm run db:migration:revert` e reaplique com `npm run db:migration:run`.
 
-- senha armazenada exclusivamente como hash Argon2id com salt e custos configuraveis;
-- access token JWT curto e refresh token aleatorio, rotativo e persistido somente por hash SHA-256;
-- sessao consultada no backend a cada acesso, permitindo revogacao efetiva no logout;
-- perfis e permissoes modelados separadamente e aplicados por guards no backend;
-- auditoria independente do log tecnico e do futuro historico de estoque;
-- logs JSON com request ID, sem corpo da requisicao e com remocao defensiva de chaves sensiveis;
-- erros e validacao seguem um envelope unico, com `code`, `message`, `requestId`, `timestamp` e `path`;
-- migration com constraints, chaves estrangeiras e indices adequados para a fundacao atual.
+## Seguranca e integridade
 
-Os dados de auditoria nao possuem endpoints de edicao ou exclusao. Operacoes futuras que afetem estoque devem usar uma transacao TypeORM e passar o mesmo `EntityManager` para persistencia operacional, saldo e `AuditService`.
+- JWT de curta duracao e refresh token aleatorio, rotativo, em cookie HttpOnly e persistido somente por SHA-256;
+- senha Argon2id, sem armazenamento ou log de senha em texto puro;
+- logs JSON com request ID e remocao defensiva de campos sensiveis;
+- chaves estrangeiras `RESTRICT`, checks, indices e unicidade sem diferenca de maiusculas/minusculas nos codigos;
+- inativacao no lugar de exclusao fisica dos cadastros aplicaveis;
+- transacoes TypeORM compartilhadas entre operacao e auditoria;
+- separacao entre locais logicos, futuro mapa fisico e futuros saldos.
