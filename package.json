@@ -1,0 +1,30 @@
+{
+  "name": "estoque-revisao",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev:backend": "npm run start:dev --workspace @estoque-revisao/backend",
+    "dev:frontend": "npm run dev --workspace @estoque-revisao/frontend",
+    "lint": "eslint . --max-warnings=0",
+    "test": "npm run test --workspaces --if-present",
+    "db:migration:run": "npm run migration:run --workspace @estoque-revisao/backend",
+    "db:migration:revert": "npm run migration:revert --workspace @estoque-revisao/backend",
+    "db:migration:show": "npm run migration:show --workspace @estoque-revisao/backend",
+    "db:user:create": "npm run user:create --workspace @estoque-revisao/backend"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.9.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.5",
+    "globals": "^17.11.0",
+    "typescript-eslint": "^8.69.0"
+  }
+}
