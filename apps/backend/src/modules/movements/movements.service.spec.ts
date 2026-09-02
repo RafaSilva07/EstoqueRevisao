@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import { StockLocationKind } from '../stocks/domain/stock-location-kind.enum';
@@ -26,7 +26,7 @@ describe('MovementsService', () => {
   };
   const repository = { findByRequestKey: jest.fn(), findById: jest.fn(), findAndCount: jest.fn(), save: jest.fn(), saveItems: jest.fn() };
   const locations = { findById: jest.fn() };
-  const stock = { addQuantity: jest.fn() };
+  const stock = { addQuantity: jest.fn(), removeQuantity: jest.fn() };
   const audit = { record: jest.fn() };
   const dataSource = { transaction: jest.fn((operation: (value: EntityManager) => unknown) => operation(manager)) };
   const service = new MovementsService(repository as unknown as MovementsRepository, locations as unknown as StockLocationsRepository, stock as unknown as StockPositionsService, audit as unknown as AuditService, dataSource as unknown as DataSource);
@@ -39,6 +39,7 @@ describe('MovementsService', () => {
     repository.findById.mockImplementation((id: string) => Promise.resolve(Object.assign(new MovementEntity(), { id, items: [] })));
     locations.findById.mockImplementation((id: string) => Promise.resolve(Object.assign(new StockLocationEntity(), { id, active: true, kind: id === originId ? StockLocationKind.External : StockLocationKind.Substock })));
     stock.addQuantity.mockResolvedValue({});
+    stock.removeQuantity.mockResolvedValue({});
   });
 
   it('registra cabecalho e varios itens em uma unica transacao', async () => {
@@ -56,7 +57,7 @@ describe('MovementsService', () => {
 
   it('nao tenta reduzir saldo da origem externa', async () => {
     await service.createExternalEntry(dto, userId, { requestId: dto.requestKey, ipAddress: null, userAgent: null });
-    expect(stock).not.toHaveProperty('removeQuantity');
+    expect(stock.removeQuantity).not.toHaveBeenCalled();
   });
 
   it('rejeita origem que nao seja externa e ativa', async () => {
@@ -88,7 +89,11 @@ describe('MovementsService', () => {
   });
 
   it('protege reenvio duplicado retornando a movimentacao existente', async () => {
-    const existing = Object.assign(new MovementEntity(), { requestKey: dto.requestKey, responsibleUserId: userId });
+    const existing = Object.assign(new MovementEntity(), {
+      requestKey: dto.requestKey,
+      responsibleUserId: userId,
+      type: MovementType.ExternalEntry,
+    });
     repository.findByRequestKey.mockResolvedValue(existing);
     await expect(service.createExternalEntry(dto, userId, { requestId: dto.requestKey, ipAddress: null, userAgent: null })).resolves.toBe(existing);
     expect(dataSource.transaction).not.toHaveBeenCalled();
@@ -112,5 +117,130 @@ describe('MovementsService', () => {
     await expect(service.getById('80000000-0000-4000-8000-000000000099')).rejects.toBeInstanceOf(NotFoundException);
     expect(service).not.toHaveProperty('update');
     expect(service).not.toHaveProperty('remove');
+  });
+
+  describe('saida externa', () => {
+    const exitDto = {
+      ...dto,
+      requestKey: '50000000-0000-4000-8000-000000000002',
+      originLocationId: destinationId,
+      destinationLocationId: originId,
+    };
+
+    beforeEach(() => {
+      locations.findById.mockImplementation((id: string) => Promise.resolve(
+        Object.assign(new StockLocationEntity(), {
+          id,
+          active: true,
+          kind: id === originId ? StockLocationKind.External : StockLocationKind.Substock,
+        }),
+      ));
+    });
+
+    it('reduz todos os itens somente na origem controlada', async () => {
+      await service.createExternalExit(exitDto, userId, {
+        requestId: exitDto.requestKey, ipAddress: null, userAgent: null,
+      });
+      expect(stock.removeQuantity).toHaveBeenNthCalledWith(1, {
+        productId: exitDto.items[0].productId,
+        batchId: exitDto.items[0].batchId,
+        stockLocationId: destinationId,
+      }, 10, manager);
+      expect(stock.removeQuantity).toHaveBeenNthCalledWith(2, {
+        productId: exitDto.items[1].productId,
+        batchId: exitDto.items[1].batchId,
+        stockLocationId: destinationId,
+      }, 2.5, manager);
+      expect(stock.addQuantity).not.toHaveBeenCalled();
+    });
+
+    it('grava tipo, responsavel e auditoria de saida', async () => {
+      await service.createExternalExit(exitDto, userId, {
+        requestId: exitDto.requestKey, ipAddress: null, userAgent: null,
+      });
+      expect(repository.save).toHaveBeenCalledWith(expect.objectContaining({
+        type: MovementType.ExternalExit,
+        responsibleUserId: userId,
+      }), manager);
+      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
+        manager,
+        userId,
+        action: 'EXTERNAL_EXIT_CREATE',
+      }));
+    });
+
+    it('rejeita origem externa', async () => {
+      locations.findById.mockResolvedValue(Object.assign(new StockLocationEntity(), {
+        active: true,
+        kind: StockLocationKind.External,
+      }));
+      await expect(service.createExternalExit(exitDto, userId, {
+        requestId: exitDto.requestKey, ipAddress: null, userAgent: null,
+      })).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejeita destino interno', async () => {
+      locations.findById.mockResolvedValue(Object.assign(new StockLocationEntity(), {
+        active: true,
+        kind: StockLocationKind.Substock,
+      }));
+      await expect(service.createExternalExit(exitDto, userId, {
+        requestId: exitDto.requestKey, ipAddress: null, userAgent: null,
+      })).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejeita produto e lote duplicados antes de abrir transacao', async () => {
+      try {
+        await service.createExternalExit({
+          ...exitDto,
+          items: [exitDto.items[0], { ...exitDto.items[0], quantity: 1 }],
+        }, userId, {
+          requestId: exitDto.requestKey, ipAddress: null, userAgent: null,
+        });
+        throw new Error('A saida deveria rejeitar itens duplicados.');
+      } catch (error: unknown) {
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect((error as BadRequestException).getResponse()).toEqual({
+          code: 'DUPLICATE_MOVEMENT_ITEM',
+          message: 'O mesmo produto e lote nao pode aparecer duas vezes na mesma saida.',
+        });
+      }
+      expect(dataSource.transaction).not.toHaveBeenCalled();
+    });
+
+    it('propaga saldo insuficiente e nao grava itens nem auditoria', async () => {
+      stock.removeQuantity.mockRejectedValueOnce(new ConflictException({
+        code: 'INSUFFICIENT_STOCK', message: 'Saldo insuficiente. Disponivel: 5.',
+      }));
+      await expect(service.createExternalExit(exitDto, userId, {
+        requestId: exitDto.requestKey, ipAddress: null, userAgent: null,
+      })).rejects.toBeInstanceOf(ConflictException);
+      expect(repository.saveItems).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('protege reenvio idempotente da mesma saida', async () => {
+      const existing = Object.assign(new MovementEntity(), {
+        requestKey: exitDto.requestKey,
+        responsibleUserId: userId,
+        type: MovementType.ExternalExit,
+      });
+      repository.findByRequestKey.mockResolvedValue(existing);
+      await expect(service.createExternalExit(exitDto, userId, {
+        requestId: exitDto.requestKey, ipAddress: null, userAgent: null,
+      })).resolves.toBe(existing);
+      expect(dataSource.transaction).not.toHaveBeenCalled();
+    });
+
+    it('nao aceita reutilizar chave de uma entrada para uma saida', async () => {
+      repository.findByRequestKey.mockResolvedValue(Object.assign(new MovementEntity(), {
+        requestKey: exitDto.requestKey,
+        responsibleUserId: userId,
+        type: MovementType.ExternalEntry,
+      }));
+      await expect(service.createExternalExit(exitDto, userId, {
+        requestId: exitDto.requestKey, ipAddress: null, userAgent: null,
+      })).rejects.toBeInstanceOf(ConflictException);
+    });
   });
 });

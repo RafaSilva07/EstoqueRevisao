@@ -22,7 +22,8 @@ export class StockPositionsRepository {
       .createQueryBuilder('position')
       .innerJoinAndSelect('position.product', 'product')
       .innerJoinAndSelect('position.batch', 'batch')
-      .innerJoinAndSelect('position.stockLocation', 'stockLocation');
+      .innerJoinAndSelect('position.stockLocation', 'stockLocation')
+      .where('position.quantity > 0');
 
     if (query.productId) {
       builder.andWhere('position.productId = :productId', { productId: query.productId });

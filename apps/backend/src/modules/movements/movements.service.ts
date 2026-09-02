@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import { getPostgresError } from '../../shared/database/postgres-error';
 import { paginate, PaginatedResult } from '../../shared/pagination/paginated-result.interface';
 import { AuditService } from '../audit/audit.service';
@@ -9,11 +9,27 @@ import { StockLocationsRepository } from '../stocks/stock-locations.repository';
 import { StockPositionsService } from '../stocks/stock-positions.service';
 import { MovementStatus } from './domain/movement-status.enum';
 import { MovementType } from './domain/movement-type.enum';
-import { CreateExternalEntryDto } from './dto/create-external-entry.dto';
+import { CreateExternalMovementDto } from './dto/create-external-movement.dto';
 import { MovementQueryDto } from './dto/movement-query.dto';
 import { MovementItemEntity } from './entities/movement-item.entity';
 import { MovementEntity } from './entities/movement.entity';
 import { MovementsRepository } from './movements.repository';
+
+interface EffectiveMovementRules {
+  type: MovementType;
+  auditAction: string;
+  invalidOrigin: { code: string; message: string };
+  invalidDestination: { code: string; message: string };
+  originIsValid: (kind: StockLocationKind) => boolean;
+  destinationIsValid: (kind: StockLocationKind) => boolean;
+  rejectDuplicateItems: boolean;
+  applyStock: (
+    service: StockPositionsService,
+    item: CreateExternalMovementDto['items'][number],
+    dto: CreateExternalMovementDto,
+    manager: EntityManager,
+  ) => Promise<unknown>;
+}
 
 @Injectable()
 export class MovementsService {
@@ -32,16 +48,78 @@ export class MovementsService {
 
   async getById(id: string): Promise<MovementEntity> {
     const movement = await this.repository.findById(id);
-    if (!movement) throw new NotFoundException({ code: 'MOVEMENT_NOT_FOUND', message: 'Movimentacao nao encontrada.' });
+    if (!movement) {
+      throw new NotFoundException({
+        code: 'MOVEMENT_NOT_FOUND',
+        message: 'Movimentacao nao encontrada.',
+      });
+    }
     return movement;
   }
 
-  async createExternalEntry(dto: CreateExternalEntryDto, userId: string, metadata: AuditRequestMetadata): Promise<MovementEntity> {
+  createExternalEntry(
+    dto: CreateExternalMovementDto,
+    userId: string,
+    metadata: AuditRequestMetadata,
+  ): Promise<MovementEntity> {
+    return this.createEffectiveMovement(dto, userId, metadata, {
+      type: MovementType.ExternalEntry,
+      auditAction: 'EXTERNAL_ENTRY_CREATE',
+      invalidOrigin: {
+        code: 'INVALID_EXTERNAL_ORIGIN',
+        message: 'A origem deve ser um local externo ativo.',
+      },
+      invalidDestination: {
+        code: 'INVALID_STOCK_DESTINATION',
+        message: 'O destino deve ser um estoque ou subestoque ativo.',
+      },
+      originIsValid: (kind) => kind === StockLocationKind.External,
+      destinationIsValid: (kind) => kind !== StockLocationKind.External,
+      rejectDuplicateItems: false,
+      applyStock: (service, item, movement, manager) => service.addQuantity({
+        productId: item.productId,
+        batchId: item.batchId,
+        stockLocationId: movement.destinationLocationId,
+      }, item.quantity, manager),
+    });
+  }
+
+  createExternalExit(
+    dto: CreateExternalMovementDto,
+    userId: string,
+    metadata: AuditRequestMetadata,
+  ): Promise<MovementEntity> {
+    return this.createEffectiveMovement(dto, userId, metadata, {
+      type: MovementType.ExternalExit,
+      auditAction: 'EXTERNAL_EXIT_CREATE',
+      invalidOrigin: {
+        code: 'INVALID_STOCK_ORIGIN',
+        message: 'A origem deve ser um estoque ou subestoque ativo.',
+      },
+      invalidDestination: {
+        code: 'INVALID_EXTERNAL_DESTINATION',
+        message: 'O destino deve ser um local externo ativo.',
+      },
+      originIsValid: (kind) => kind !== StockLocationKind.External,
+      destinationIsValid: (kind) => kind === StockLocationKind.External,
+      rejectDuplicateItems: true,
+      applyStock: (service, item, movement, manager) => service.removeQuantity({
+        productId: item.productId,
+        batchId: item.batchId,
+        stockLocationId: movement.originLocationId,
+      }, item.quantity, manager),
+    });
+  }
+
+  private async createEffectiveMovement(
+    dto: CreateExternalMovementDto,
+    userId: string,
+    metadata: AuditRequestMetadata,
+    rules: EffectiveMovementRules,
+  ): Promise<MovementEntity> {
     const existing = await this.repository.findByRequestKey(dto.requestKey);
-    if (existing) {
-      if (existing.responsibleUserId === userId) return existing;
-      throw new ConflictException({ code: 'DUPLICATE_MOVEMENT_REQUEST', message: 'A chave desta entrada ja foi utilizada.' });
-    }
+    if (existing) return this.resolveIdempotent(existing, userId, rules.type);
+    if (rules.rejectDuplicateItems) this.validateNoDuplicateItems(dto);
 
     try {
       const id = await this.dataSource.transaction(async (manager) => {
@@ -49,16 +127,16 @@ export class MovementsService {
           this.locations.findById(dto.originLocationId, manager),
           this.locations.findById(dto.destinationLocationId, manager),
         ]);
-        if (!origin?.active || origin.kind !== StockLocationKind.External) {
-          throw new BadRequestException({ code: 'INVALID_EXTERNAL_ORIGIN', message: 'A origem deve ser um local externo ativo.' });
+        if (!origin?.active || !rules.originIsValid(origin.kind)) {
+          throw new BadRequestException(rules.invalidOrigin);
         }
-        if (!destination?.active || destination.kind === StockLocationKind.External) {
-          throw new BadRequestException({ code: 'INVALID_STOCK_DESTINATION', message: 'O destino deve ser um estoque ou subestoque ativo.' });
+        if (!destination?.active || !rules.destinationIsValid(destination.kind)) {
+          throw new BadRequestException(rules.invalidDestination);
         }
 
         const movement = Object.assign(new MovementEntity(), {
           requestKey: dto.requestKey,
-          type: MovementType.ExternalEntry,
+          type: rules.type,
           originLocationId: dto.originLocationId,
           destinationLocationId: dto.destinationLocationId,
           responsibleUserId: userId,
@@ -70,11 +148,7 @@ export class MovementsService {
 
         const items: MovementItemEntity[] = [];
         for (const dtoItem of dto.items) {
-          await this.stockPositions.addQuantity({
-            productId: dtoItem.productId,
-            batchId: dtoItem.batchId,
-            stockLocationId: dto.destinationLocationId,
-          }, dtoItem.quantity, manager);
+          await rules.applyStock(this.stockPositions, dtoItem, dto, manager);
           items.push(Object.assign(new MovementItemEntity(), {
             movementId: movement.id,
             productId: dtoItem.productId,
@@ -87,7 +161,7 @@ export class MovementsService {
           ...metadata,
           manager,
           userId,
-          action: 'EXTERNAL_ENTRY_CREATE',
+          action: rules.auditAction,
           entityType: 'MOVEMENT',
           entityId: movement.id,
           result: 'SUCCESS',
@@ -107,10 +181,40 @@ export class MovementsService {
     } catch (error: unknown) {
       if (getPostgresError(error)?.constraint === 'UQ_movements_request_key') {
         const concurrent = await this.repository.findByRequestKey(dto.requestKey);
-        if (concurrent?.responsibleUserId === userId) return concurrent;
-        throw new ConflictException({ code: 'DUPLICATE_MOVEMENT_REQUEST', message: 'Esta entrada ja foi processada.' });
+        if (concurrent) return this.resolveIdempotent(concurrent, userId, rules.type);
+        throw this.duplicateRequest();
       }
       throw error;
     }
+  }
+
+  private validateNoDuplicateItems(dto: CreateExternalMovementDto): void {
+    const keys = new Set<string>();
+    for (const item of dto.items) {
+      const key = `${item.productId}:${item.batchId}`;
+      if (keys.has(key)) {
+        throw new BadRequestException({
+          code: 'DUPLICATE_MOVEMENT_ITEM',
+          message: 'O mesmo produto e lote nao pode aparecer duas vezes na mesma saida.',
+        });
+      }
+      keys.add(key);
+    }
+  }
+
+  private resolveIdempotent(
+    movement: MovementEntity,
+    userId: string,
+    expectedType: MovementType,
+  ): MovementEntity {
+    if (movement.responsibleUserId === userId && movement.type === expectedType) return movement;
+    throw this.duplicateRequest();
+  }
+
+  private duplicateRequest(): ConflictException {
+    return new ConflictException({
+      code: 'DUPLICATE_MOVEMENT_REQUEST',
+      message: 'A chave desta movimentacao ja foi utilizada.',
+    });
   }
 }

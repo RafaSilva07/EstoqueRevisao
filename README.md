@@ -2,7 +2,7 @@
 
 Sistema web para controle do estoque da Revisao, estruturado como monolito modular. A stack oficial e React com TypeScript/Vite no frontend, NestJS com TypeScript no backend e PostgreSQL 17, executado localmente por Docker Compose.
 
-O sistema entrega os cadastros base, a codificacao rastreavel de lotes, o saldo atual por produto/lote/local e a primeira operacao funcional: entrada externa efetivada com historico imutavel. Saidas, transferencias, conferencia em transito e revisoes ainda nao fazem parte do sistema.
+O sistema entrega os cadastros base, a codificacao rastreavel de lotes, o saldo atual por produto/lote/local e entradas e saidas externas efetivadas com historico imutavel. Transferencias, conferencia em transito e revisoes ainda nao fazem parte do sistema.
 
 ## Estrutura
 
@@ -18,7 +18,7 @@ apps/
       products/         produtos e conversoes de unidade
       batches/          lotes vinculados a produtos
       stocks/           locais logicos e posicoes de estoque
-      movements/        entradas externas e historico operacional imutavel
+      movements/        entradas/saidas externas e historico imutavel
       health/           saude da API e do banco
     shared/             erros, logs, paginacao e validacao
   frontend/src/         cliente da API e telas dos cadastros base
@@ -94,7 +94,7 @@ npm run dev:frontend
 - API REST: `http://localhost:3000/api/v1`
 - Health check: `GET http://localhost:3000/api/v1/health`
 
-O frontend restaura a sessao pelo refresh token HttpOnly, mantem o access token apenas em memoria e apresenta os cadastros, o estoque atual, a nova entrada externa e o historico operacional.
+O frontend restaura a sessao pelo refresh token HttpOnly, mantem o access token apenas em memoria e apresenta os cadastros, o estoque atual, entradas/saidas externas e o historico operacional.
 
 ## API preparada nesta etapa
 
@@ -103,7 +103,7 @@ O frontend restaura a sessao pelo refresh token HttpOnly, mantem o access token 
 - lotes: codigo `CONSERVADI` calculado da fabricacao (ou o inverso), validade obrigatoria e vinculo com produto;
 - estoques/locais: listagem paginada com filtros, detalhe, criacao, edicao e ativacao/inativacao;
 - estoque atual: consulta paginada e detalhe por produto, lote e local, sem endpoint publico de alteracao;
-- movimentacoes: criacao idempotente de entrada externa com varios itens, listagem filtrada e detalhe somente leitura;
+- movimentacoes: criacao idempotente de entradas e saidas externas com varios itens, listagem filtrada por tipo e detalhe somente leitura;
 - autenticacao: login, refresh rotativo, logout e consulta da sessao;
 - autorizacao: permissoes especificas aplicadas em todas as rotas de cadastro;
 - auditoria: usuario, acao, entidade, identificador, data/hora, valores anteriores e novos;
@@ -116,6 +116,14 @@ Os locais iniciais sao configuracao persistida no banco: Revisao, Revisar, Lata 
 `POST /api/v1/movements/external-entries` recebe uma origem externa, um destino controlado, uma chave UUID de idempotencia e um ou mais itens. A operacao cria historico, incrementa o saldo e registra auditoria na mesma transacao. Consulte por `GET /api/v1/movements` usando filtros de periodo, tipo, origem, destino e produto, ou obtenha o detalhe em `GET /api/v1/movements/:id`.
 
 Entradas efetivadas nao possuem rotas de edicao ou exclusao. Cancelamentos e estornos serao operacoes compensatorias futuras.
+
+### Saida externa
+
+`POST /api/v1/movements/external-exits` recebe uma origem controlada, um destino externo, uma chave UUID de idempotencia e um ou mais itens. Cada produto/lote deve possuir saldo positivo na origem e a quantidade solicitada nao pode superar o disponivel. A operacao reduz somente o saldo da origem e confirma cabecalho, itens, saldos e auditoria na mesma transacao.
+
+Itens repetidos pelo mesmo produto/lote sao rejeitados de forma deterministica. Atualizacoes condicionais no PostgreSQL impedem saldo negativo inclusive sob requisicoes concorrentes. Posicoes zeradas permanecem preservadas no banco para integridade historica, mas nao aparecem na consulta operacional de saldos disponiveis.
+
+Saidas efetivadas compartilham o historico, os filtros e o detalhe imutavel das entradas. Nao existem rotas de edicao, exclusao, cancelamento ou estorno nesta etapa.
 
 ## Verificacoes
 

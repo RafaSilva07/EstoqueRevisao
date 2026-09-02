@@ -1,8 +1,20 @@
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsISO8601, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateNested } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsISO8601,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { trimString } from '../../../shared/validation/transforms';
 
-export class CreateExternalEntryItemDto {
+export class CreateExternalMovementItemDto {
   @IsUUID()
   productId!: string;
 
@@ -15,7 +27,7 @@ export class CreateExternalEntryItemDto {
   quantity!: number;
 }
 
-export class CreateExternalEntryDto {
+export class CreateExternalMovementDto {
   @IsUUID()
   requestKey!: string;
 
@@ -39,6 +51,6 @@ export class CreateExternalEntryDto {
   @ArrayMinSize(1)
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
-  @Type(() => CreateExternalEntryItemDto)
-  items!: CreateExternalEntryItemDto[];
+  @Type(() => CreateExternalMovementItemDto)
+  items!: CreateExternalMovementItemDto[];
 }

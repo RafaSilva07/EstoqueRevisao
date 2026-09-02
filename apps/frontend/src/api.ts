@@ -88,7 +88,7 @@ export interface MovementItem {
 export interface Movement {
   id: string;
   requestKey: string;
-  type: 'ENTRADA_EXTERNA';
+  type: 'ENTRADA_EXTERNA' | 'SAIDA_EXTERNA';
   originLocationId: string;
   destinationLocationId: string;
   responsibleUserId: string;

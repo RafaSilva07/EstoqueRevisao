@@ -75,6 +75,9 @@ h3 { color: #24495a; font-size: 1rem; }
 .page-header p { margin-bottom: 0; line-height: 1.5; }
 .page-action, .page-action button { width: 100%; }
 .quick-actions { display: grid; gap: .75rem; margin-bottom: 1.5rem; }
+.available-balance { display: grid; gap: .2rem; align-content: center; padding: .8rem 1rem; border: 1px solid #b9d8ca; border-radius: .75rem; background: #f0faf5; color: #264d3d; }
+.available-balance strong { font-size: 1.2rem; }
+.available-balance small { color: #577164; }
 .quick-action { display: grid; min-height: 6rem; align-content: center; gap: .3rem; border: 1px solid var(--line); background: #fff; color: #1e4657; text-align: left; box-shadow: var(--shadow); }
 .quick-action:hover { border-color: #9ec8d3; background: #f7fbfc; }
 .quick-action span { font-size: 1.02rem; }

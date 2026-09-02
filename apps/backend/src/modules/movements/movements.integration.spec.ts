@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { databaseEntities, databaseMigrations } from '../../database/typeorm.config';
 import { AuditRepository } from '../audit/audit.repository';
@@ -46,7 +46,20 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
   });
   afterAll(async () => { if (dataSource?.isInitialized) await dataSource.destroy(); });
 
-  const create = (requestKey = randomUUID()) => service.createExternalEntry({ requestKey, originLocationId: originId, destinationLocationId: destinationId, items: [{ productId: productAId, batchId: batchAId, quantity: 10 }, { productId: productBId, batchId: batchBId, quantity: 2.5 }] }, userId, { requestId: randomUUID(), ipAddress: null, userAgent: 'jest' });
+  const create = (requestKey = randomUUID()): Promise<MovementEntity> => service.createExternalEntry({ requestKey, originLocationId: originId, destinationLocationId: destinationId, items: [{ productId: productAId, batchId: batchAId, quantity: 10 }, { productId: productBId, batchId: batchBId, quantity: 2.5 }] }, userId, { requestId: randomUUID(), ipAddress: null, userAgent: 'jest' });
+  const seedStock = (productId: string, batchId: string, quantity: number): Promise<StockPositionEntity> => dataSource.transaction(
+    (manager) => stockService.addQuantity({
+      productId,
+      batchId,
+      stockLocationId: destinationId,
+    }, quantity, manager),
+  );
+  const createExit = (items: Array<{ productId: string; batchId: string; quantity: number }>, requestKey = randomUUID()): Promise<MovementEntity> => service.createExternalExit({
+    requestKey,
+    originLocationId: destinationId,
+    destinationLocationId: originId,
+    items,
+  }, userId, { requestId: randomUUID(), ipAddress: null, userAgent: 'jest' });
 
   it('efetiva varios itens, cria posicoes e auditoria atomicamente', async () => {
     const movement = await create();
@@ -78,5 +91,92 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     expect(history.meta.total).toBe(1);
     expect((await service.getById(first.id)).items).toHaveLength(2);
     await expect(dataSource.getRepository(MovementEntity).delete(first.id)).rejects.toMatchObject({ code: '23503' });
+  });
+
+  it('realiza saida parcial e saida total sem criar saldo externo', async () => {
+    await seedStock(productAId, batchAId, 10);
+    await createExit([{ productId: productAId, batchId: batchAId, quantity: 4 }]);
+    expect(await stockService.getBalance({
+      productId: productAId, batchId: batchAId, stockLocationId: destinationId,
+    })).toBe(6);
+    await createExit([{ productId: productAId, batchId: batchAId, quantity: 6 }]);
+    expect(await stockService.getBalance({
+      productId: productAId, batchId: batchAId, stockLocationId: destinationId,
+    })).toBe(0);
+    expect(await dataSource.getRepository(StockPositionEntity).countBy({
+      stockLocationId: originId,
+    })).toBe(0);
+  });
+
+  it('reverte todos os itens da saida quando o ultimo possui saldo insuficiente', async () => {
+    await seedStock(productAId, batchAId, 10);
+    await seedStock(productBId, batchBId, 2.5);
+    try {
+      await createExit([
+        { productId: productAId, batchId: batchAId, quantity: 4 },
+        { productId: productBId, batchId: batchBId, quantity: 3 },
+      ]);
+      throw new Error('A saida deveria falhar por saldo insuficiente.');
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(ConflictException);
+      expect((error as ConflictException).getResponse()).toEqual({
+        code: 'INSUFFICIENT_STOCK',
+        message: 'Saldo insuficiente. Disponivel: 2.5.',
+        available: 2.5,
+      });
+    }
+    expect(await stockService.getBalance({
+      productId: productAId, batchId: batchAId, stockLocationId: destinationId,
+    })).toBe(10);
+    expect(await stockService.getBalance({
+      productId: productBId, batchId: batchBId, stockLocationId: destinationId,
+    })).toBe(2.5);
+    expect(await dataSource.getRepository(MovementEntity).count()).toBe(0);
+    expect(await dataSource.getRepository(AuditLogEntity).count()).toBe(0);
+  });
+
+  it('permite somente uma de duas saidas concorrentes sobre o mesmo saldo', async () => {
+    await seedStock(productAId, batchAId, 10);
+    const results = await Promise.allSettled([
+      createExit([{ productId: productAId, batchId: batchAId, quantity: 7 }]),
+      createExit([{ productId: productAId, batchId: batchAId, quantity: 7 }]),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect(await stockService.getBalance({
+      productId: productAId, batchId: batchAId, stockLocationId: destinationId,
+    })).toBe(3);
+    expect(await dataSource.getRepository(MovementEntity).count()).toBe(1);
+  });
+
+  it('registra saida no mesmo historico, detalhe, responsavel e auditoria', async () => {
+    await seedStock(productAId, batchAId, 8);
+    const requestKey = randomUUID();
+    const created = await createExit([
+      { productId: productAId, batchId: batchAId, quantity: 3 },
+    ], requestKey);
+    const repeated = await createExit([
+      { productId: productAId, batchId: batchAId, quantity: 3 },
+    ], requestKey);
+    expect(repeated.id).toBe(created.id);
+    const history = await service.list({
+      page: 1,
+      limit: 20,
+      type: MovementType.ExternalExit,
+      originLocationId: destinationId,
+      destinationLocationId: originId,
+      productId: productAId,
+    });
+    expect(history.meta.total).toBe(1);
+    const detail = await service.getById(created.id);
+    expect(detail).toMatchObject({
+      type: MovementType.ExternalExit,
+      responsibleUserId: userId,
+      items: [expect.objectContaining({ quantity: 3 })],
+    });
+    expect(await dataSource.getRepository(AuditLogEntity).countBy({
+      entityId: created.id,
+      action: 'EXTERNAL_EXIT_CREATE',
+    })).toBe(1);
   });
 });

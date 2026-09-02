@@ -67,9 +67,11 @@ export class StockPositionsService {
     await this.validateReferences(key, manager, false);
     const position = await this.positionsRepository.removeAtomic(key, quantity, manager);
     if (!position) {
+      const available = await this.getBalance(key, manager);
       throw new ConflictException({
         code: 'INSUFFICIENT_STOCK',
-        message: 'Saldo insuficiente para remover a quantidade informada.',
+        message: `Saldo insuficiente. Disponivel: ${available}.`,
+        available,
       });
     }
     return position;
@@ -104,7 +106,9 @@ export class StockPositionsService {
     ) {
       throw new BadRequestException({
         code: 'INVALID_STOCK_PRODUCT_BATCH',
-        message: 'O produto ativo e o lote informados nao possuem uma associacao valida.',
+        message: requireActiveProduct
+          ? 'O produto ativo e o lote informados nao possuem uma associacao valida.'
+          : 'O produto e o lote informados nao possuem uma associacao valida.',
       });
     }
     if (!location || location.kind === StockLocationKind.External) {
