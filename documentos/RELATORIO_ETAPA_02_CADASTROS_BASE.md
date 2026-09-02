@@ -41,7 +41,7 @@ Tambem foi estabelecido o PostgreSQL 17 via Docker Compose como dependencia obri
 
 O documento arquitetural inicial permitia PostgreSQL instalado localmente e considerava Docker opcional durante a fundacao. A instrucao explicita desta etapa tornou o PostgreSQL via Docker Compose obrigatorio para o desenvolvimento.
 
-Como a mudanca afeta apenas a disponibilizacao da infraestrutura e nao altera a stack ou o dominio, ela nao foi impeditiva. A decisao foi registrada em `ADR_001_POSTGRESQL_DOCKER_COMPOSE_DESENVOLVIMENTO.md`.
+Como a mudanca afeta apenas a disponibilizacao da infraestrutura e nao altera a stack ou o dominio, ela nao foi impeditiva. A decisao foi registrada em `ADR_016_POSTGRESQL_DOCKER_COMPOSE_DESENVOLVIMENTO.md`.
 
 ## 3. Implementacao realizada
 
@@ -212,7 +212,7 @@ As listagens oferecem paginacao e filtros basicos apropriados ao cadastro.
 - `apps/frontend/src/api.ts`
 - `apps/frontend/src/App.tsx`
 - `apps/frontend/src/styles.css`
-- `documentos/ADR_001_POSTGRESQL_DOCKER_COMPOSE_DESENVOLVIMENTO.md`
+- `documentos/ADR_016_POSTGRESQL_DOCKER_COMPOSE_DESENVOLVIMENTO.md`
 
 ## 7. Verificacoes executadas
 

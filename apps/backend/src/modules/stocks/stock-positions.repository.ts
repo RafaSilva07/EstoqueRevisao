@@ -85,19 +85,21 @@ export class StockPositionsRepository {
     quantity: number,
     manager: EntityManager,
   ): Promise<StockPositionEntity | null> {
-    const rows: unknown = await manager.query(
-      `
-        UPDATE "stock_positions"
-        SET "quantity" = "quantity" - $4, "updated_at" = CURRENT_TIMESTAMP
-        WHERE "product_id" = $1
-          AND "batch_id" = $2
-          AND "stock_location_id" = $3
-          AND "quantity" >= $4
-        RETURNING "id"
-      `,
-      [key.productId, key.batchId, key.stockLocationId, quantity],
-    );
-    if (!Array.isArray(rows) || rows.length === 0) {
+    const result = await manager
+      .createQueryBuilder()
+      .update(StockPositionEntity)
+      .set({
+        quantity: () => '"quantity" - :quantity',
+        updatedAt: () => 'CURRENT_TIMESTAMP',
+      })
+      .where('"product_id" = :productId', { productId: key.productId })
+      .andWhere('"batch_id" = :batchId', { batchId: key.batchId })
+      .andWhere('"stock_location_id" = :stockLocationId', {
+        stockLocationId: key.stockLocationId,
+      })
+      .andWhere('"quantity" >= :quantity', { quantity })
+      .execute();
+    if (!result.affected) {
       return null;
     }
     return this.requireByKey(key, manager);

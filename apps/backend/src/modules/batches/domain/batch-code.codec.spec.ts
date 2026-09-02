@@ -37,7 +37,7 @@ describe('BatchCodeCodec', () => {
 
   it('rejeita divergencia entre lote e fabricacao simultaneos', () => {
     expect(() => codec.resolve('SOCDNV', '2026-08-30')).toThrow(
-      expect.objectContaining({ code: 'BATCH_MANUFACTURING_MISMATCH' }),
+      'O lote informado nao corresponde a data de fabricacao.',
     );
   });
 

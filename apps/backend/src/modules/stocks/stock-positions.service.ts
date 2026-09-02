@@ -89,11 +89,9 @@ export class StockPositionsService {
   }
 
   private async validateReferences(key: StockPositionKey, manager: EntityManager): Promise<void> {
-    const [product, batch, location] = await Promise.all([
-      this.productsRepository.findById(key.productId, manager),
-      this.batchesRepository.findById(key.batchId, manager),
-      this.locationsRepository.findById(key.stockLocationId, manager),
-    ]);
+    const product = await this.productsRepository.findById(key.productId, manager);
+    const batch = await this.batchesRepository.findById(key.batchId, manager);
+    const location = await this.locationsRepository.findById(key.stockLocationId, manager);
     if (!product || !batch || batch.productId !== key.productId) {
       throw new BadRequestException({
         code: 'INVALID_STOCK_PRODUCT_BATCH',

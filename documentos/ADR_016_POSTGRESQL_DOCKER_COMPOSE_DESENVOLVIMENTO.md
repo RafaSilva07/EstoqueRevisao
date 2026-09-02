@@ -1,4 +1,4 @@
-# ADR 001 — PostgreSQL via Docker Compose no desenvolvimento
+# ADR 016 — PostgreSQL via Docker Compose no desenvolvimento
 
 - Status: aceito
 - Data: 2026-08-31

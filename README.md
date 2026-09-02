@@ -2,7 +2,7 @@
 
 Sistema web para controle do estoque da Revisao, estruturado como monolito modular. A stack oficial e React com TypeScript/Vite no frontend, NestJS com TypeScript no backend e PostgreSQL 17, executado localmente por Docker Compose.
 
-Esta etapa entrega os cadastros base de produtos, lotes, conversoes de unidade e estoques/locais logicos. Saldos, movimentacoes, revisoes, transferencias e relatorios operacionais ainda nao fazem parte do sistema.
+Esta etapa entrega os cadastros base, a codificacao rastreavel de lotes e o nucleo de saldo atual por produto, lote e local. Movimentacoes, revisoes, transferencias e relatorios operacionais ainda nao fazem parte do sistema.
 
 ## Estrutura
 
@@ -17,7 +17,7 @@ apps/
       audit/            trilha de auditoria persistente
       products/         produtos e conversoes de unidade
       batches/          lotes vinculados a produtos
-      stocks/           estoques, subestoques e pontos externos
+      stocks/           locais logicos e posicoes de estoque
       health/           saude da API e do banco
     shared/             erros, logs, paginacao e validacao
   frontend/src/         cliente da API e telas dos cadastros base
@@ -78,6 +78,8 @@ npm run docker:down
 
 `docker:down` preserva o volume do banco. A exclusao do volume deve ser uma decisao explicita do operador.
 
+O container e a instancia executavel e pode ser recriado automaticamente por `npm run docker:up`. Os dados ficam no volume persistente `estoque-revisao_postgres_data`, que e reconectado ao novo container. No uso diario, voce tambem pode apenas iniciar e parar o container pelo Docker Desktop; nao e necessario executar migrations novamente quando o volume ja esta atualizado.
+
 ## Execucao
 
 Em dois terminais:
@@ -91,20 +93,21 @@ npm run dev:frontend
 - API REST: `http://localhost:3000/api/v1`
 - Health check: `GET http://localhost:3000/api/v1/health`
 
-O frontend restaura a sessao pelo refresh token HttpOnly, mantem o access token apenas em memoria e apresenta telas de consulta, criacao e edicao de produtos, lotes e estoques/locais.
+O frontend restaura a sessao pelo refresh token HttpOnly, mantem o access token apenas em memoria e apresenta os cadastros base e a consulta somente leitura do estoque atual.
 
 ## API preparada nesta etapa
 
 - produtos: listagem paginada com busca/status, detalhe, criacao, edicao e ativacao/inativacao;
 - conversoes: listagem por produto, criacao, edicao e ativacao/inativacao;
-- lotes: listagem paginada com filtros, detalhe, criacao e edicao, sempre vinculados a um produto;
+- lotes: codigo `CONSERVADI` calculado da fabricacao (ou o inverso), validade obrigatoria e vinculo com produto;
 - estoques/locais: listagem paginada com filtros, detalhe, criacao, edicao e ativacao/inativacao;
+- estoque atual: consulta paginada e detalhe por produto, lote e local, sem endpoint publico de alteracao;
 - autenticacao: login, refresh rotativo, logout e consulta da sessao;
 - autorizacao: permissoes especificas aplicadas em todas as rotas de cadastro;
 - auditoria: usuario, acao, entidade, identificador, data/hora, valores anteriores e novos;
 - validacao e erros: DTOs com whitelist e envelope de erro padronizado.
 
-Os locais iniciais sao configuracao persistida no banco: Revisao, Revisar, Lata Boa, Varejo, TUF, Expedicao e Producao. Nenhum saldo foi adicionado a produto, lote ou local.
+Os locais iniciais sao configuracao persistida no banco: Revisao, Revisar, Lata Boa, Varejo, TUF, Expedicao e Producao. O saldo e mantido por um servico interno transacional e sera alimentado pelos modulos operacionais futuros.
 
 ## Verificacoes
 
@@ -112,6 +115,8 @@ Os locais iniciais sao configuracao persistida no banco: Revisao, Revisar, Lata 
 npm run build
 npm run lint
 npm test
+$env:TEST_DATABASE_URL='postgresql://usuario:senha@localhost:5432/estoque_revisao_test'
+npm test --workspace @estoque-revisao/backend -- --runInBand stock-positions.integration.spec.ts
 npm run db:migration:show
 docker compose config
 ```

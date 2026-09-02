@@ -32,8 +32,14 @@ export interface Batch {
   id: string;
   productId: string;
   code: string;
-  expirationDate: string | null;
+  manufacturingDate: string;
+  expirationDate: string;
   product?: Product;
+}
+
+export interface ResolvedBatchCode {
+  code: string;
+  manufacturingDate: string;
 }
 
 export interface UnitConversion {
@@ -55,6 +61,19 @@ export interface StockLocation {
   kind: StockLocationKind;
   parentId: string | null;
   active: boolean;
+}
+
+export interface StockPosition {
+  id: string;
+  productId: string;
+  batchId: string;
+  stockLocationId: string;
+  quantity: number;
+  product: Product;
+  batch: Batch;
+  stockLocation: StockLocation;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface ErrorEnvelope {

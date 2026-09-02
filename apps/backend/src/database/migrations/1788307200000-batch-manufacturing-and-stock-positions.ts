@@ -107,7 +107,7 @@ export class BatchManufacturingAndStockPositions1788307200000 implements Migrati
 
   private async migrateExistingBatches(queryRunner: QueryRunner): Promise<void> {
     const result: unknown = await queryRunner.query(
-      'SELECT "id", "code", "expiration_date" FROM "batches" ORDER BY "id"',
+      'SELECT "id", "code", "expiration_date"::text AS "expiration_date" FROM "batches" ORDER BY "id"',
     );
     if (!Array.isArray(result)) {
       throw new Error('Nao foi possivel ler os lotes existentes durante a migration.');

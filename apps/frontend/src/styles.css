@@ -26,6 +26,7 @@ nav button.current { border-bottom: 3px solid #225c96; color: #173b63; }
 .content-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr); gap: 1rem; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .section-heading input { max-width: 16rem; }
+.filter-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; margin: 1rem 0; }
 .table-wrap { overflow-x: auto; margin: 1rem 0; }
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: .75rem .6rem; border-bottom: 1px solid #e5eaf0; text-align: left; font-size: .9rem; }
@@ -51,5 +52,6 @@ dd { margin: 0; font-weight: 650; }
   nav { order: 3; width: 100%; overflow-x: auto; }
   .content-grid { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr; }
+  .filter-grid { grid-template-columns: 1fr; }
   .wide { grid-column: auto; }
 }
