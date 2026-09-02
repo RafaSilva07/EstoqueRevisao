@@ -13,6 +13,9 @@ import { InitialFoundation1788134400000 } from './migrations/1788134400000-initi
 import { BaseRegistries1788220800000 } from './migrations/1788220800000-base-registries';
 import { StockPositionEntity } from '../modules/stocks/entities/stock-position.entity';
 import { BatchManufacturingAndStockPositions1788307200000 } from './migrations/1788307200000-batch-manufacturing-and-stock-positions';
+import { MovementEntity } from '../modules/movements/entities/movement.entity';
+import { MovementItemEntity } from '../modules/movements/entities/movement-item.entity';
+import { ExternalEntryMovements1788393600000 } from './migrations/1788393600000-external-entry-movements';
 
 export const databaseEntities = [
   UserEntity,
@@ -25,12 +28,15 @@ export const databaseEntities = [
   BatchEntity,
   StockLocationEntity,
   StockPositionEntity,
+  MovementEntity,
+  MovementItemEntity,
 ];
 
 export const databaseMigrations = [
   InitialFoundation1788134400000,
   BaseRegistries1788220800000,
   BatchManufacturingAndStockPositions1788307200000,
+  ExternalEntryMovements1788393600000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {

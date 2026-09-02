@@ -2,7 +2,7 @@
 
 Sistema web para controle do estoque da Revisao, estruturado como monolito modular. A stack oficial e React com TypeScript/Vite no frontend, NestJS com TypeScript no backend e PostgreSQL 17, executado localmente por Docker Compose.
 
-Esta etapa entrega os cadastros base, a codificacao rastreavel de lotes e o nucleo de saldo atual por produto, lote e local. Movimentacoes, revisoes, transferencias e relatorios operacionais ainda nao fazem parte do sistema.
+O sistema entrega os cadastros base, a codificacao rastreavel de lotes, o saldo atual por produto/lote/local e a primeira operacao funcional: entrada externa efetivada com historico imutavel. Saidas, transferencias, conferencia em transito e revisoes ainda nao fazem parte do sistema.
 
 ## Estrutura
 
@@ -18,6 +18,7 @@ apps/
       products/         produtos e conversoes de unidade
       batches/          lotes vinculados a produtos
       stocks/           locais logicos e posicoes de estoque
+      movements/        entradas externas e historico operacional imutavel
       health/           saude da API e do banco
     shared/             erros, logs, paginacao e validacao
   frontend/src/         cliente da API e telas dos cadastros base
@@ -93,7 +94,7 @@ npm run dev:frontend
 - API REST: `http://localhost:3000/api/v1`
 - Health check: `GET http://localhost:3000/api/v1/health`
 
-O frontend restaura a sessao pelo refresh token HttpOnly, mantem o access token apenas em memoria e apresenta os cadastros base e a consulta somente leitura do estoque atual.
+O frontend restaura a sessao pelo refresh token HttpOnly, mantem o access token apenas em memoria e apresenta os cadastros, o estoque atual, a nova entrada externa e o historico operacional.
 
 ## API preparada nesta etapa
 
@@ -102,12 +103,19 @@ O frontend restaura a sessao pelo refresh token HttpOnly, mantem o access token 
 - lotes: codigo `CONSERVADI` calculado da fabricacao (ou o inverso), validade obrigatoria e vinculo com produto;
 - estoques/locais: listagem paginada com filtros, detalhe, criacao, edicao e ativacao/inativacao;
 - estoque atual: consulta paginada e detalhe por produto, lote e local, sem endpoint publico de alteracao;
+- movimentacoes: criacao idempotente de entrada externa com varios itens, listagem filtrada e detalhe somente leitura;
 - autenticacao: login, refresh rotativo, logout e consulta da sessao;
 - autorizacao: permissoes especificas aplicadas em todas as rotas de cadastro;
 - auditoria: usuario, acao, entidade, identificador, data/hora, valores anteriores e novos;
 - validacao e erros: DTOs com whitelist e envelope de erro padronizado.
 
 Os locais iniciais sao configuracao persistida no banco: Revisao, Revisar, Lata Boa, Varejo, TUF, Expedicao e Producao. O saldo e mantido por um servico interno transacional e sera alimentado pelos modulos operacionais futuros.
+
+### Entrada externa
+
+`POST /api/v1/movements/external-entries` recebe uma origem externa, um destino controlado, uma chave UUID de idempotencia e um ou mais itens. A operacao cria historico, incrementa o saldo e registra auditoria na mesma transacao. Consulte por `GET /api/v1/movements` usando filtros de periodo, tipo, origem, destino e produto, ou obtenha o detalhe em `GET /api/v1/movements/:id`.
+
+Entradas efetivadas nao possuem rotas de edicao ou exclusao. Cancelamentos e estornos serao operacoes compensatorias futuras.
 
 ## Verificacoes
 
@@ -117,6 +125,7 @@ npm run lint
 npm test
 $env:TEST_DATABASE_URL='postgresql://usuario:senha@localhost:5432/estoque_revisao_test'
 npm test --workspace @estoque-revisao/backend -- --runInBand stock-positions.integration.spec.ts
+npm test --workspace @estoque-revisao/backend -- --runInBand movements.integration.spec.ts
 npm run db:migration:show
 docker compose config
 ```

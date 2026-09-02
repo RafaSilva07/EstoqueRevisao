@@ -54,7 +54,7 @@ export class StockPositionsService {
     manager: EntityManager,
   ): Promise<StockPositionEntity> {
     this.validateQuantity(quantity);
-    await this.validateReferences(key, manager);
+    await this.validateReferences(key, manager, true);
     return this.positionsRepository.addAtomic(key, quantity, manager);
   }
 
@@ -64,7 +64,7 @@ export class StockPositionsService {
     manager: EntityManager,
   ): Promise<StockPositionEntity> {
     this.validateQuantity(quantity);
-    await this.validateReferences(key, manager);
+    await this.validateReferences(key, manager, false);
     const position = await this.positionsRepository.removeAtomic(key, quantity, manager);
     if (!position) {
       throw new ConflictException({
@@ -88,14 +88,23 @@ export class StockPositionsService {
     }
   }
 
-  private async validateReferences(key: StockPositionKey, manager: EntityManager): Promise<void> {
+  private async validateReferences(
+    key: StockPositionKey,
+    manager: EntityManager,
+    requireActiveProduct: boolean,
+  ): Promise<void> {
     const product = await this.productsRepository.findById(key.productId, manager);
     const batch = await this.batchesRepository.findById(key.batchId, manager);
     const location = await this.locationsRepository.findById(key.stockLocationId, manager);
-    if (!product || !batch || batch.productId !== key.productId) {
+    if (
+      !product
+      || (requireActiveProduct && !product.active)
+      || !batch
+      || batch.productId !== key.productId
+    ) {
       throw new BadRequestException({
         code: 'INVALID_STOCK_PRODUCT_BATCH',
-        message: 'O produto e o lote informados nao possuem uma associacao valida.',
+        message: 'O produto ativo e o lote informados nao possuem uma associacao valida.',
       });
     }
     if (!location || location.kind === StockLocationKind.External) {

@@ -76,6 +76,32 @@ export interface StockPosition {
   updatedAt: string;
 }
 
+export interface MovementItem {
+  id: string;
+  productId: string;
+  batchId: string;
+  quantity: number;
+  product: Product;
+  batch: Batch;
+}
+
+export interface Movement {
+  id: string;
+  requestKey: string;
+  type: 'ENTRADA_EXTERNA';
+  originLocationId: string;
+  destinationLocationId: string;
+  responsibleUserId: string;
+  occurredAt: string;
+  status: 'EFETIVADA';
+  observation: string | null;
+  createdAt: string;
+  originLocation: StockLocation;
+  destinationLocation: StockLocation;
+  responsibleUser: { id: string; username: string };
+  items: MovementItem[];
+}
+
 interface ErrorEnvelope {
   error?: { message?: string };
 }

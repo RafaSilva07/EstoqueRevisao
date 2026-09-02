@@ -18,7 +18,7 @@
 * { box-sizing: border-box; }
 html { min-width: 320px; background: #f4f7fa; }
 body { margin: 0; min-width: 320px; min-height: 100vh; }
-button, input, select { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button { min-height: 44px; border: 0; border-radius: .7rem; background: var(--primary); color: #fff; cursor: pointer; padding: .7rem 1rem; font-weight: 720; }
 button:hover { background: var(--primary-dark); }
 button:disabled { cursor: wait; opacity: .62; }
@@ -28,7 +28,8 @@ button.danger { background: var(--danger); }
 button.text-button { min-height: 40px; padding: .35rem 0; background: transparent; color: var(--primary); text-align: left; text-decoration: underline; text-underline-offset: .2rem; }
 button.text-button:hover { background: transparent; color: var(--primary-dark); }
 button:focus-visible, input:focus-visible, select:focus-visible, tr:focus-visible { outline: 3px solid #65bcd1; outline-offset: 2px; }
-input, select { width: 100%; min-height: 46px; border: 1px solid #bccad4; border-radius: .65rem; background: #fff; padding: .72rem .78rem; color: var(--ink); }
+input, select, textarea { width: 100%; min-height: 46px; border: 1px solid #bccad4; border-radius: .65rem; background: #fff; padding: .72rem .78rem; color: var(--ink); }
+textarea { resize: vertical; }
 input:disabled, select:disabled { background: #edf1f4; color: #667786; }
 label { display: grid; gap: .4rem; min-width: 0; color: #354d61; font-size: .88rem; font-weight: 700; }
 label small { color: var(--muted); font-weight: 500; }
@@ -143,6 +144,14 @@ dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font-weight: 700; }
 .responsive-table td > * { min-width: 0; }
 .row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .45rem; }
 .row-actions button { min-height: 42px; padding: .55rem .7rem; font-size: .8rem; }
+.entry-items { display: grid; gap: .65rem; margin-bottom: 1rem; }
+.entry-item { display: flex; align-items: center; justify-content: space-between; gap: .75rem; border: 1px solid var(--line); border-radius: .8rem; padding: .8rem; }
+.entry-item div { display: grid; min-width: 0; gap: .25rem; }
+.entry-item span { color: var(--muted); font-size: .85rem; }
+.movement-detail-items { display: grid; gap: .65rem; padding: 0; list-style: none; }
+.movement-detail-items li { display: grid; gap: .2rem; border-radius: .7rem; background: #f3f7f8; padding: .75rem; }
+.movement-detail-items span { color: var(--muted); font-size: .85rem; }
+.confirmation-dialog ul { max-height: 14rem; overflow: auto; padding-left: 1.2rem; line-height: 1.6; }
 
 .dialog-backdrop { position: fixed; z-index: 50; inset: 0; display: grid; place-items: end center; padding: 1rem; background: rgb(12 28 37 / 55%); }
 .dialog { width: min(100%, 28rem); border-radius: 1rem; background: #fff; padding: 1.2rem; box-shadow: 0 1rem 3rem rgb(0 0 0 / 20%); }

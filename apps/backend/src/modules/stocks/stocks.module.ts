@@ -24,6 +24,6 @@ import { StockPositionsService } from './stock-positions.service';
     StockPositionsRepository,
     StockPositionsService,
   ],
-  exports: [StockPositionsService],
+  exports: [StockPositionsService, StockLocationsRepository],
 })
 export class StocksModule {}
