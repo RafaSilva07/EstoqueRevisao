@@ -66,15 +66,52 @@ export class StockPositionsService {
     this.validateQuantity(quantity);
     await this.validateReferences(key, manager, false);
     const position = await this.positionsRepository.removeAtomic(key, quantity, manager);
-    if (!position) {
-      const available = await this.getBalance(key, manager);
-      throw new ConflictException({
-        code: 'INSUFFICIENT_STOCK',
-        message: `Saldo insuficiente. Disponivel: ${available}.`,
-        available,
+    if (!position) throw await this.insufficientStockException(key, manager);
+    return position;
+  }
+
+  async transferQuantity(
+    source: StockPositionKey,
+    destination: StockPositionKey,
+    quantity: number,
+    manager: EntityManager,
+  ): Promise<{ source: StockPositionEntity; destination: StockPositionEntity }> {
+    this.validateQuantity(quantity);
+    if (
+      source.productId !== destination.productId
+      || source.batchId !== destination.batchId
+      || source.stockLocationId === destination.stockLocationId
+    ) {
+      throw new BadRequestException({
+        code: 'INVALID_STOCK_TRANSFER',
+        message: 'A transferencia deve mover o mesmo produto e lote entre locais diferentes.',
       });
     }
-    return position;
+    await Promise.all([
+      this.validateReferences(source, manager, false),
+      this.validateReferences(destination, manager, false),
+    ]);
+    await this.positionsRepository.lockForTransfer(source, destination, manager);
+    const updatedSource = await this.positionsRepository.removeAtomic(source, quantity, manager);
+    if (!updatedSource) throw await this.insufficientStockException(source, manager);
+    const updatedDestination = await this.positionsRepository.addAtomic(
+      destination,
+      quantity,
+      manager,
+    );
+    return { source: updatedSource, destination: updatedDestination };
+  }
+
+  private async insufficientStockException(
+    key: StockPositionKey,
+    manager: EntityManager,
+  ): Promise<ConflictException> {
+    const available = await this.getBalance(key, manager);
+    return new ConflictException({
+      code: 'INSUFFICIENT_STOCK',
+      message: `Saldo insuficiente. Disponivel: ${available}.`,
+      available,
+    });
   }
 
   private validateQuantity(quantity: number): void {

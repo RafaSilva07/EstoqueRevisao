@@ -106,6 +106,23 @@ export class StockPositionsRepository {
     return this.requireByKey(key, manager);
   }
 
+  async lockForTransfer(
+    source: StockPositionKey,
+    destination: StockPositionKey,
+    manager: EntityManager,
+  ): Promise<void> {
+    await manager.getRepository(StockPositionEntity)
+      .createQueryBuilder('position')
+      .where('position.productId = :productId', { productId: source.productId })
+      .andWhere('position.batchId = :batchId', { batchId: source.batchId })
+      .andWhere('position.stockLocationId IN (:...locationIds)', {
+        locationIds: [source.stockLocationId, destination.stockLocationId].sort(),
+      })
+      .orderBy('position.stockLocationId', 'ASC')
+      .setLock('pessimistic_write')
+      .getMany();
+  }
+
   private async requireByKey(
     key: StockPositionKey,
     manager: EntityManager,

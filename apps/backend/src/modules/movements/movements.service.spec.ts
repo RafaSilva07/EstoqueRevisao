@@ -26,7 +26,7 @@ describe('MovementsService', () => {
   };
   const repository = { findByRequestKey: jest.fn(), findById: jest.fn(), findAndCount: jest.fn(), save: jest.fn(), saveItems: jest.fn() };
   const locations = { findById: jest.fn() };
-  const stock = { addQuantity: jest.fn(), removeQuantity: jest.fn() };
+  const stock = { addQuantity: jest.fn(), removeQuantity: jest.fn(), transferQuantity: jest.fn() };
   const audit = { record: jest.fn() };
   const dataSource = { transaction: jest.fn((operation: (value: EntityManager) => unknown) => operation(manager)) };
   const service = new MovementsService(repository as unknown as MovementsRepository, locations as unknown as StockLocationsRepository, stock as unknown as StockPositionsService, audit as unknown as AuditService, dataSource as unknown as DataSource);
@@ -40,6 +40,7 @@ describe('MovementsService', () => {
     locations.findById.mockImplementation((id: string) => Promise.resolve(Object.assign(new StockLocationEntity(), { id, active: true, kind: id === originId ? StockLocationKind.External : StockLocationKind.Substock })));
     stock.addQuantity.mockResolvedValue({});
     stock.removeQuantity.mockResolvedValue({});
+    stock.transferQuantity.mockResolvedValue({});
   });
 
   it('registra cabecalho e varios itens em uma unica transacao', async () => {
@@ -202,7 +203,7 @@ describe('MovementsService', () => {
         expect(error).toBeInstanceOf(BadRequestException);
         expect((error as BadRequestException).getResponse()).toEqual({
           code: 'DUPLICATE_MOVEMENT_ITEM',
-          message: 'O mesmo produto e lote nao pode aparecer duas vezes na mesma saida.',
+          message: 'O mesmo produto e lote nao pode aparecer duas vezes na mesma movimentacao.',
         });
       }
       expect(dataSource.transaction).not.toHaveBeenCalled();
@@ -241,6 +242,126 @@ describe('MovementsService', () => {
       await expect(service.createExternalExit(exitDto, userId, {
         requestId: exitDto.requestKey, ipAddress: null, userAgent: null,
       })).rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
+  describe('transferencia interna', () => {
+    const transferDestinationId = '10000000-0000-4000-8000-000000000003';
+    const transferDto = {
+      ...dto,
+      requestKey: '50000000-0000-4000-8000-000000000003',
+      originLocationId: destinationId,
+      destinationLocationId: transferDestinationId,
+    };
+
+    beforeEach(() => {
+      locations.findById.mockImplementation((id: string) => Promise.resolve(
+        Object.assign(new StockLocationEntity(), {
+          id,
+          active: true,
+          kind: id === originId ? StockLocationKind.External : StockLocationKind.Substock,
+        }),
+      ));
+    });
+
+    it('transfere todos os itens entre os mesmos locais internos', async () => {
+      await service.createInternalTransfer(transferDto, userId, {
+        requestId: transferDto.requestKey, ipAddress: null, userAgent: null,
+      });
+      expect(stock.transferQuantity).toHaveBeenNthCalledWith(1, {
+        productId: transferDto.items[0].productId,
+        batchId: transferDto.items[0].batchId,
+        stockLocationId: destinationId,
+      }, {
+        productId: transferDto.items[0].productId,
+        batchId: transferDto.items[0].batchId,
+        stockLocationId: transferDestinationId,
+      }, transferDto.items[0].quantity, manager);
+      expect(stock.transferQuantity).toHaveBeenCalledTimes(2);
+      expect(stock.addQuantity).not.toHaveBeenCalled();
+      expect(stock.removeQuantity).not.toHaveBeenCalled();
+    });
+
+    it('grava tipo, responsavel e auditoria da transferencia', async () => {
+      await service.createInternalTransfer(transferDto, userId, {
+        requestId: transferDto.requestKey, ipAddress: null, userAgent: null,
+      });
+      expect(repository.save).toHaveBeenCalledWith(expect.objectContaining({
+        type: MovementType.InternalTransfer,
+        responsibleUserId: userId,
+      }), manager);
+      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
+        manager,
+        userId,
+        action: 'INTERNAL_TRANSFER_CREATE',
+      }));
+    });
+
+    it('rejeita origem igual ao destino antes da transacao', async () => {
+      await expect(service.createInternalTransfer({
+        ...transferDto,
+        destinationLocationId: transferDto.originLocationId,
+      }, userId, {
+        requestId: transferDto.requestKey, ipAddress: null, userAgent: null,
+      })).rejects.toMatchObject({
+        response: {
+          code: 'SAME_TRANSFER_LOCATIONS',
+          message: 'Origem e destino devem ser diferentes.',
+        },
+      });
+      expect(dataSource.transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejeita origem externa', async () => {
+      await expect(service.createInternalTransfer({
+        ...transferDto,
+        originLocationId: originId,
+      }, userId, {
+        requestId: transferDto.requestKey, ipAddress: null, userAgent: null,
+      })).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejeita destino externo', async () => {
+      await expect(service.createInternalTransfer({
+        ...transferDto,
+        destinationLocationId: originId,
+      }, userId, {
+        requestId: transferDto.requestKey, ipAddress: null, userAgent: null,
+      })).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejeita itens duplicados', async () => {
+      await expect(service.createInternalTransfer({
+        ...transferDto,
+        items: [transferDto.items[0], transferDto.items[0]],
+      }, userId, {
+        requestId: transferDto.requestKey, ipAddress: null, userAgent: null,
+      })).rejects.toBeInstanceOf(BadRequestException);
+      expect(dataSource.transaction).not.toHaveBeenCalled();
+    });
+
+    it('interrompe itens e auditoria quando uma baixa falha', async () => {
+      stock.transferQuantity.mockRejectedValueOnce(new ConflictException({
+        code: 'INSUFFICIENT_STOCK', message: 'Saldo insuficiente. Disponivel: 1.',
+      }));
+      await expect(service.createInternalTransfer(transferDto, userId, {
+        requestId: transferDto.requestKey, ipAddress: null, userAgent: null,
+      })).rejects.toBeInstanceOf(ConflictException);
+      expect(repository.saveItems).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('protege o reenvio idempotente da mesma transferencia', async () => {
+      const existing = Object.assign(new MovementEntity(), {
+        requestKey: transferDto.requestKey,
+        responsibleUserId: userId,
+        type: MovementType.InternalTransfer,
+      });
+      repository.findByRequestKey.mockResolvedValue(existing);
+      await expect(service.createInternalTransfer(transferDto, userId, {
+        requestId: transferDto.requestKey, ipAddress: null, userAgent: null,
+      })).resolves.toBe(existing);
+      expect(dataSource.transaction).not.toHaveBeenCalled();
     });
   });
 });

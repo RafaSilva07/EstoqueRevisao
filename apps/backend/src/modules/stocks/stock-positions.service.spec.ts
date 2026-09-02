@@ -25,6 +25,7 @@ describe('StockPositionsService', () => {
     findByKey: jest.fn(),
     addAtomic: jest.fn(),
     removeAtomic: jest.fn(),
+    lockForTransfer: jest.fn(),
   };
   const products = { findById: jest.fn() };
   const batches = { findById: jest.fn() };
@@ -95,5 +96,51 @@ describe('StockPositionsService', () => {
     const result = await service.list(query);
     expect(positions.findAndCount).toHaveBeenCalledWith(query);
     expect(result.meta.total).toBe(1);
+  });
+
+  describe('transferencia interna', () => {
+    const destination = {
+      ...key,
+      stockLocationId: '10000000-0000-4000-8000-000000000004',
+    };
+
+    beforeEach(() => {
+      positions.lockForTransfer.mockResolvedValue(undefined);
+      positions.removeAtomic.mockResolvedValue(Object.assign(new StockPositionEntity(), key, {
+        quantity: 6,
+      }));
+      positions.addAtomic.mockResolvedValue(Object.assign(new StockPositionEntity(), destination, {
+        quantity: 4,
+      }));
+    });
+
+    it('bloqueia, retira da origem e adiciona a mesma quantidade no destino', async () => {
+      const result = await service.transferQuantity(key, destination, 4, manager);
+      expect(positions.lockForTransfer).toHaveBeenCalledWith(key, destination, manager);
+      expect(positions.removeAtomic).toHaveBeenCalledWith(key, 4, manager);
+      expect(positions.addAtomic).toHaveBeenCalledWith(destination, 4, manager);
+      expect(result).toMatchObject({ source: { quantity: 6 }, destination: { quantity: 4 } });
+    });
+
+    it.each([0, -1, 0.0000001])('rejeita quantidade invalida: %s', async (quantity) => {
+      await expect(service.transferQuantity(key, destination, quantity, manager))
+        .rejects.toBeInstanceOf(BadRequestException);
+      expect(positions.lockForTransfer).not.toHaveBeenCalled();
+    });
+
+    it('rejeita origem e destino iguais', async () => {
+      await expect(service.transferQuantity(key, key, 1, manager))
+        .rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('nao adiciona no destino quando a origem nao possui saldo', async () => {
+      positions.removeAtomic.mockResolvedValue(null);
+      positions.findByKey.mockResolvedValue(Object.assign(new StockPositionEntity(), key, {
+        quantity: 2,
+      }));
+      await expect(service.transferQuantity(key, destination, 3, manager))
+        .rejects.toBeInstanceOf(ConflictException);
+      expect(positions.addAtomic).not.toHaveBeenCalled();
+    });
   });
 });

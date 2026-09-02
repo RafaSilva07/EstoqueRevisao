@@ -9,7 +9,7 @@ import { StockLocationsRepository } from '../stocks/stock-locations.repository';
 import { StockPositionsService } from '../stocks/stock-positions.service';
 import { MovementStatus } from './domain/movement-status.enum';
 import { MovementType } from './domain/movement-type.enum';
-import { CreateExternalMovementDto } from './dto/create-external-movement.dto';
+import { CreateEffectiveMovementDto } from './dto/create-effective-movement.dto';
 import { MovementQueryDto } from './dto/movement-query.dto';
 import { MovementItemEntity } from './entities/movement-item.entity';
 import { MovementEntity } from './entities/movement.entity';
@@ -25,10 +25,12 @@ interface EffectiveMovementRules {
   rejectDuplicateItems: boolean;
   applyStock: (
     service: StockPositionsService,
-    item: CreateExternalMovementDto['items'][number],
-    dto: CreateExternalMovementDto,
+    item: CreateEffectiveMovementDto['items'][number],
+    dto: CreateEffectiveMovementDto,
     manager: EntityManager,
   ) => Promise<unknown>;
+  validateRoute?: (dto: CreateEffectiveMovementDto) => void;
+  deterministicItemOrder?: boolean;
 }
 
 @Injectable()
@@ -58,7 +60,7 @@ export class MovementsService {
   }
 
   createExternalEntry(
-    dto: CreateExternalMovementDto,
+    dto: CreateEffectiveMovementDto,
     userId: string,
     metadata: AuditRequestMetadata,
   ): Promise<MovementEntity> {
@@ -85,7 +87,7 @@ export class MovementsService {
   }
 
   createExternalExit(
-    dto: CreateExternalMovementDto,
+    dto: CreateEffectiveMovementDto,
     userId: string,
     metadata: AuditRequestMetadata,
   ): Promise<MovementEntity> {
@@ -103,6 +105,7 @@ export class MovementsService {
       originIsValid: (kind) => kind !== StockLocationKind.External,
       destinationIsValid: (kind) => kind === StockLocationKind.External,
       rejectDuplicateItems: true,
+      deterministicItemOrder: true,
       applyStock: (service, item, movement, manager) => service.removeQuantity({
         productId: item.productId,
         batchId: item.batchId,
@@ -111,8 +114,48 @@ export class MovementsService {
     });
   }
 
+  createInternalTransfer(
+    dto: CreateEffectiveMovementDto,
+    userId: string,
+    metadata: AuditRequestMetadata,
+  ): Promise<MovementEntity> {
+    return this.createEffectiveMovement(dto, userId, metadata, {
+      type: MovementType.InternalTransfer,
+      auditAction: 'INTERNAL_TRANSFER_CREATE',
+      invalidOrigin: {
+        code: 'INVALID_INTERNAL_ORIGIN',
+        message: 'A origem deve ser um estoque ou subestoque ativo.',
+      },
+      invalidDestination: {
+        code: 'INVALID_INTERNAL_DESTINATION',
+        message: 'O destino deve ser um estoque ou subestoque ativo.',
+      },
+      originIsValid: (kind) => kind !== StockLocationKind.External,
+      destinationIsValid: (kind) => kind !== StockLocationKind.External,
+      rejectDuplicateItems: true,
+      deterministicItemOrder: true,
+      validateRoute: (movement) => {
+        if (movement.originLocationId === movement.destinationLocationId) {
+          throw new BadRequestException({
+            code: 'SAME_TRANSFER_LOCATIONS',
+            message: 'Origem e destino devem ser diferentes.',
+          });
+        }
+      },
+      applyStock: (service, item, movement, manager) => service.transferQuantity({
+        productId: item.productId,
+        batchId: item.batchId,
+        stockLocationId: movement.originLocationId,
+      }, {
+        productId: item.productId,
+        batchId: item.batchId,
+        stockLocationId: movement.destinationLocationId,
+      }, item.quantity, manager),
+    });
+  }
+
   private async createEffectiveMovement(
-    dto: CreateExternalMovementDto,
+    dto: CreateEffectiveMovementDto,
     userId: string,
     metadata: AuditRequestMetadata,
     rules: EffectiveMovementRules,
@@ -120,6 +163,7 @@ export class MovementsService {
     const existing = await this.repository.findByRequestKey(dto.requestKey);
     if (existing) return this.resolveIdempotent(existing, userId, rules.type);
     if (rules.rejectDuplicateItems) this.validateNoDuplicateItems(dto);
+    rules.validateRoute?.(dto);
 
     try {
       const id = await this.dataSource.transaction(async (manager) => {
@@ -146,8 +190,13 @@ export class MovementsService {
         });
         await this.repository.save(movement, manager);
 
+        const effectiveItems = rules.deterministicItemOrder
+          ? [...dto.items].sort((left, right) => (
+            `${left.productId}:${left.batchId}`.localeCompare(`${right.productId}:${right.batchId}`)
+          ))
+          : dto.items;
         const items: MovementItemEntity[] = [];
-        for (const dtoItem of dto.items) {
+        for (const dtoItem of effectiveItems) {
           await rules.applyStock(this.stockPositions, dtoItem, dto, manager);
           items.push(Object.assign(new MovementItemEntity(), {
             movementId: movement.id,
@@ -172,7 +221,7 @@ export class MovementsService {
             destinationLocationId: movement.destinationLocationId,
             occurredAt: movement.occurredAt.toISOString(),
             observation: movement.observation,
-            items: dto.items,
+            items: effectiveItems,
           },
         });
         return movement.id;
@@ -188,14 +237,14 @@ export class MovementsService {
     }
   }
 
-  private validateNoDuplicateItems(dto: CreateExternalMovementDto): void {
+  private validateNoDuplicateItems(dto: CreateEffectiveMovementDto): void {
     const keys = new Set<string>();
     for (const item of dto.items) {
       const key = `${item.productId}:${item.batchId}`;
       if (keys.has(key)) {
         throw new BadRequestException({
           code: 'DUPLICATE_MOVEMENT_ITEM',
-          message: 'O mesmo produto e lote nao pode aparecer duas vezes na mesma saida.',
+          message: 'O mesmo produto e lote nao pode aparecer duas vezes na mesma movimentacao.',
         });
       }
       keys.add(key);

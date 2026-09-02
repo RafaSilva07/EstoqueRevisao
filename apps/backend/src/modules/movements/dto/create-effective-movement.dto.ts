@@ -14,7 +14,7 @@ import {
 } from 'class-validator';
 import { trimString } from '../../../shared/validation/transforms';
 
-export class CreateExternalMovementItemDto {
+export class CreateEffectiveMovementItemDto {
   @IsUUID()
   productId!: string;
 
@@ -27,7 +27,7 @@ export class CreateExternalMovementItemDto {
   quantity!: number;
 }
 
-export class CreateExternalMovementDto {
+export class CreateEffectiveMovementDto {
   @IsUUID()
   requestKey!: string;
 
@@ -51,6 +51,6 @@ export class CreateExternalMovementDto {
   @ArrayMinSize(1)
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
-  @Type(() => CreateExternalMovementItemDto)
-  items!: CreateExternalMovementItemDto[];
+  @Type(() => CreateEffectiveMovementItemDto)
+  items!: CreateEffectiveMovementItemDto[];
 }

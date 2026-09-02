@@ -2,7 +2,7 @@
 
 Sistema web para controle do estoque da Revisao, estruturado como monolito modular. A stack oficial e React com TypeScript/Vite no frontend, NestJS com TypeScript no backend e PostgreSQL 17, executado localmente por Docker Compose.
 
-O sistema entrega os cadastros base, a codificacao rastreavel de lotes, o saldo atual por produto/lote/local e entradas e saidas externas efetivadas com historico imutavel. Transferencias, conferencia em transito e revisoes ainda nao fazem parte do sistema.
+O sistema entrega os cadastros base, a codificacao rastreavel de lotes, o saldo atual por produto/lote/local e entradas, saidas e transferencias internas efetivadas com historico imutavel. Conferencia em transito e revisoes ainda nao fazem parte do sistema.
 
 ## Estrutura
 
@@ -18,7 +18,7 @@ apps/
       products/         produtos e conversoes de unidade
       batches/          lotes vinculados a produtos
       stocks/           locais logicos e posicoes de estoque
-      movements/        entradas/saidas externas e historico imutavel
+      movements/        entradas, saidas, transferencias e historico
       health/           saude da API e do banco
     shared/             erros, logs, paginacao e validacao
   frontend/src/         cliente da API e telas dos cadastros base
@@ -94,7 +94,7 @@ npm run dev:frontend
 - API REST: `http://localhost:3000/api/v1`
 - Health check: `GET http://localhost:3000/api/v1/health`
 
-O frontend restaura a sessao pelo refresh token HttpOnly, mantem o access token apenas em memoria e apresenta os cadastros, o estoque atual, entradas/saidas externas e o historico operacional.
+O frontend restaura a sessao pelo refresh token HttpOnly, mantem o access token apenas em memoria e apresenta os cadastros, o estoque atual, entradas, saidas, transferencias internas e o historico operacional.
 
 ## API preparada nesta etapa
 
@@ -103,7 +103,7 @@ O frontend restaura a sessao pelo refresh token HttpOnly, mantem o access token 
 - lotes: codigo `CONSERVADI` calculado da fabricacao (ou o inverso), validade obrigatoria e vinculo com produto;
 - estoques/locais: listagem paginada com filtros, detalhe, criacao, edicao e ativacao/inativacao;
 - estoque atual: consulta paginada e detalhe por produto, lote e local, sem endpoint publico de alteracao;
-- movimentacoes: criacao idempotente de entradas e saidas externas com varios itens, listagem filtrada por tipo e detalhe somente leitura;
+- movimentacoes: criacao idempotente de entradas, saidas e transferencias internas com varios itens, listagem filtrada por tipo e detalhe somente leitura;
 - autenticacao: login, refresh rotativo, logout e consulta da sessao;
 - autorizacao: permissoes especificas aplicadas em todas as rotas de cadastro;
 - auditoria: usuario, acao, entidade, identificador, data/hora, valores anteriores e novos;
@@ -124,6 +124,14 @@ Entradas efetivadas nao possuem rotas de edicao ou exclusao. Cancelamentos e est
 Itens repetidos pelo mesmo produto/lote sao rejeitados de forma deterministica. Atualizacoes condicionais no PostgreSQL impedem saldo negativo inclusive sob requisicoes concorrentes. Posicoes zeradas permanecem preservadas no banco para integridade historica, mas nao aparecem na consulta operacional de saldos disponiveis.
 
 Saidas efetivadas compartilham o historico, os filtros e o detalhe imutavel das entradas. Nao existem rotas de edicao, exclusao, cancelamento ou estorno nesta etapa.
+
+### Transferencia interna
+
+`POST /api/v1/movements/internal-transfers` recebe dois locais controlados diferentes, uma chave UUID de idempotencia e um ou mais itens. Para cada item, a mesma quantidade e retirada da origem e adicionada ao destino dentro da transacao do documento, preservando o total geral.
+
+Produto e lote devem possuir saldo positivo na origem. Itens repetidos sao rejeitados, as posicoes envolvidas sao bloqueadas em ordem deterministica e os itens sao processados por uma chave estavel para reduzir deadlocks. O destino e criado por UPSERT quando ainda nao possui a combinacao produto/lote, ou recebe a soma quando a posicao ja existe.
+
+A transferencia usa os locais configurados no banco e aceita `STOCK` e `SUBSTOCK`; nomes como Revisar, Lata Boa, Varejo e TUF nao fazem parte da regra. Transferencias efetivadas aparecem no mesmo historico e permanecem imutaveis.
 
 ## Verificacoes
 
