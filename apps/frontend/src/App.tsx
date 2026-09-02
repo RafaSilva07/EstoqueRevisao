@@ -1,320 +1,85 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react';
-import {
-  api,
-  Batch,
-  Paginated,
-  Product,
-  ResolvedBatchCode,
-  StockLocation,
-  StockLocationKind,
-  StockPosition,
-  UnitConversion,
-  UserSession,
-} from './api';
+import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react';
+import { api, Batch, Paginated, Product, ResolvedBatchCode, StockLocation, StockLocationKind, StockPosition, UnitConversion, UserSession } from './api';
+import { ConfirmDialog, EmptyState, LoadingState, Notice, PageHeader } from './components';
+import { formatDate } from './format';
 
-type Page = 'products' | 'batches' | 'stocks' | 'inventory';
-
-function messageFrom(error: unknown): string {
-  return error instanceof Error ? error.message : 'Ocorreu um erro inesperado.';
-}
+type Page = 'home' | 'inventory' | 'products' | 'batches' | 'stocks' | 'more';
+type Navigate = (page: Page) => void;
+const messageFrom = (error: unknown) => error instanceof Error ? error.message : 'Ocorreu um erro inesperado.';
 
 function Login({ onAuthenticated }: { onAuthenticated: (user: UserSession) => void }) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setError('');
-    try {
-      const result = await api.login(username, password);
-      onAuthenticated(result.user);
-    } catch (caught) {
-      setError(messageFrom(caught));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return <main className="login-page">
-    <form className="card login-card" onSubmit={(event) => void submit(event)}>
-      <p className="eyebrow">Acesso seguro</p>
-      <h1>Estoque Revisao</h1>
-      <label>Usuario<input value={username} onChange={(event) => setUsername(event.target.value)} required /></label>
-      <label>Senha<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
-      {error && <p className="alert">{error}</p>}
-      <button disabled={busy}>{busy ? 'Entrando...' : 'Entrar'}</button>
-    </form>
-  </main>;
+  const [username, setUsername] = useState(''); const [password, setPassword] = useState('');
+  const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
+  async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setError(''); try { onAuthenticated((await api.login(username, password)).user); } catch (caught) { setError(messageFrom(caught)); } finally { setBusy(false); } }
+  return <main className="login-page"><section className="login-intro" aria-hidden="true"><p className="brand-mark">ER</p><p className="eyebrow">Estoque Revisao</p><h1>Controle simples para o trabalho diario.</h1><p>Consulte produtos, lotes e saldos com rapidez e rastreabilidade.</p></section><form className="surface login-card" onSubmit={(event) => void submit(event)}><div><p className="eyebrow">Acesso seguro</p><h2>Entrar no sistema</h2><p className="muted">Use seu usuario e senha para continuar.</p></div><label htmlFor="username"><span>Usuario <span className="required">*</span></span></label><input id="username" autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} required autoFocus /><label htmlFor="password"><span>Senha <span className="required">*</span></span></label><input id="password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />{error && <Notice kind="error">{error}</Notice>}<button className="button-wide" disabled={busy}>{busy ? 'Entrando...' : 'Entrar'}</button></form></main>;
 }
 
+function HomePage({ navigate, inventory, productsWrite, batchesWrite }: { navigate: Navigate; inventory: boolean; productsWrite: boolean; batchesWrite: boolean }) {
+  const [counts, setCounts] = useState({ products: 0, batches: 0, positions: 0 }); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  useEffect(() => { void Promise.all([api.get<Paginated<Product>>('/products?limit=1'), api.get<Paginated<Batch>>('/batches?limit=1'), inventory ? api.get<Paginated<StockPosition>>('/stock-positions?limit=1') : Promise.resolve(null)]).then(([products, batches, positions]) => setCounts({ products: products.meta.total, batches: batches.meta.total, positions: positions?.meta.total ?? 0 })).catch((caught) => setError(messageFrom(caught))).finally(() => setLoading(false)); }, [inventory]);
+  return <><PageHeader eyebrow="Inicio" title="O que voce precisa fazer?" description="Acesse rapidamente as funcoes que ja estao disponiveis." />{error && <Notice kind="error">{error}</Notice>}<section className="quick-actions" aria-label="Acoes rapidas">{inventory && <button className="quick-action primary-action" onClick={() => navigate('inventory')}><span>Consultar estoque</span><small>Veja saldos por produto, lote e local</small></button>}{productsWrite && <button className="quick-action" onClick={() => navigate('products')}><span>Novo produto</span><small>Cadastre produtos e conversoes</small></button>}{batchesWrite && <button className="quick-action" onClick={() => navigate('batches')}><span>Novo lote</span><small>Informe fabricacao, lote e validade</small></button>}<button className="quick-action" onClick={() => navigate('stocks')}><span>Estoques e locais</span><small>Consulte a estrutura operacional</small></button></section><section className="summary-section"><p className="eyebrow">Visao atual</p><h2>Resumo dos cadastros</h2>{loading ? <LoadingState label="Carregando resumo" /> : <div className="summary-grid"><Metric label="Produtos" value={counts.products} action="Ver produtos" onClick={() => navigate('products')} /><Metric label="Lotes" value={counts.batches} action="Ver lotes" onClick={() => navigate('batches')} />{inventory && <Metric label="Posicoes em estoque" value={counts.positions} action="Consultar saldo" onClick={() => navigate('inventory')} />}</div>}</section></>;
+}
+function Metric({ label, value, action, onClick }: { label: string; value: number; action: string; onClick: () => void }) { return <article className="metric"><span>{label}</span><strong>{value}</strong><button className="text-button" onClick={onClick}>{action}</button></article>; }
+
 function ProductsPage({ canWrite }: { canWrite: boolean }) {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [selected, setSelected] = useState<Product | null>(null);
-  const [conversions, setConversions] = useState<UnitConversion[]>([]);
-  const [search, setSearch] = useState('');
-  const [error, setError] = useState('');
-  const [editing, setEditing] = useState<Product | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      const data = await api.get<Paginated<Product>>(`/products?limit=100&search=${encodeURIComponent(search)}`);
-      setProducts(data.items);
-    } catch (caught) { setError(messageFrom(caught)); }
-  }, [search]);
-
-  useEffect(() => {
-    const timeout = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(timeout);
-  }, [load]);
-
-  async function saveProduct(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const payload = { code: form.get('code'), name: form.get('name'), defaultUnit: form.get('defaultUnit') };
-    try {
-      if (editing?.id) await api.patch(`/products/${editing.id}`, payload);
-      else await api.post('/products', payload);
-      setEditing(null);
-      event.currentTarget.reset();
-      await load();
-    } catch (caught) { setError(messageFrom(caught)); }
-  }
-
-  async function selectProduct(product: Product) {
-    setSelected(product);
-    try { setConversions(await api.get(`/products/${product.id}/conversions`)); }
-    catch (caught) { setError(messageFrom(caught)); }
-  }
-
-  async function addConversion(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selected) return;
-    const form = new FormData(event.currentTarget);
-    try {
-      await api.post(`/products/${selected.id}/conversions`, {
-        fromUnit: form.get('fromUnit'),
-        toUnit: form.get('toUnit'),
-        factor: Number(form.get('factor')),
-      });
-      setConversions(await api.get(`/products/${selected.id}/conversions`));
-      event.currentTarget.reset();
-    } catch (caught) { setError(messageFrom(caught)); }
-  }
-
-  async function toggle(product: Product) {
-    try { await api.patch(`/products/${product.id}/status`, { active: !product.active }); await load(); }
-    catch (caught) { setError(messageFrom(caught)); }
-  }
-
-  return <div className="content-grid">
-    <section className="card">
-      <div className="section-heading">
-        <div><p className="eyebrow">Cadastro base</p><h2>Produtos</h2></div>
-        <input aria-label="Buscar produtos" placeholder="Buscar..." value={search} onChange={(event) => setSearch(event.target.value)} />
-      </div>
-      {error && <p className="alert">{error}</p>}
-      <div className="table-wrap"><table><thead><tr><th>Codigo</th><th>Produto</th><th>Unidade</th><th>Status</th><th /></tr></thead>
-        <tbody>{products.map((product) => <tr key={product.id} className={selected?.id === product.id ? 'selected' : ''}>
-          <td><button className="link" onClick={() => void selectProduct(product)}>{product.code}</button></td>
-          <td>{product.name}</td><td>{product.defaultUnit}</td>
-          <td><span className={`badge ${product.active ? 'active' : ''}`}>{product.active ? 'Ativo' : 'Inativo'}</span></td>
-          <td className="actions">{canWrite && <><button className="secondary" onClick={() => setEditing(product)}>Editar</button><button className="secondary" onClick={() => void toggle(product)}>{product.active ? 'Inativar' : 'Ativar'}</button></>}</td>
-        </tr>)}</tbody></table></div>
-      {canWrite && <form key={editing?.id ?? 'new'} className="form-grid" onSubmit={(event) => void saveProduct(event)}>
-        <h3>{editing ? 'Editar produto' : 'Novo produto'}</h3>
-        <label>Codigo<input name="code" defaultValue={editing?.code} required maxLength={60} /></label>
-        <label>Nome<input name="name" defaultValue={editing?.name} required maxLength={200} /></label>
-        <label>Unidade padrao<input name="defaultUnit" defaultValue={editing?.defaultUnit} required maxLength={20} /></label>
-        <div className="actions"><button>Salvar</button>{editing && <button type="button" className="secondary" onClick={() => setEditing(null)}>Cancelar</button>}</div>
-      </form>}
-    </section>
-    <aside className="card detail-card"><p className="eyebrow">Detalhe</p><h2>{selected?.name ?? 'Selecione um produto'}</h2>
-      {selected && <><dl><dt>Codigo</dt><dd>{selected.code}</dd><dt>Unidade padrao</dt><dd>{selected.defaultUnit}</dd></dl>
-        <h3>Conversoes de unidade</h3>
-        {conversions.length === 0 ? <p className="muted">Nenhuma conversao cadastrada.</p> : <ul className="conversion-list">{conversions.map((item) => <li key={item.id}>{item.fromUnit} → {item.factor} {item.toUnit}</li>)}</ul>}
-        {canWrite && <form className="compact-form" onSubmit={(event) => void addConversion(event)}><input name="fromUnit" placeholder="De" required /><input name="toUnit" placeholder="Para" required /><input name="factor" type="number" min="0.000001" step="0.000001" placeholder="Fator" required /><button>Adicionar</button></form>}
-      </>}
-    </aside>
-  </div>;
+  const [products, setProducts] = useState<Product[]>([]); const [selected, setSelected] = useState<Product | null>(null); const [conversions, setConversions] = useState<UnitConversion[]>([]);
+  const [search, setSearch] = useState(''); const [error, setError] = useState(''); const [success, setSuccess] = useState(''); const [editing, setEditing] = useState<Product | null>(null);
+  const [showForm, setShowForm] = useState(false); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [confirming, setConfirming] = useState<Product | null>(null);
+  const load = useCallback(async () => { setLoading(true); try { setProducts((await api.get<Paginated<Product>>(`/products?limit=100&search=${encodeURIComponent(search)}`)).items); setError(''); } catch (caught) { setError(messageFrom(caught)); } finally { setLoading(false); } }, [search]);
+  useEffect(() => { const timeout = window.setTimeout(() => void load(), 250); return () => window.clearTimeout(timeout); }, [load]);
+  function openForm(product: Product | null) { setEditing(product); setShowForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  async function save(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setBusy(true); const form = new FormData(event.currentTarget); try { const payload = { code: form.get('code'), name: form.get('name'), defaultUnit: form.get('defaultUnit') }; if (editing) await api.patch(`/products/${editing.id}`, payload); else await api.post('/products', payload); setSuccess(editing ? 'Produto atualizado com sucesso.' : 'Produto cadastrado com sucesso.'); setShowForm(false); setEditing(null); await load(); } catch (caught) { setError(messageFrom(caught)); } finally { setBusy(false); } }
+  async function select(product: Product) { setSelected(product); try { setConversions(await api.get(`/products/${product.id}/conversions`)); } catch (caught) { setError(messageFrom(caught)); } }
+  async function addConversion(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!selected) return; setBusy(true); const form = new FormData(event.currentTarget); try { await api.post(`/products/${selected.id}/conversions`, { fromUnit: form.get('fromUnit'), toUnit: form.get('toUnit'), factor: Number(form.get('factor')) }); setConversions(await api.get(`/products/${selected.id}/conversions`)); event.currentTarget.reset(); setSuccess('Conversao adicionada com sucesso.'); } catch (caught) { setError(messageFrom(caught)); } finally { setBusy(false); } }
+  async function toggle(product: Product) { setBusy(true); try { await api.patch(`/products/${product.id}/status`, { active: !product.active }); setSuccess(product.active ? 'Produto inativado com sucesso.' : 'Produto ativado com sucesso.'); setConfirming(null); await load(); } catch (caught) { setError(messageFrom(caught)); } finally { setBusy(false); } }
+  return <><PageHeader eyebrow="Cadastro base" title="Produtos" description="Consulte produtos e mantenha suas unidades e conversoes." action={canWrite && <button onClick={() => openForm(null)}>+ Novo produto</button>} />{success && <Notice kind="success" onClose={() => setSuccess('')}>{success}</Notice>}{error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}{showForm && <section className="surface form-panel"><PanelHeading eyebrow={editing ? 'Edicao' : 'Novo cadastro'} title={editing ? 'Editar produto' : 'Cadastrar produto'} onClose={() => setShowForm(false)} /><form key={editing?.id ?? 'new'} className="form-grid" onSubmit={(event) => void save(event)}><RequiredField label="Codigo"><input name="code" defaultValue={editing?.code} required maxLength={60} autoFocus /></RequiredField><RequiredField label="Nome"><input name="name" defaultValue={editing?.name} required maxLength={200} /></RequiredField><RequiredField label="Unidade padrao"><input name="defaultUnit" defaultValue={editing?.defaultUnit} required maxLength={20} /></RequiredField><FormActions busy={busy} saveLabel="Salvar produto" onCancel={() => setShowForm(false)} /></form></section>}<div className="content-grid"><section className="surface list-panel"><div className="toolbar"><label className="search-field">Buscar produto<input type="search" placeholder="Codigo ou nome" value={search} onChange={(event) => setSearch(event.target.value)} /></label></div>{loading ? <LoadingState label="Carregando produtos" /> : products.length === 0 ? <EmptyState title={search ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'} description={search ? 'Revise o termo de busca.' : 'Cadastre o primeiro produto para comecar.'} action={canWrite && !search ? <button onClick={() => openForm(null)}>Cadastrar produto</button> : undefined} /> : <div className="responsive-table"><table><thead><tr><th>Codigo</th><th>Produto</th><th>Unidade</th><th>Status</th><th>Acoes</th></tr></thead><tbody>{products.map((product) => <tr key={product.id} className={selected?.id === product.id ? 'selected' : ''}><td data-label="Codigo"><button className="text-button" onClick={() => void select(product)}>{product.code}</button></td><td data-label="Produto">{product.name}</td><td data-label="Unidade">{product.defaultUnit}</td><td data-label="Status"><Status active={product.active} /></td><td data-label="Acoes"><div className="row-actions">{canWrite && <><button className="secondary" onClick={() => openForm(product)}>Editar</button><button className="secondary" onClick={() => product.active ? setConfirming(product) : void toggle(product)}>{product.active ? 'Inativar' : 'Ativar'}</button></>}</div></td></tr>)}</tbody></table></div>}</section><aside className="surface detail-panel"><p className="eyebrow">Detalhes</p><h2>{selected?.name ?? 'Selecione um produto'}</h2>{selected ? <><dl><dt>Codigo</dt><dd>{selected.code}</dd><dt>Unidade</dt><dd>{selected.defaultUnit}</dd><dt>Status</dt><dd>{selected.active ? 'Ativo' : 'Inativo'}</dd></dl><div className="divider" /><h3>Conversoes de unidade</h3>{conversions.length === 0 ? <p className="muted">Nenhuma conversao cadastrada.</p> : <ul className="conversion-list">{conversions.map((item) => <li key={item.id}><strong>{item.fromUnit}</strong><span>1 × {item.factor} = {item.factor} {item.toUnit}</span></li>)}</ul>}{canWrite && <form className="compact-form" onSubmit={(event) => void addConversion(event)}><label>Origem<input name="fromUnit" required /></label><label>Destino<input name="toUnit" required /></label><label>Fator<input name="factor" type="number" min="0.000001" step="0.000001" required /></label><button disabled={busy}>{busy ? 'Adicionando...' : 'Adicionar conversao'}</button></form>}</> : <p className="muted">Toque no codigo de um produto para ver os detalhes.</p>}</aside></div><ConfirmDialog open={Boolean(confirming)} title="Inativar produto?" description={`O produto ${confirming?.name ?? ''} deixara de aparecer nas selecoes operacionais.`} confirmLabel="Inativar produto" busy={busy} onCancel={() => setConfirming(null)} onConfirm={() => { if (confirming) void toggle(confirming); }} /></>;
 }
 
 function BatchesPage({ canWrite }: { canWrite: boolean }) {
-  const [batches, setBatches] = useState<Batch[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [error, setError] = useState('');
-  const [editing, setEditing] = useState<Batch | null>(null);
-  const [code, setCode] = useState('');
-  const [manufacturingDate, setManufacturingDate] = useState('');
-  const [expirationDate, setExpirationDate] = useState('');
-
-  const load = useCallback(async () => {
-    try {
-      const [batchData, productData] = await Promise.all([
-        api.get<Paginated<Batch>>('/batches?limit=100'),
-        api.get<Paginated<Product>>('/products?limit=100&active=true'),
-      ]);
-      setBatches(batchData.items);
-      setProducts(productData.items);
-    } catch (caught) { setError(messageFrom(caught)); }
-  }, []);
-  useEffect(() => {
-    const timeout = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(timeout);
-  }, [load]);
-
-  async function create(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    try {
-      const payload = { code, manufacturingDate, expirationDate };
-      if (editing) await api.patch(`/batches/${editing.id}`, payload);
-      else await api.post('/batches', { ...payload, productId: form.get('productId') });
-      setEditing(null);
-      setCode('');
-      setManufacturingDate('');
-      setExpirationDate('');
-      event.currentTarget.reset();
-      await load();
-    } catch (caught) { setError(messageFrom(caught)); }
-  }
-
-  async function resolveBatch(values: { code?: string; manufacturingDate?: string }) {
-    if (!(values.code ?? values.manufacturingDate)) return;
-    try {
-      setError('');
-      const resolved = await api.post<ResolvedBatchCode>('/batches/resolve-code', values);
-      setCode(resolved.code);
-      setManufacturingDate(resolved.manufacturingDate);
-    } catch (caught) { setError(messageFrom(caught)); }
-  }
-
-  function beginEdit(batch: Batch) {
-    setEditing(batch);
-    setCode(batch.code);
-    setManufacturingDate(batch.manufacturingDate);
-    setExpirationDate(batch.expirationDate);
-  }
-
-  function cancelEdit() {
-    setEditing(null);
-    setCode('');
-    setManufacturingDate('');
-    setExpirationDate('');
-  }
-
+  const [batches, setBatches] = useState<Batch[]>([]); const [products, setProducts] = useState<Product[]>([]); const [editing, setEditing] = useState<Batch | null>(null);
+  const [code, setCode] = useState(''); const [manufacturingDate, setManufacturingDate] = useState(''); const [expirationDate, setExpirationDate] = useState('');
+  const [showForm, setShowForm] = useState(false); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [resolving, setResolving] = useState(false); const [error, setError] = useState(''); const [success, setSuccess] = useState('');
+  const load = useCallback(async () => { setLoading(true); try { const [batchData, productData] = await Promise.all([api.get<Paginated<Batch>>('/batches?limit=100'), api.get<Paginated<Product>>('/products?limit=100&active=true')]); setBatches(batchData.items); setProducts(productData.items); setError(''); } catch (caught) { setError(messageFrom(caught)); } finally { setLoading(false); } }, []);
+  useEffect(() => { const timeout = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timeout); }, [load]);
+  function reset() { setEditing(null); setCode(''); setManufacturingDate(''); setExpirationDate(''); }
+  function open(batch: Batch | null) { reset(); if (batch) { setEditing(batch); setCode(batch.code); setManufacturingDate(batch.manufacturingDate); setExpirationDate(batch.expirationDate); } setShowForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  async function resolve(values: { code?: string; manufacturingDate?: string }) { if (!(values.code ?? values.manufacturingDate)) return; setResolving(true); try { const result = await api.post<ResolvedBatchCode>('/batches/resolve-code', values); setCode(result.code); setManufacturingDate(result.manufacturingDate); setError(''); } catch (caught) { setError(messageFrom(caught)); } finally { setResolving(false); } }
+  async function save(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setBusy(true); const form = new FormData(event.currentTarget); try { const payload = { code, manufacturingDate, expirationDate }; if (editing) await api.patch(`/batches/${editing.id}`, payload); else await api.post('/batches', { ...payload, productId: form.get('productId') }); setSuccess(editing ? 'Lote atualizado com sucesso.' : 'Lote cadastrado com sucesso.'); reset(); setShowForm(false); await load(); } catch (caught) { setError(messageFrom(caught)); } finally { setBusy(false); } }
   const productName = (batch: Batch) => products.find((product) => product.id === batch.productId)?.name ?? batch.product?.name ?? 'Produto';
-  return <section className="card"><p className="eyebrow">Rastreabilidade</p><h2>Lotes</h2><p className="muted">Informe a fabricacao ou o codigo CONSERVADI; o campo correspondente sera calculado automaticamente.</p>{error && <p className="alert">{error}</p>}
-    <div className="table-wrap"><table><thead><tr><th>Lote</th><th>Produto</th><th>Fabricacao</th><th>Validade</th><th /></tr></thead><tbody>{batches.map((batch) => <tr key={batch.id}><td>{batch.code}</td><td>{productName(batch)}</td><td>{batch.manufacturingDate}</td><td>{batch.expirationDate}</td><td>{canWrite && <button className="secondary" onClick={() => beginEdit(batch)}>Editar</button>}</td></tr>)}</tbody></table></div>
-    {canWrite && <form key={editing?.id ?? 'new'} className="form-grid" onSubmit={(event) => void create(event)}><h3>{editing ? 'Editar lote' : 'Novo lote'}</h3><label>Produto<select name="productId" defaultValue={editing?.productId ?? ''} required disabled={Boolean(editing)}><option value="">Selecione</option>{products.map((product) => <option key={product.id} value={product.id}>{product.code} — {product.name}</option>)}</select></label><label>Codigo do lote<input name="code" value={code} maxLength={6} pattern="[CONSERVADIconservadi]{6}" required onChange={(event) => setCode(event.target.value.toUpperCase())} onBlur={() => void resolveBatch({ code })} /></label><label>Fabricacao<input name="manufacturingDate" type="date" value={manufacturingDate} required onChange={(event) => { setManufacturingDate(event.target.value); void resolveBatch({ manufacturingDate: event.target.value }); }} /></label><label>Validade<input name="expirationDate" type="date" value={expirationDate} min={manufacturingDate} required onChange={(event) => setExpirationDate(event.target.value)} /></label><div className="actions"><button>Salvar lote</button>{editing && <button type="button" className="secondary" onClick={cancelEdit}>Cancelar</button>}</div></form>}
-  </section>;
+  return <><PageHeader eyebrow="Rastreabilidade" title="Lotes" description="A fabricacao e o codigo CONSERVADI representam a mesma informacao." action={canWrite && <button onClick={() => open(null)}>+ Novo lote</button>} />{success && <Notice kind="success" onClose={() => setSuccess('')}>{success}</Notice>}{error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}{showForm && <section className="surface form-panel"><PanelHeading eyebrow={editing ? 'Edicao' : 'Novo cadastro'} title={editing ? 'Editar lote' : 'Cadastrar lote'} onClose={() => setShowForm(false)} /><form key={editing?.id ?? 'new'} className="form-grid batch-form" onSubmit={(event) => void save(event)}><RequiredField label="Produto"><select name="productId" defaultValue={editing?.productId ?? ''} required disabled={Boolean(editing)}><option value="">Selecione</option>{products.map((product) => <option key={product.id} value={product.id}>{product.code} — {product.name}</option>)}</select></RequiredField><div className="linked-fields"><RequiredField label="Fabricacao"><input type="date" value={manufacturingDate} required onChange={(event) => { setManufacturingDate(event.target.value); void resolve({ manufacturingDate: event.target.value }); }} /></RequiredField><span className="link-indicator">gera</span><RequiredField label="Codigo do lote"><input value={code} maxLength={6} pattern="[CONSERVADIconservadi]{6}" required onChange={(event) => setCode(event.target.value.toUpperCase())} onBlur={() => void resolve({ code })} /><small>{resolving ? 'Calculando...' : '6 letras CONSERVADI'}</small></RequiredField></div><RequiredField label="Validade"><input type="date" value={expirationDate} min={manufacturingDate} required onChange={(event) => setExpirationDate(event.target.value)} /></RequiredField><FormActions busy={busy || resolving} saveLabel="Salvar lote" onCancel={() => setShowForm(false)} /></form></section>}<section className="surface list-panel">{loading ? <LoadingState label="Carregando lotes" /> : batches.length === 0 ? <EmptyState title="Nenhum lote cadastrado" description="Cadastre o primeiro lote informando fabricacao e validade." action={canWrite ? <button onClick={() => open(null)}>Cadastrar lote</button> : undefined} /> : <div className="responsive-table"><table><thead><tr><th>Lote</th><th>Produto</th><th>Fabricacao</th><th>Validade</th><th>Acoes</th></tr></thead><tbody>{batches.map((batch) => <tr key={batch.id}><td data-label="Lote"><strong>{batch.code}</strong></td><td data-label="Produto">{productName(batch)}</td><td data-label="Fabricacao">{formatDate(batch.manufacturingDate)}</td><td data-label="Validade">{formatDate(batch.expirationDate)}</td><td data-label="Acoes"><div className="row-actions">{canWrite && <button className="secondary" onClick={() => open(batch)}>Editar lote</button>}</div></td></tr>)}</tbody></table></div>}</section></>;
 }
 
 function InventoryPage() {
-  const [positions, setPositions] = useState<StockPosition[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [batches, setBatches] = useState<Batch[]>([]);
-  const [locations, setLocations] = useState<StockLocation[]>([]);
-  const [selected, setSelected] = useState<StockPosition | null>(null);
-  const [productId, setProductId] = useState('');
-  const [batchId, setBatchId] = useState('');
-  const [stockLocationId, setStockLocationId] = useState('');
-  const [error, setError] = useState('');
-
-  const load = useCallback(async () => {
-    const query = new URLSearchParams({ limit: '100' });
-    if (productId) query.set('productId', productId);
-    if (batchId) query.set('batchId', batchId);
-    if (stockLocationId) query.set('stockLocationId', stockLocationId);
-    try {
-      const [positionData, productData, batchData, locationData] = await Promise.all([
-        api.get<Paginated<StockPosition>>(`/stock-positions?${query.toString()}`),
-        api.get<Paginated<Product>>('/products?limit=100&active=true'),
-        api.get<Paginated<Batch>>('/batches?limit=100'),
-        api.get<Paginated<StockLocation>>('/stocks?limit=100&active=true'),
-      ]);
-      setPositions(positionData.items);
-      setProducts(productData.items);
-      setBatches(batchData.items);
-      setLocations(locationData.items);
-      setError('');
-    } catch (caught) { setError(messageFrom(caught)); }
-  }, [batchId, productId, stockLocationId]);
-
-  useEffect(() => {
-    const timeout = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(timeout);
-  }, [load]);
-
-  const availableBatches = productId ? batches.filter((batch) => batch.productId === productId) : batches;
-  return <div className="content-grid">
-    <section className="card"><p className="eyebrow">Consulta operacional</p><h2>Estoque atual</h2><p className="muted">Posicao consolidada por produto, lote e local. Alteracoes de saldo sao permitidas somente pelos servicos internos transacionais.</p>
-      <div className="filter-grid"><label>Produto<select value={productId} onChange={(event) => { setProductId(event.target.value); setBatchId(''); }}><option value="">Todos</option>{products.map((product) => <option key={product.id} value={product.id}>{product.code} — {product.name}</option>)}</select></label><label>Lote<select value={batchId} onChange={(event) => setBatchId(event.target.value)}><option value="">Todos</option>{availableBatches.map((batch) => <option key={batch.id} value={batch.id}>{batch.code}</option>)}</select></label><label>Local<select value={stockLocationId} onChange={(event) => setStockLocationId(event.target.value)}><option value="">Todos</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.code} — {location.name}</option>)}</select></label></div>
-      {error && <p className="alert">{error}</p>}
-      <div className="table-wrap"><table><thead><tr><th>Produto</th><th>Lote</th><th>Fabricacao</th><th>Validade</th><th>Local</th><th>Quantidade</th></tr></thead><tbody>{positions.map((position) => <tr key={position.id} className={selected?.id === position.id ? 'selected' : ''} onClick={() => setSelected(position)}><td>{position.product.code} — {position.product.name}</td><td>{position.batch.code}</td><td>{position.batch.manufacturingDate}</td><td>{position.batch.expirationDate}</td><td>{position.stockLocation.name}</td><td>{position.quantity} {position.product.defaultUnit}</td></tr>)}</tbody></table></div>
-      {positions.length === 0 && !error && <p className="muted">Nenhuma posicao encontrada para os filtros.</p>}
-    </section>
-    <aside className="card detail-card"><p className="eyebrow">Detalhe</p><h2>{selected?.product.name ?? 'Selecione uma posicao'}</h2>{selected && <dl><dt>Produto</dt><dd>{selected.product.code}</dd><dt>Lote</dt><dd>{selected.batch.code}</dd><dt>Fabricacao</dt><dd>{selected.batch.manufacturingDate}</dd><dt>Validade</dt><dd>{selected.batch.expirationDate}</dd><dt>Local</dt><dd>{selected.stockLocation.name}</dd><dt>Quantidade</dt><dd>{selected.quantity} {selected.product.defaultUnit}</dd></dl>}</aside>
-  </div>;
+  const [positions, setPositions] = useState<StockPosition[]>([]); const [products, setProducts] = useState<Product[]>([]); const [batches, setBatches] = useState<Batch[]>([]); const [locations, setLocations] = useState<StockLocation[]>([]); const [selected, setSelected] = useState<StockPosition | null>(null);
+  const [productId, setProductId] = useState(''); const [batchId, setBatchId] = useState(''); const [stockLocationId, setStockLocationId] = useState(''); const [showFilters, setShowFilters] = useState(false); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  const load = useCallback(async () => { setLoading(true); const query = new URLSearchParams({ limit: '100' }); if (productId) query.set('productId', productId); if (batchId) query.set('batchId', batchId); if (stockLocationId) query.set('stockLocationId', stockLocationId); try { const [positionData, productData, batchData, locationData] = await Promise.all([api.get<Paginated<StockPosition>>(`/stock-positions?${query}`), api.get<Paginated<Product>>('/products?limit=100&active=true'), api.get<Paginated<Batch>>('/batches?limit=100'), api.get<Paginated<StockLocation>>('/stocks?limit=100&active=true')]); setPositions(positionData.items); setProducts(productData.items); setBatches(batchData.items); setLocations(locationData.items); setError(''); } catch (caught) { setError(messageFrom(caught)); } finally { setLoading(false); } }, [batchId, productId, stockLocationId]);
+  useEffect(() => { const timeout = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timeout); }, [load]);
+  const filters = [productId, batchId, stockLocationId].filter(Boolean).length; const availableBatches = productId ? batches.filter((batch) => batch.productId === productId) : batches; const clear = () => { setProductId(''); setBatchId(''); setStockLocationId(''); };
+  return <><PageHeader eyebrow="Consulta operacional" title="Estoque atual" description="Saldo consolidado por produto, lote e local." action={<button className="secondary filter-toggle" onClick={() => setShowFilters((value) => !value)}>Filtros{filters ? ` (${filters})` : ''}</button>} />{error && <Notice kind="error">{error}</Notice>}<section className={`surface filters-panel ${showFilters ? 'filters-open' : ''}`}><div className="filter-grid"><label>Produto<select value={productId} onChange={(event) => { setProductId(event.target.value); setBatchId(''); }}><option value="">Todos</option>{products.map((product) => <option key={product.id} value={product.id}>{product.code} — {product.name}</option>)}</select></label><label>Lote<select value={batchId} onChange={(event) => setBatchId(event.target.value)}><option value="">Todos</option>{availableBatches.map((batch) => <option key={batch.id} value={batch.id}>{batch.code}</option>)}</select></label><label>Local<select value={stockLocationId} onChange={(event) => setStockLocationId(event.target.value)}><option value="">Todos</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.code} — {location.name}</option>)}</select></label></div>{filters > 0 && <button className="text-button" onClick={clear}>Limpar filtros</button>}</section><div className="content-grid inventory-grid"><section className="surface list-panel">{loading ? <LoadingState label="Consultando estoque" /> : positions.length === 0 ? <EmptyState title={filters ? 'Nenhuma posicao encontrada' : 'Estoque sem posicoes'} description={filters ? 'Ajuste ou limpe os filtros.' : 'As posicoes aparecerao quando operacoes de estoque forem registradas.'} action={filters ? <button className="secondary" onClick={clear}>Limpar filtros</button> : undefined} /> : <div className="responsive-table"><table><thead><tr><th>Produto</th><th>Lote</th><th>Fabricacao</th><th>Validade</th><th>Local</th><th>Quantidade</th></tr></thead><tbody>{positions.map((position) => <tr key={position.id} className={selected?.id === position.id ? 'selected' : ''} onClick={() => setSelected(position)} tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter') setSelected(position); }}><td data-label="Produto"><strong>{position.product.name}</strong><small className="cell-note">{position.product.code}</small></td><td data-label="Lote">{position.batch.code}</td><td data-label="Fabricacao">{formatDate(position.batch.manufacturingDate)}</td><td data-label="Validade">{formatDate(position.batch.expirationDate)}</td><td data-label="Local">{position.stockLocation.name}</td><td data-label="Quantidade"><strong className="quantity">{position.quantity} {position.product.defaultUnit}</strong></td></tr>)}</tbody></table></div>}</section>{selected && <aside className="surface detail-panel"><PanelHeading eyebrow="Detalhes da posicao" title={selected.product.name} onClose={() => setSelected(null)} /><dl><dt>Produto</dt><dd>{selected.product.code}</dd><dt>Lote</dt><dd>{selected.batch.code}</dd><dt>Fabricacao</dt><dd>{formatDate(selected.batch.manufacturingDate)}</dd><dt>Validade</dt><dd>{formatDate(selected.batch.expirationDate)}</dd><dt>Local</dt><dd>{selected.stockLocation.name}</dd><dt>Quantidade</dt><dd>{selected.quantity} {selected.product.defaultUnit}</dd></dl></aside>}</div></>;
 }
 
 function StocksPage({ canWrite }: { canWrite: boolean }) {
-  const [locations, setLocations] = useState<StockLocation[]>([]);
-  const [error, setError] = useState('');
-  const [editing, setEditing] = useState<StockLocation | null>(null);
-  const load = useCallback(async () => {
-    try { setLocations((await api.get<Paginated<StockLocation>>('/stocks?limit=100')).items); }
-    catch (caught) { setError(messageFrom(caught)); }
-  }, []);
-  useEffect(() => {
-    const timeout = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(timeout);
-  }, [load]);
-
-  async function create(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const kind = form.get('kind') as StockLocationKind;
-    try {
-      const payload = {
-        code: form.get('code'),
-        name: form.get('name'),
-        description: form.get('description') || null,
-        kind,
-        parentId: form.get('parentId') || null,
-      };
-      if (editing) await api.patch(`/stocks/${editing.id}`, payload);
-      else await api.post('/stocks', payload);
-      setEditing(null);
-      event.currentTarget.reset();
-      await load();
-    } catch (caught) { setError(messageFrom(caught)); }
-  }
-
-  async function toggle(location: StockLocation) {
-    try { await api.patch(`/stocks/${location.id}/status`, { active: !location.active }); await load(); }
-    catch (caught) { setError(messageFrom(caught)); }
-  }
-
-  const stockParents = locations.filter((item) => item.kind === 'STOCK' && item.active);
-  return <section className="card"><p className="eyebrow">Estrutura logica</p><h2>Estoques e locais</h2><p className="muted">Cadastros de origem e destino. Os saldos consolidados estao disponiveis em Estoque atual.</p>{error && <p className="alert">{error}</p>}
-    <div className="table-wrap"><table><thead><tr><th>Codigo</th><th>Nome</th><th>Tipo</th><th>Pai</th><th>Status</th><th /></tr></thead><tbody>{locations.map((location) => <tr key={location.id}><td>{location.code}</td><td>{location.name}</td><td>{location.kind}</td><td>{locations.find((item) => item.id === location.parentId)?.name ?? '—'}</td><td><span className={`badge ${location.active ? 'active' : ''}`}>{location.active ? 'Ativo' : 'Inativo'}</span></td><td className="actions">{canWrite && <><button className="secondary" onClick={() => setEditing(location)}>Editar</button><button className="secondary" onClick={() => void toggle(location)}>{location.active ? 'Inativar' : 'Ativar'}</button></>}</td></tr>)}</tbody></table></div>
-    {canWrite && <form key={editing?.id ?? 'new'} className="form-grid" onSubmit={(event) => void create(event)}><h3>{editing ? 'Editar estoque ou local' : 'Novo estoque ou local'}</h3><label>Codigo<input name="code" defaultValue={editing?.code} required /></label><label>Nome<input name="name" defaultValue={editing?.name} required /></label><label>Tipo<select name="kind" defaultValue={editing?.kind ?? 'STOCK'} required><option value="STOCK">Estoque</option><option value="SUBSTOCK">Subestoque</option><option value="EXTERNAL">Origem/destino externo</option></select></label><label>Estoque pai (somente subestoque)<select name="parentId" defaultValue={editing?.parentId ?? ''}><option value="">Nenhum</option>{stockParents.filter((item) => item.id !== editing?.id).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="wide">Descricao<input name="description" defaultValue={editing?.description ?? ''} /></label><div className="actions"><button>Salvar local</button>{editing && <button type="button" className="secondary" onClick={() => setEditing(null)}>Cancelar</button>}</div></form>}
-  </section>;
+  const [locations, setLocations] = useState<StockLocation[]>([]); const [editing, setEditing] = useState<StockLocation | null>(null); const [showForm, setShowForm] = useState(false); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [confirming, setConfirming] = useState<StockLocation | null>(null); const [error, setError] = useState(''); const [success, setSuccess] = useState('');
+  const load = useCallback(async () => { setLoading(true); try { setLocations((await api.get<Paginated<StockLocation>>('/stocks?limit=100')).items); setError(''); } catch (caught) { setError(messageFrom(caught)); } finally { setLoading(false); } }, []); useEffect(() => { const timeout = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timeout); }, [load]);
+  function open(location: StockLocation | null) { setEditing(location); setShowForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  async function save(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setBusy(true); const form = new FormData(event.currentTarget); const payload = { code: form.get('code'), name: form.get('name'), description: form.get('description') || null, kind: form.get('kind') as StockLocationKind, parentId: form.get('parentId') || null }; try { if (editing) await api.patch(`/stocks/${editing.id}`, payload); else await api.post('/stocks', payload); setSuccess(editing ? 'Local atualizado com sucesso.' : 'Local cadastrado com sucesso.'); setShowForm(false); setEditing(null); await load(); } catch (caught) { setError(messageFrom(caught)); } finally { setBusy(false); } }
+  async function toggle(location: StockLocation) { setBusy(true); try { await api.patch(`/stocks/${location.id}/status`, { active: !location.active }); setSuccess(location.active ? 'Local inativado com sucesso.' : 'Local ativado com sucesso.'); setConfirming(null); await load(); } catch (caught) { setError(messageFrom(caught)); } finally { setBusy(false); } }
+  const parents = locations.filter((item) => item.kind === 'STOCK' && item.active); const kindLabel = (kind: StockLocationKind) => ({ STOCK: 'Estoque', SUBSTOCK: 'Subestoque', EXTERNAL: 'Origem/destino externo' })[kind];
+  return <><PageHeader eyebrow="Estrutura logica" title="Estoques e locais" description="Locais usados como origem, destino e classificacao do saldo." action={canWrite && <button onClick={() => open(null)}>+ Novo local</button>} />{success && <Notice kind="success" onClose={() => setSuccess('')}>{success}</Notice>}{error && <Notice kind="error">{error}</Notice>}{showForm && <section className="surface form-panel"><PanelHeading eyebrow={editing ? 'Edicao' : 'Novo cadastro'} title={editing ? 'Editar local' : 'Cadastrar local'} onClose={() => setShowForm(false)} /><form key={editing?.id ?? 'new'} className="form-grid" onSubmit={(event) => void save(event)}><RequiredField label="Codigo"><input name="code" defaultValue={editing?.code} required /></RequiredField><RequiredField label="Nome"><input name="name" defaultValue={editing?.name} required /></RequiredField><RequiredField label="Tipo"><select name="kind" defaultValue={editing?.kind ?? 'STOCK'}><option value="STOCK">Estoque</option><option value="SUBSTOCK">Subestoque</option><option value="EXTERNAL">Origem/destino externo</option></select></RequiredField><label>Estoque pai<select name="parentId" defaultValue={editing?.parentId ?? ''}><option value="">Nenhum</option>{parents.filter((item) => item.id !== editing?.id).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><small>Obrigatorio somente para subestoques.</small></label><label className="wide">Descricao<input name="description" defaultValue={editing?.description ?? ''} /></label><FormActions busy={busy} saveLabel="Salvar local" onCancel={() => setShowForm(false)} /></form></section>}<section className="surface list-panel">{loading ? <LoadingState label="Carregando locais" /> : locations.length === 0 ? <EmptyState title="Nenhum local cadastrado" description="Cadastre um local para organizar a operacao." action={canWrite ? <button onClick={() => open(null)}>Cadastrar local</button> : undefined} /> : <div className="responsive-table"><table><thead><tr><th>Codigo</th><th>Nome</th><th>Tipo</th><th>Estoque pai</th><th>Status</th><th>Acoes</th></tr></thead><tbody>{locations.map((location) => <tr key={location.id}><td data-label="Codigo"><strong>{location.code}</strong></td><td data-label="Nome">{location.name}</td><td data-label="Tipo">{kindLabel(location.kind)}</td><td data-label="Estoque pai">{locations.find((item) => item.id === location.parentId)?.name ?? '—'}</td><td data-label="Status"><Status active={location.active} /></td><td data-label="Acoes"><div className="row-actions">{canWrite && <><button className="secondary" onClick={() => open(location)}>Editar</button><button className="secondary" onClick={() => location.active ? setConfirming(location) : void toggle(location)}>{location.active ? 'Inativar' : 'Ativar'}</button></>}</div></td></tr>)}</tbody></table></div>}</section><ConfirmDialog open={Boolean(confirming)} title="Inativar local?" description={`O local ${confirming?.name ?? ''} deixara de aparecer nas selecoes operacionais.`} confirmLabel="Inativar local" busy={busy} onCancel={() => setConfirming(null)} onConfirm={() => { if (confirming) void toggle(confirming); }} /></>;
 }
 
+function PanelHeading({ eyebrow, title, onClose }: { eyebrow: string; title: string; onClose: () => void }) { return <div className="panel-heading"><div><p className="eyebrow">{eyebrow}</p><h2>{title}</h2></div><button type="button" className="secondary" onClick={onClose}>Fechar</button></div>; }
+function RequiredField({ label, children }: { label: string; children: ReactNode }) { return <label><span>{label} <span className="required">*</span></span>{children}</label>; }
+function FormActions({ busy, saveLabel, onCancel }: { busy: boolean; saveLabel: string; onCancel: () => void }) { return <div className="form-actions"><button disabled={busy}>{busy ? 'Salvando...' : saveLabel}</button><button type="button" className="secondary" onClick={onCancel} disabled={busy}>Cancelar</button></div>; }
+function Status({ active }: { active: boolean }) { return <span className={`badge ${active ? 'active' : ''}`}>{active ? 'Ativo' : 'Inativo'}</span>; }
+function MorePage({ navigate, username, logout, busy }: { navigate: Navigate; username: string; logout: () => void; busy: boolean }) { return <><PageHeader eyebrow="Mais" title="Cadastros e conta" description="Funcoes de apoio e dados da sua sessao." /><section className="more-grid"><button className="menu-card" onClick={() => navigate('batches')}><span>Lotes</span><small>Fabricacao, codigo e validade</small></button><button className="menu-card" onClick={() => navigate('stocks')}><span>Estoques e locais</span><small>Estrutura logica da operacao</small></button><article className="surface account-card"><p className="eyebrow">Sessao atual</p><h2>{username}</h2><p className="muted">Seu acesso segue as permissoes do perfil.</p><button className="secondary button-wide" onClick={logout} disabled={busy}>{busy ? 'Saindo...' : 'Sair do sistema'}</button></article></section></>; }
+function NavButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) { return <button className={active ? 'current' : ''} onClick={onClick} aria-current={active ? 'page' : undefined}>{children}</button>; }
+
 export function App() {
-  const [user, setUser] = useState<UserSession | null>(null);
-  const [checking, setChecking] = useState(true);
-  const [page, setPage] = useState<Page>('products');
+  const [user, setUser] = useState<UserSession | null>(null); const [checking, setChecking] = useState(true); const [loggingOut, setLoggingOut] = useState(false); const [page, setPage] = useState<Page>('home');
   useEffect(() => { void api.refresh().then((result) => setUser(result?.user ?? null)).finally(() => setChecking(false)); }, []);
-  if (checking) return <main className="login-page"><p>Restaurando sessao...</p></main>;
-  if (!user) return <Login onAuthenticated={setUser} />;
-  const can = (permission: string) => user.permissions.includes(permission);
-  return <div className="app-shell">
-    <header><div><p className="eyebrow">Estoque Revisao</p><strong>Operacao de estoque</strong></div><nav><button className={page === 'products' ? 'current' : ''} onClick={() => setPage('products')}>Produtos</button><button className={page === 'batches' ? 'current' : ''} onClick={() => setPage('batches')}>Lotes</button><button className={page === 'stocks' ? 'current' : ''} onClick={() => setPage('stocks')}>Locais</button>{can('stock-positions.read') && <button className={page === 'inventory' ? 'current' : ''} onClick={() => setPage('inventory')}>Estoque atual</button>}</nav><div className="user-area"><span>{user.username}</span><button className="secondary" onClick={() => void api.logout().finally(() => setUser(null))}>Sair</button></div></header>
-    <main className="workspace">{page === 'products' && <ProductsPage canWrite={can('products.create') || can('products.update')} />}{page === 'batches' && <BatchesPage canWrite={can('batches.create') || can('batches.update')} />}{page === 'stocks' && <StocksPage canWrite={can('stocks.create') || can('stocks.update')} />}{page === 'inventory' && can('stock-positions.read') && <InventoryPage />}</main>
-  </div>;
+  if (checking) return <main className="splash"><span className="spinner" /><p>Preparando seu ambiente...</p></main>;
+  if (!user) return <Login onAuthenticated={(authenticated) => { setUser(authenticated); setPage('home'); }} />;
+  const can = (permission: string) => user.permissions.includes(permission); const navigate: Navigate = (destination) => { setPage(destination); window.scrollTo({ top: 0, behavior: 'smooth' }); }; const logout = () => { setLoggingOut(true); void api.logout().finally(() => { setUser(null); setLoggingOut(false); }); };
+  return <div className="app-shell"><header className="topbar"><button className="brand" onClick={() => navigate('home')} aria-label="Ir para o inicio"><span>ER</span><strong>Estoque Revisao</strong></button><div className="user-area"><span className="user-name">{user.username}</span><button className="secondary desktop-logout" onClick={logout}>Sair</button></div></header><aside className="sidebar"><nav aria-label="Navegacao principal"><NavButton active={page === 'home'} onClick={() => navigate('home')}>Inicio</NavButton>{can('stock-positions.read') && <NavButton active={page === 'inventory'} onClick={() => navigate('inventory')}>Estoque atual</NavButton>}<NavButton active={page === 'products'} onClick={() => navigate('products')}>Produtos</NavButton><NavButton active={page === 'batches'} onClick={() => navigate('batches')}>Lotes</NavButton><NavButton active={page === 'stocks'} onClick={() => navigate('stocks')}>Estoques e locais</NavButton></nav><p className="sidebar-note">Operacao segura e rastreavel</p></aside><main className="workspace">{page === 'home' && <HomePage navigate={navigate} inventory={can('stock-positions.read')} productsWrite={can('products.create')} batchesWrite={can('batches.create')} />}{page === 'products' && <ProductsPage canWrite={can('products.create') || can('products.update')} />}{page === 'batches' && <BatchesPage canWrite={can('batches.create') || can('batches.update')} />}{page === 'stocks' && <StocksPage canWrite={can('stocks.create') || can('stocks.update')} />}{page === 'inventory' && can('stock-positions.read') && <InventoryPage />}{page === 'more' && <MorePage navigate={navigate} username={user.username} logout={logout} busy={loggingOut} />}</main><nav className="bottom-nav" aria-label="Navegacao principal mobile"><NavButton active={page === 'home'} onClick={() => navigate('home')}>Inicio</NavButton>{can('stock-positions.read') && <NavButton active={page === 'inventory'} onClick={() => navigate('inventory')}>Estoque</NavButton>}<NavButton active={page === 'products'} onClick={() => navigate('products')}>Produtos</NavButton><NavButton active={page === 'more' || page === 'batches' || page === 'stocks'} onClick={() => navigate('more')}>Mais</NavButton></nav></div>;
 }
