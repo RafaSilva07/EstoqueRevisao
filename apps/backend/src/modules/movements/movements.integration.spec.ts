@@ -66,7 +66,12 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     items,
   }, userId, { requestId: randomUUID(), ipAddress: null, userAgent: 'jest' });
   const createTransfer = (
-    items: Array<{ productId: string; batchId: string; quantity: number }>,
+    items: Array<{
+      productId: string;
+      batchId: string;
+      destinationBatchId?: string;
+      quantity: number;
+    }>,
     requestKey = randomUUID(),
     sourceId = destinationId,
     targetId = transferDestinationId,
@@ -74,7 +79,10 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     requestKey,
     originLocationId: sourceId,
     destinationLocationId: targetId,
-    items,
+    items: items.map((item) => ({
+      ...item,
+      destinationBatchId: item.destinationBatchId ?? item.batchId,
+    })),
   }, userId, { requestId: randomUUID(), ipAddress: null, userAgent: 'jest' });
   const createReview = (
     items: Array<{
@@ -239,6 +247,74 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     expect(await stockService.getBalance({
       productId: productBId, batchId: batchBId, stockLocationId: transferDestinationId,
     })).toBe(1.5);
+  });
+
+  it('transfere para outro lote do mesmo produto e preserva o total do produto', async () => {
+    await seedStock(productAId, batchAId, 10);
+    const totalBefore = await dataSource.getRepository(StockPositionEntity)
+      .createQueryBuilder('position')
+      .select('COALESCE(SUM(position.quantity), 0)', 'total')
+      .where('position.productId = :productAId', { productAId })
+      .getRawOne<{ total: string }>();
+    const created = await createTransfer([{
+      productId: productAId,
+      batchId: batchAId,
+      destinationBatchId: batchAEmptyId,
+      quantity: 4,
+    }]);
+    expect(await stockService.getBalance({
+      productId: productAId, batchId: batchAId, stockLocationId: destinationId,
+    })).toBe(6);
+    expect(await stockService.getBalance({
+      productId: productAId, batchId: batchAEmptyId, stockLocationId: transferDestinationId,
+    })).toBe(4);
+    const totalAfter = await dataSource.getRepository(StockPositionEntity)
+      .createQueryBuilder('position')
+      .select('COALESCE(SUM(position.quantity), 0)', 'total')
+      .where('position.productId = :productAId', { productAId })
+      .getRawOne<{ total: string }>();
+    expect(totalAfter?.total).toBe(totalBefore?.total);
+    expect((await service.getById(created.id)).items[0]).toMatchObject({
+      batchId: batchAId,
+      destinationBatchId: batchAEmptyId,
+      destinationBatch: { id: batchAEmptyId, code: 'COCINV' },
+    });
+  });
+
+  it('troca o lote dentro do mesmo local e soma em posicao existente', async () => {
+    await seedStock(productAId, batchAId, 10);
+    await seedStock(productAId, batchAEmptyId, 2);
+    const created = await createTransfer([{
+      productId: productAId,
+      batchId: batchAId,
+      destinationBatchId: batchAEmptyId,
+      quantity: 4,
+    }], randomUUID(), destinationId, destinationId);
+    expect(created.originLocationId).toBe(created.destinationLocationId);
+    expect(await stockService.getBalance({
+      productId: productAId, batchId: batchAId, stockLocationId: destinationId,
+    })).toBe(6);
+    expect(await stockService.getBalance({
+      productId: productAId, batchId: batchAEmptyId, stockLocationId: destinationId,
+    })).toBe(6);
+  });
+
+  it('rejeita mesmo local com mesmo lote e lote de destino de outro produto', async () => {
+    await seedStock(productAId, batchAId, 10);
+    await expect(createTransfer([{
+      productId: productAId, batchId: batchAId, quantity: 1,
+    }], randomUUID(), destinationId, destinationId)).rejects.toMatchObject({
+      response: { code: 'TRANSFER_WITHOUT_CHANGE' },
+    });
+    await expect(createTransfer([{
+      productId: productAId,
+      batchId: batchAId,
+      destinationBatchId: batchBId,
+      quantity: 1,
+    }])).rejects.toBeInstanceOf(BadRequestException);
+    expect(await stockService.getBalance({
+      productId: productAId, batchId: batchAId, stockLocationId: destinationId,
+    })).toBe(10);
   });
 
   it('permite transferencia total e mantem a posicao de origem zerada', async () => {
@@ -437,6 +513,7 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     const itemA = detail.items.find((item) => item.productId === productAId);
     expect(itemA).toMatchObject({
       batchId: batchAId,
+      destinationBatchId: null,
       batch: {
         code: 'SOCDNV',
         manufacturingDate: '2026-08-31',

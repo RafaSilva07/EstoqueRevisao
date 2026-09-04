@@ -79,12 +79,14 @@ export class StockPositionsService {
     this.validateQuantity(quantity);
     if (
       source.productId !== destination.productId
-      || source.batchId !== destination.batchId
-      || source.stockLocationId === destination.stockLocationId
+      || (
+        source.batchId === destination.batchId
+        && source.stockLocationId === destination.stockLocationId
+      )
     ) {
       throw new BadRequestException({
         code: 'INVALID_STOCK_TRANSFER',
-        message: 'A transferencia deve mover o mesmo produto e lote entre locais diferentes.',
+        message: 'A transferencia deve manter o produto e alterar o lote ou o local.',
       });
     }
     await Promise.all([

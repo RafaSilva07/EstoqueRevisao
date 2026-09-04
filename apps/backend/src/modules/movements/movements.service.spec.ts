@@ -255,6 +255,7 @@ describe('MovementsService', () => {
       requestKey: '50000000-0000-4000-8000-000000000003',
       originLocationId: destinationId,
       destinationLocationId: transferDestinationId,
+      items: dto.items.map((item) => ({ ...item, destinationBatchId: item.batchId })),
     };
 
     beforeEach(() => {
@@ -300,7 +301,7 @@ describe('MovementsService', () => {
       }));
     });
 
-    it('rejeita origem igual ao destino antes da transacao', async () => {
+    it('rejeita mesmo local e mesmo lote antes da transacao', async () => {
       await expect(service.createInternalTransfer({
         ...transferDto,
         destinationLocationId: transferDto.originLocationId,
@@ -308,8 +309,8 @@ describe('MovementsService', () => {
         requestId: transferDto.requestKey, ipAddress: null, userAgent: null,
       })).rejects.toMatchObject({
         response: {
-          code: 'SAME_TRANSFER_LOCATIONS',
-          message: 'Origem e destino devem ser diferentes.',
+          code: 'TRANSFER_WITHOUT_CHANGE',
+          message: 'A transferencia deve alterar o lote ou o local.',
         },
       });
       expect(dataSource.transaction).not.toHaveBeenCalled();
@@ -365,6 +366,71 @@ describe('MovementsService', () => {
         requestId: transferDto.requestKey, ipAddress: null, userAgent: null,
       })).resolves.toBe(existing);
       expect(dataSource.transaction).not.toHaveBeenCalled();
+    });
+
+    it('transfere para outro lote do mesmo produto em outro local', async () => {
+      const destinationBatchId = '70000000-0000-4000-8000-000000000099';
+      await service.createInternalTransfer({
+        ...transferDto,
+        items: [{ ...transferDto.items[0], destinationBatchId }],
+      }, userId, {
+        requestId: transferDto.requestKey, ipAddress: null, userAgent: null,
+      });
+      expect(stock.transferQuantity).toHaveBeenCalledWith({
+        productId: transferDto.items[0].productId,
+        batchId: transferDto.items[0].batchId,
+        stockLocationId: transferDto.originLocationId,
+      }, {
+        productId: transferDto.items[0].productId,
+        batchId: destinationBatchId,
+        stockLocationId: transferDestinationId,
+      }, transferDto.items[0].quantity, manager);
+      expect(repository.saveItems).toHaveBeenCalledWith(expect.arrayContaining([
+        expect.objectContaining({ destinationBatchId }),
+      ]), manager);
+    });
+
+    it('permite trocar o lote no mesmo local', async () => {
+      const destinationBatchId = '70000000-0000-4000-8000-000000000099';
+      await expect(service.createInternalTransfer({
+        ...transferDto,
+        destinationLocationId: transferDto.originLocationId,
+        items: [{ ...transferDto.items[0], destinationBatchId }],
+      }, userId, {
+        requestId: transferDto.requestKey, ipAddress: null, userAgent: null,
+      })).resolves.toBeDefined();
+    });
+
+    it('rejeita mesmo local e mesmo lote ou lote de destino ausente', async () => {
+      await expect(service.createInternalTransfer({
+        ...transferDto,
+        destinationLocationId: transferDto.originLocationId,
+      }, userId, {
+        requestId: transferDto.requestKey, ipAddress: null, userAgent: null,
+      })).rejects.toMatchObject({ response: { code: 'TRANSFER_WITHOUT_CHANGE' } });
+      await expect(service.createInternalTransfer({
+        ...transferDto,
+        items: [{
+          ...transferDto.items[0],
+          destinationBatchId: undefined as unknown as string,
+        }],
+      }, userId, {
+        requestId: transferDto.requestKey, ipAddress: null, userAgent: null,
+      })).rejects.toMatchObject({
+        response: { code: 'TRANSFER_DESTINATION_BATCH_REQUIRED' },
+      });
+    });
+
+    it('propaga rejeicao de lote de destino incompatível antes de salvar itens', async () => {
+      stock.transferQuantity.mockRejectedValueOnce(new BadRequestException({
+        code: 'INVALID_STOCK_PRODUCT_BATCH',
+        message: 'O produto e o lote informados nao possuem uma associacao valida.',
+      }));
+      await expect(service.createInternalTransfer(transferDto, userId, {
+        requestId: transferDto.requestKey, ipAddress: null, userAgent: null,
+      })).rejects.toBeInstanceOf(BadRequestException);
+      expect(repository.saveItems).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
     });
   });
 

@@ -134,6 +134,44 @@ describe('StockPositionsService', () => {
         .rejects.toBeInstanceOf(BadRequestException);
     });
 
+    it('permite trocar o lote mantendo o produto e o local', async () => {
+      const destinationBatch = {
+        ...key,
+        batchId: '10000000-0000-4000-8000-000000000099',
+      };
+      batches.findById.mockImplementation((id: string) => Promise.resolve(
+        Object.assign(new BatchEntity(), { id, productId: key.productId }),
+      ));
+      positions.addAtomic.mockResolvedValue(Object.assign(
+        new StockPositionEntity(),
+        destinationBatch,
+        { quantity: 4 },
+      ));
+      await expect(service.transferQuantity(key, destinationBatch, 4, manager))
+        .resolves.toMatchObject({ source: { quantity: 6 }, destination: { quantity: 4 } });
+      expect(positions.lockForTransfer).toHaveBeenCalledWith(key, destinationBatch, manager);
+      expect(positions.addAtomic).toHaveBeenCalledWith(destinationBatch, 4, manager);
+    });
+
+    it('rejeita troca para lote de outro produto', async () => {
+      const incompatible = {
+        productId: key.productId,
+        batchId: '10000000-0000-4000-8000-000000000099',
+        stockLocationId: destination.stockLocationId,
+      };
+      batches.findById.mockImplementation((id: string) => Promise.resolve(
+        Object.assign(new BatchEntity(), {
+          id,
+          productId: id === incompatible.batchId
+            ? '10000000-0000-4000-8000-000000000098'
+            : key.productId,
+        }),
+      ));
+      await expect(service.transferQuantity(key, incompatible, 1, manager))
+        .rejects.toBeInstanceOf(BadRequestException);
+      expect(positions.removeAtomic).not.toHaveBeenCalled();
+    });
+
     it('nao adiciona no destino quando a origem nao possui saldo', async () => {
       positions.removeAtomic.mockResolvedValue(null);
       positions.findByKey.mockResolvedValue(Object.assign(new StockPositionEntity(), key, {

@@ -1,8 +1,10 @@
 # ADR 020 - Transferencia interna e preservacao de quantidade
 
-- Status: aceito
+- Status: parcialmente substituido pela ADR 022
 - Data: 2026-09-02
 - Escopo: terceira operacao funcional de estoque
+
+> A ADR 022 substitui as decisoes sobre preservacao obrigatoria do lote e diferenca obrigatoria entre locais. As demais decisoes deste registro permanecem validas.
 
 ## Contexto
 

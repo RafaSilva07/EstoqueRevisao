@@ -52,13 +52,19 @@ describe('CreateReviewDto', () => {
       ...validPayload,
       items: [{
         ...validPayload.items[0],
+        destinationBatchId: '70000000-0000-4000-8000-000000000002',
         newBatchCode: 'NOVOLOTE',
         manufacturingDate: '2026-09-02',
         expirationDate: '2027-09-02',
       }],
     });
     expect(errors[0]?.children?.[0]?.children?.map((error) => error.property)).toEqual(
-      expect.arrayContaining(['newBatchCode', 'manufacturingDate', 'expirationDate']),
+      expect.arrayContaining([
+        'destinationBatchId',
+        'newBatchCode',
+        'manufacturingDate',
+        'expirationDate',
+      ]),
     );
   });
 });

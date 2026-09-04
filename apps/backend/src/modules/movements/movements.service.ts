@@ -11,12 +11,21 @@ import { StockPositionsService } from '../stocks/stock-positions.service';
 import { MovementStatus } from './domain/movement-status.enum';
 import { MovementType } from './domain/movement-type.enum';
 import { CreateEffectiveMovementDto } from './dto/create-effective-movement.dto';
+import { CreateInternalTransferDto } from './dto/create-internal-transfer.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { MovementQueryDto } from './dto/movement-query.dto';
 import { MovementItemEntity } from './entities/movement-item.entity';
 import { MovementItemDistributionEntity } from './entities/movement-item-distribution.entity';
 import { MovementEntity } from './entities/movement.entity';
 import { MovementsRepository } from './movements.repository';
+
+type EffectiveMovementItem = CreateEffectiveMovementDto['items'][number] & {
+  destinationBatchId?: string;
+};
+
+type EffectiveMovementDto = Omit<CreateEffectiveMovementDto, 'items'> & {
+  items: EffectiveMovementItem[];
+};
 
 interface EffectiveMovementRules {
   type: MovementType;
@@ -28,11 +37,11 @@ interface EffectiveMovementRules {
   rejectDuplicateItems: boolean;
   applyStock: (
     service: StockPositionsService,
-    item: CreateEffectiveMovementDto['items'][number],
-    dto: CreateEffectiveMovementDto,
+    item: EffectiveMovementItem,
+    dto: EffectiveMovementDto,
     manager: EntityManager,
   ) => Promise<unknown>;
-  validateRoute?: (dto: CreateEffectiveMovementDto) => void;
+  validateRoute?: (dto: EffectiveMovementDto) => void;
   deterministicItemOrder?: boolean;
 }
 
@@ -118,7 +127,7 @@ export class MovementsService {
   }
 
   createInternalTransfer(
-    dto: CreateEffectiveMovementDto,
+    dto: CreateInternalTransferDto,
     userId: string,
     metadata: AuditRequestMetadata,
   ): Promise<MovementEntity> {
@@ -138,11 +147,22 @@ export class MovementsService {
       rejectDuplicateItems: true,
       deterministicItemOrder: true,
       validateRoute: (movement) => {
-        if (movement.originLocationId === movement.destinationLocationId) {
-          throw new BadRequestException({
-            code: 'SAME_TRANSFER_LOCATIONS',
-            message: 'Origem e destino devem ser diferentes.',
-          });
+        for (const item of movement.items) {
+          if (!item.destinationBatchId) {
+            throw new BadRequestException({
+              code: 'TRANSFER_DESTINATION_BATCH_REQUIRED',
+              message: 'Informe o lote de destino de todos os itens.',
+            });
+          }
+          if (
+            movement.originLocationId === movement.destinationLocationId
+            && item.batchId === item.destinationBatchId
+          ) {
+            throw new BadRequestException({
+              code: 'TRANSFER_WITHOUT_CHANGE',
+              message: 'A transferencia deve alterar o lote ou o local.',
+            });
+          }
         }
       },
       applyStock: (service, item, movement, manager) => service.transferQuantity({
@@ -151,7 +171,7 @@ export class MovementsService {
         stockLocationId: movement.originLocationId,
       }, {
         productId: item.productId,
-        batchId: item.batchId,
+        batchId: item.destinationBatchId!,
         stockLocationId: movement.destinationLocationId,
       }, item.quantity, manager),
     });
@@ -219,6 +239,7 @@ export class MovementsService {
             movementId: movement.id,
             productId: dtoItem.productId,
             batchId: dtoItem.batchId,
+            destinationBatchId: null,
             quantity: dtoItem.quantity,
           });
           items.push(item);
@@ -263,7 +284,7 @@ export class MovementsService {
   }
 
   private async createEffectiveMovement(
-    dto: CreateEffectiveMovementDto,
+    dto: EffectiveMovementDto,
     userId: string,
     metadata: AuditRequestMetadata,
     rules: EffectiveMovementRules,
@@ -300,7 +321,8 @@ export class MovementsService {
 
         const effectiveItems = rules.deterministicItemOrder
           ? [...dto.items].sort((left, right) => (
-            `${left.productId}:${left.batchId}`.localeCompare(`${right.productId}:${right.batchId}`)
+            `${left.productId}:${left.batchId}:${left.destinationBatchId ?? ''}`
+              .localeCompare(`${right.productId}:${right.batchId}:${right.destinationBatchId ?? ''}`)
           ))
           : dto.items;
         const items: MovementItemEntity[] = [];
@@ -310,6 +332,9 @@ export class MovementsService {
             movementId: movement.id,
             productId: dtoItem.productId,
             batchId: dtoItem.batchId,
+            destinationBatchId: rules.type === MovementType.InternalTransfer
+              ? dtoItem.destinationBatchId
+              : null,
             quantity: dtoItem.quantity,
           }));
         }
@@ -345,7 +370,7 @@ export class MovementsService {
     }
   }
 
-  private validateNoDuplicateItems(dto: CreateEffectiveMovementDto): void {
+  private validateNoDuplicateItems(dto: EffectiveMovementDto): void {
     const keys = new Set<string>();
     for (const item of dto.items) {
       const key = `${item.productId}:${item.batchId}`;

@@ -2,7 +2,7 @@
 
 Sistema web para controle do estoque da Revisao, estruturado como monolito modular. A stack oficial e React com TypeScript/Vite no frontend, NestJS com TypeScript no backend e PostgreSQL 17, executado localmente por Docker Compose.
 
-O sistema entrega os cadastros base, a codificacao rastreavel de lotes, o saldo atual por produto/lote/local e entradas, saidas e transferencias internas efetivadas com historico imutavel. Conferencia em transito e revisoes ainda nao fazem parte do sistema.
+O sistema entrega os cadastros base, a codificacao rastreavel de lotes, o saldo atual por produto/lote/local e entradas, saidas, transferencias internas e revisoes efetivadas com historico imutavel. Conferencia em transito ainda nao faz parte do sistema.
 
 ## Estrutura
 
@@ -127,11 +127,11 @@ Saidas efetivadas compartilham o historico, os filtros e o detalhe imutavel das 
 
 ### Transferencia interna
 
-`POST /api/v1/movements/internal-transfers` recebe dois locais controlados diferentes, uma chave UUID de idempotencia e um ou mais itens. Para cada item, a mesma quantidade e retirada da origem e adicionada ao destino dentro da transacao do documento, preservando o total geral.
+`POST /api/v1/movements/internal-transfers` recebe locais controlados de origem e destino, uma chave UUID de idempotencia e um ou mais itens. Cada item informa o produto, lote de origem, lote de destino e quantidade. O produto permanece o mesmo; lote, local ou ambos devem mudar. O mesmo local e aceito somente quando o lote muda.
 
-Produto e lote devem possuir saldo positivo na origem. Itens repetidos sao rejeitados, as posicoes envolvidas sao bloqueadas em ordem deterministica e os itens sao processados por uma chave estavel para reduzir deadlocks. O destino e criado por UPSERT quando ainda nao possui a combinacao produto/lote, ou recebe a soma quando a posicao ja existe.
+Produto e lote devem possuir saldo positivo na origem. O lote de destino deve pertencer ao mesmo produto e pode ser o atual, outro existente ou um novo lote criado pelo fluxo central de lotes, que aplica a codificacao `CONSERVADI` e a validade manual. Itens repetidos sao rejeitados, as posicoes exatas de origem e destino sao bloqueadas em ordem deterministica e processadas por uma chave estavel para reduzir deadlocks. O destino e criado por UPSERT quando a posicao produto/lote/local ainda nao existe, ou recebe a soma quando ela ja existe.
 
-A transferencia usa os locais configurados no banco e aceita `STOCK` e `SUBSTOCK`; nomes como Revisar, Lata Boa, Varejo e TUF nao fazem parte da regra. Transferencias efetivadas aparecem no mesmo historico e permanecem imutaveis.
+A transferencia usa os locais configurados no banco e aceita `STOCK` e `SUBSTOCK`; nomes como Revisar, Lata Boa, Varejo e TUF nao fazem parte da regra. O historico preserva produto, lote e local de cada ponta. A mesma quantidade e baixada da origem e somada ao destino na transacao do documento, preservando o total do produto. Esta permissao de trocar lote e exclusiva da transferencia interna e nao altera a regra de `REVISAO`.
 
 ### Revisar produtos
 

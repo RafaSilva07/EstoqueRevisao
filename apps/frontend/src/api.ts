@@ -84,6 +84,8 @@ export interface MovementItem {
   quantity: number;
   product: Product;
   batch: Batch;
+  destinationBatchId: string | null;
+  destinationBatch: Batch | null;
   distributions: MovementItemDistribution[];
 }
 

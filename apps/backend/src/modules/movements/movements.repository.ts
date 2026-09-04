@@ -44,6 +44,7 @@ export class MovementsRepository {
       .leftJoinAndSelect('movement.items', 'item')
       .leftJoinAndSelect('item.product', 'product')
       .leftJoinAndSelect('item.batch', 'batch')
+      .leftJoinAndSelect('item.destinationBatch', 'destinationBatch')
       .leftJoinAndSelect('item.distributions', 'distribution')
       .leftJoinAndSelect('distribution.destinationLocation', 'distributionDestination')
       .distinct(true);
@@ -95,6 +96,7 @@ export class MovementsRepository {
       .leftJoinAndSelect('movement.items', 'item')
       .leftJoinAndSelect('item.product', 'product')
       .leftJoinAndSelect('item.batch', 'batch')
+      .leftJoinAndSelect('item.destinationBatch', 'destinationBatch')
       .leftJoinAndSelect('item.distributions', 'distribution')
       .leftJoinAndSelect('distribution.destinationLocation', 'distributionDestination')
       .orderBy('item.id', 'ASC')

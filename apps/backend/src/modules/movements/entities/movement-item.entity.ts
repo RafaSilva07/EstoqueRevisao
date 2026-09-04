@@ -36,6 +36,13 @@ export class MovementItemEntity {
   @JoinColumn({ name: 'batch_id' })
   batch!: BatchEntity;
 
+  @Column({ name: 'destination_batch_id', type: 'uuid', nullable: true })
+  destinationBatchId!: string | null;
+
+  @ManyToOne(() => BatchEntity, { nullable: true, onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'destination_batch_id' })
+  destinationBatch!: BatchEntity | null;
+
   @Column({ type: 'numeric', precision: 18, scale: 6, transformer: numericTransformer })
   quantity!: number;
 

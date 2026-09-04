@@ -5,6 +5,7 @@ import { getAuditRequestMetadata } from '../audit/audit-request-metadata';
 import { AuthenticatedUser } from '../auth/authenticated-user.interface';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { CreateEffectiveMovementDto } from './dto/create-effective-movement.dto';
+import { CreateInternalTransferDto } from './dto/create-internal-transfer.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { MovementQueryDto } from './dto/movement-query.dto';
 import { MovementEntity } from './entities/movement.entity';
@@ -34,7 +35,7 @@ export class MovementsController {
   @Post('internal-transfers')
   @RequirePermissions('movements.create')
   createInternalTransfer(
-    @Body() dto: CreateEffectiveMovementDto,
+    @Body() dto: CreateInternalTransferDto,
     @Req() request: Request,
   ): Promise<MovementEntity> {
     const user = request.user as AuthenticatedUser;

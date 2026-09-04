@@ -113,12 +113,27 @@ export class StockPositionsRepository {
   ): Promise<void> {
     await manager.getRepository(StockPositionEntity)
       .createQueryBuilder('position')
-      .where('position.productId = :productId', { productId: source.productId })
-      .andWhere('position.batchId = :batchId', { batchId: source.batchId })
-      .andWhere('position.stockLocationId IN (:...locationIds)', {
-        locationIds: [source.stockLocationId, destination.stockLocationId].sort(),
+      .where(`(
+        position.productId = :sourceProductId
+        AND position.batchId = :sourceBatchId
+        AND position.stockLocationId = :sourceLocationId
+      )`, {
+        sourceProductId: source.productId,
+        sourceBatchId: source.batchId,
+        sourceLocationId: source.stockLocationId,
       })
-      .orderBy('position.stockLocationId', 'ASC')
+      .orWhere(`(
+        position.productId = :destinationProductId
+        AND position.batchId = :destinationBatchId
+        AND position.stockLocationId = :destinationLocationId
+      )`, {
+        destinationProductId: destination.productId,
+        destinationBatchId: destination.batchId,
+        destinationLocationId: destination.stockLocationId,
+      })
+      .orderBy('position.productId', 'ASC')
+      .addOrderBy('position.batchId', 'ASC')
+      .addOrderBy('position.stockLocationId', 'ASC')
       .setLock('pessimistic_write')
       .getMany();
   }
