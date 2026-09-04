@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { UserEntity } from '../../users/entities/user.entity';
 import { StockLocationKind } from '../domain/stock-location-kind.enum';
+import { ReviewLocationRole } from '../domain/review-location-role.enum';
 
 @Entity({ name: 'stock_locations' })
 export class StockLocationEntity {
@@ -28,6 +29,9 @@ export class StockLocationEntity {
 
   @Column({ type: 'varchar', length: 20 })
   kind!: StockLocationKind;
+
+  @Column({ name: 'review_role', type: 'varchar', length: 20, nullable: true })
+  reviewRole!: ReviewLocationRole | null;
 
   @Column({ name: 'parent_id', type: 'uuid', nullable: true })
   parentId!: string | null;

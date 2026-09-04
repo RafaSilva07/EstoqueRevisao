@@ -16,6 +16,7 @@ import { StockPositionsRepository } from '../stocks/stock-positions.repository';
 import { StockPositionsService } from '../stocks/stock-positions.service';
 import { MovementType } from './domain/movement-type.enum';
 import { MovementItemEntity } from './entities/movement-item.entity';
+import { MovementItemDistributionEntity } from './entities/movement-item-distribution.entity';
 import { MovementEntity } from './entities/movement.entity';
 import { MovementsRepository } from './movements.repository';
 import { MovementsService } from './movements.service';
@@ -25,7 +26,7 @@ const describeWithDatabase = databaseUrl ? describe : describe.skip;
 
 describeWithDatabase('MovementsService (PostgreSQL)', () => {
   let dataSource: DataSource; let service: MovementsService; let stockService: StockPositionsService;
-  let userId: string; let originId: string; let destinationId: string; let transferDestinationId: string; let productAId: string; let batchAId: string; let batchAEmptyId: string; let productBId: string; let batchBId: string;
+  let userId: string; let originId: string; let destinationId: string; let transferDestinationId: string; let lataBoaId: string; let varejoId: string; let productAId: string; let batchAId: string; let batchAEmptyId: string; let productBId: string; let batchBId: string;
 
   beforeAll(async () => {
     dataSource = new DataSource({ type: 'postgres', url: databaseUrl, entities: databaseEntities, migrations: databaseMigrations, migrationsTableName: 'schema_migrations', dropSchema: true, migrationsRun: true, synchronize: false, logging: false });
@@ -41,6 +42,8 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     originId = (await dataSource.getRepository(StockLocationEntity).findOneByOrFail({ code: 'PRODUCAO' })).id;
     destinationId = (await dataSource.getRepository(StockLocationEntity).findOneByOrFail({ code: 'REVISAR' })).id;
     transferDestinationId = (await dataSource.getRepository(StockLocationEntity).findOneByOrFail({ code: 'TUF' })).id;
+    lataBoaId = (await dataSource.getRepository(StockLocationEntity).findOneByOrFail({ code: 'LATA_BOA' })).id;
+    varejoId = (await dataSource.getRepository(StockLocationEntity).findOneByOrFail({ code: 'VAREJO' })).id;
   });
 
   beforeEach(async () => {
@@ -73,6 +76,17 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     destinationLocationId: targetId,
     items,
   }, userId, { requestId: randomUUID(), ipAddress: null, userAgent: 'jest' });
+  const createReview = (
+    items: Array<{
+      productId: string;
+      batchId: string;
+      quantity: number;
+      distributions: Array<{ destinationLocationId: string; quantity: number }>;
+    }>,
+    requestKey = randomUUID(),
+  ): Promise<MovementEntity> => service.createReview({ requestKey, items }, userId, {
+    requestId: randomUUID(), ipAddress: null, userAgent: 'jest',
+  });
 
   it('efetiva varios itens, cria posicoes e auditoria atomicamente', async () => {
     const movement = await create();
@@ -350,6 +364,222 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
       entityId: created.id,
       action: 'INTERNAL_TRANSFER_CREATE',
     })).toBe(1);
+    await expect(dataSource.getRepository(MovementEntity).delete(created.id))
+      .rejects.toMatchObject({ code: '23503' });
+  });
+
+  it('realiza revisao parcial para um, dois e tres destinos preservando o total', async () => {
+    await seedStock(productAId, batchAId, 30);
+    await createReview([{
+      productId: productAId,
+      batchId: batchAId,
+      quantity: 6,
+      distributions: [{ destinationLocationId: lataBoaId, quantity: 6 }],
+    }]);
+    await createReview([{
+      productId: productAId,
+      batchId: batchAId,
+      quantity: 9,
+      distributions: [
+        { destinationLocationId: lataBoaId, quantity: 5 },
+        { destinationLocationId: varejoId, quantity: 4 },
+      ],
+    }]);
+    await createReview([{
+      productId: productAId,
+      batchId: batchAId,
+      quantity: 10,
+      distributions: [
+        { destinationLocationId: lataBoaId, quantity: 5 },
+        { destinationLocationId: varejoId, quantity: 3 },
+        { destinationLocationId: transferDestinationId, quantity: 2 },
+      ],
+    }]);
+    const balances = await Promise.all([destinationId, lataBoaId, varejoId, transferDestinationId]
+      .map((stockLocationId) => stockService.getBalance({
+        productId: productAId, batchId: batchAId, stockLocationId,
+      })));
+    expect(balances).toEqual([5, 16, 7, 2]);
+    expect(balances.reduce((total, value) => total + value, 0)).toBe(30);
+  });
+
+  it('realiza revisao completa com varios produtos e preserva lote, fabricacao e validade', async () => {
+    await seedStock(productAId, batchAId, 10);
+    await seedStock(productBId, batchBId, 5);
+    const movement = await createReview([
+      {
+        productId: productBId,
+        batchId: batchBId,
+        quantity: 5,
+        distributions: [
+          { destinationLocationId: lataBoaId, quantity: 3 },
+          { destinationLocationId: transferDestinationId, quantity: 2 },
+        ],
+      },
+      {
+        productId: productAId,
+        batchId: batchAId,
+        quantity: 10,
+        distributions: [
+          { destinationLocationId: lataBoaId, quantity: 7 },
+          { destinationLocationId: varejoId, quantity: 3 },
+        ],
+      },
+    ]);
+    const detail = await service.getById(movement.id);
+    expect(detail).toMatchObject({
+      type: MovementType.Review,
+      destinationLocationId: null,
+      responsibleUserId: userId,
+    });
+    expect(detail.items).toHaveLength(2);
+    expect(detail.items.flatMap((item) => item.distributions)).toHaveLength(4);
+    const itemA = detail.items.find((item) => item.productId === productAId);
+    expect(itemA).toMatchObject({
+      batchId: batchAId,
+      batch: {
+        code: 'SOCDNV',
+        manufacturingDate: '2026-08-31',
+        expirationDate: '2027-08-31',
+      },
+    });
+    expect(await stockService.getBalance({
+      productId: productAId, batchId: batchAId, stockLocationId: destinationId,
+    })).toBe(0);
+    expect(await dataSource.getRepository(AuditLogEntity).countBy({
+      entityId: movement.id,
+      action: 'REVIEW_CREATE',
+    })).toBe(1);
+  });
+
+  it('rejeita distribuicao incompleta, excedente, destino Revisar e local externo', async () => {
+    await seedStock(productAId, batchAId, 10);
+    for (const distributions of [
+      [{ destinationLocationId: lataBoaId, quantity: 9 }],
+      [{ destinationLocationId: lataBoaId, quantity: 11 }],
+      [{ destinationLocationId: destinationId, quantity: 10 }],
+      [{ destinationLocationId: originId, quantity: 10 }],
+    ]) {
+      await expect(createReview([{
+        productId: productAId, batchId: batchAId, quantity: 10, distributions,
+      }])).rejects.toBeInstanceOf(BadRequestException);
+    }
+    expect(await stockService.getBalance({
+      productId: productAId, batchId: batchAId, stockLocationId: destinationId,
+    })).toBe(10);
+    expect(await dataSource.getRepository(MovementEntity).count()).toBe(0);
+  });
+
+  it.each([0, -1])('rejeita quantidade revisada invalida: %s', async (quantity) => {
+    await seedStock(productAId, batchAId, 10);
+    await expect(createReview([{
+      productId: productAId,
+      batchId: batchAId,
+      quantity,
+      distributions: [{ destinationLocationId: lataBoaId, quantity }],
+    }])).rejects.toBeInstanceOf(BadRequestException);
+    expect(await stockService.getBalance({
+      productId: productAId, batchId: batchAId, stockLocationId: destinationId,
+    })).toBe(10);
+  });
+
+  it('rejeita saldo insuficiente, lote sem saldo e lote pertencente a outro produto', async () => {
+    await seedStock(productAId, batchAId, 5);
+    await expect(createReview([{
+      productId: productAId,
+      batchId: batchAId,
+      quantity: 6,
+      distributions: [{ destinationLocationId: lataBoaId, quantity: 6 }],
+    }])).rejects.toBeInstanceOf(ConflictException);
+    await expect(createReview([{
+      productId: productAId,
+      batchId: batchAEmptyId,
+      quantity: 1,
+      distributions: [{ destinationLocationId: lataBoaId, quantity: 1 }],
+    }])).rejects.toBeInstanceOf(ConflictException);
+    await expect(createReview([{
+      productId: productAId,
+      batchId: batchBId,
+      quantity: 1,
+      distributions: [{ destinationLocationId: lataBoaId, quantity: 1 }],
+    }])).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('reverte integralmente varios itens quando o ultimo falha', async () => {
+    await seedStock(productAId, batchAId, 10);
+    await seedStock(productBId, batchBId, 2);
+    await expect(createReview([
+      {
+        productId: productAId,
+        batchId: batchAId,
+        quantity: 4,
+        distributions: [{ destinationLocationId: lataBoaId, quantity: 4 }],
+      },
+      {
+        productId: productBId,
+        batchId: batchBId,
+        quantity: 3,
+        distributions: [{ destinationLocationId: varejoId, quantity: 3 }],
+      },
+    ])).rejects.toBeInstanceOf(ConflictException);
+    expect(await stockService.getBalance({
+      productId: productAId, batchId: batchAId, stockLocationId: destinationId,
+    })).toBe(10);
+    expect(await stockService.getBalance({
+      productId: productAId, batchId: batchAId, stockLocationId: lataBoaId,
+    })).toBe(0);
+    expect(await dataSource.getRepository(MovementEntity).count()).toBe(0);
+    expect(await dataSource.getRepository(MovementItemDistributionEntity).count()).toBe(0);
+    expect(await dataSource.getRepository(AuditLogEntity).count()).toBe(0);
+  });
+
+  it('permite somente uma revisao concorrente sobre o mesmo saldo', async () => {
+    await seedStock(productAId, batchAId, 10);
+    const item = [{
+      productId: productAId,
+      batchId: batchAId,
+      quantity: 7,
+      distributions: [{ destinationLocationId: lataBoaId, quantity: 7 }],
+    }];
+    const results = await Promise.allSettled([createReview(item), createReview(item)]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect(await stockService.getBalance({
+      productId: productAId, batchId: batchAId, stockLocationId: destinationId,
+    })).toBe(3);
+    expect(await stockService.getBalance({
+      productId: productAId, batchId: batchAId, stockLocationId: lataBoaId,
+    })).toBe(7);
+  });
+
+  it('mantem revisao no historico geral, detalhe imutavel e idempotencia', async () => {
+    await seedStock(productAId, batchAId, 8);
+    const requestKey = randomUUID();
+    const item = [{
+      productId: productAId,
+      batchId: batchAId,
+      quantity: 3,
+      distributions: [
+        { destinationLocationId: lataBoaId, quantity: 2 },
+        { destinationLocationId: varejoId, quantity: 1 },
+      ],
+    }];
+    const created = await createReview(item, requestKey);
+    expect((await createReview(item, requestKey)).id).toBe(created.id);
+    const history = await service.list({
+      page: 1,
+      limit: 20,
+      type: MovementType.Review,
+      originLocationId: destinationId,
+      destinationLocationId: varejoId,
+      productId: productAId,
+    });
+    expect(history.meta.total).toBe(1);
+    expect(history.items[0].items[0].distributions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ destinationLocationId: lataBoaId, quantity: 2 }),
+      expect.objectContaining({ destinationLocationId: varejoId, quantity: 1 }),
+    ]));
+    expect(await dataSource.getRepository(MovementEntity).count()).toBe(1);
     await expect(dataSource.getRepository(MovementEntity).delete(created.id))
       .rejects.toMatchObject({ code: '23503' });
   });

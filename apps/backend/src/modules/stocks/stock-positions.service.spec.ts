@@ -26,6 +26,7 @@ describe('StockPositionsService', () => {
     addAtomic: jest.fn(),
     removeAtomic: jest.fn(),
     lockForTransfer: jest.fn(),
+    lockForDistribution: jest.fn(),
   };
   const products = { findById: jest.fn() };
   const batches = { findById: jest.fn() };
@@ -139,6 +140,68 @@ describe('StockPositionsService', () => {
         quantity: 2,
       }));
       await expect(service.transferQuantity(key, destination, 3, manager))
+        .rejects.toBeInstanceOf(ConflictException);
+      expect(positions.addAtomic).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('distribuicao de revisao', () => {
+    const destinations = [
+      { destinationLocationId: '10000000-0000-4000-8000-000000000004', quantity: 6 },
+      { destinationLocationId: '10000000-0000-4000-8000-000000000005', quantity: 4 },
+    ];
+
+    beforeEach(() => {
+      positions.lockForDistribution.mockResolvedValue(undefined);
+      positions.removeAtomic.mockResolvedValue(Object.assign(new StockPositionEntity(), key, {
+        quantity: 5,
+      }));
+      positions.addAtomic.mockResolvedValue(new StockPositionEntity());
+    });
+
+    it('retira o total uma vez e adiciona cada parcela apos obter os locks', async () => {
+      await service.distributeQuantity(key, destinations, 10, manager);
+      expect(positions.lockForDistribution).toHaveBeenCalledWith(
+        key,
+        destinations.map((item) => item.destinationLocationId),
+        manager,
+      );
+      expect(positions.removeAtomic).toHaveBeenCalledWith(key, 10, manager);
+      expect(positions.addAtomic).toHaveBeenCalledTimes(2);
+      expect(positions.addAtomic).toHaveBeenCalledWith({
+        ...key,
+        stockLocationId: destinations[0].destinationLocationId,
+      }, 6, manager);
+    });
+
+    it('rejeita distribuicao incompleta ou excedente antes de alterar saldo', async () => {
+      await expect(service.distributeQuantity(key, destinations, 9, manager))
+        .rejects.toMatchObject({ response: { code: 'INVALID_STOCK_DISTRIBUTION_TOTAL' } });
+      await expect(service.distributeQuantity(key, destinations, 11, manager))
+        .rejects.toMatchObject({ response: { code: 'INVALID_STOCK_DISTRIBUTION_TOTAL' } });
+      expect(positions.removeAtomic).not.toHaveBeenCalled();
+    });
+
+    it('rejeita destino igual a origem ou repetido', async () => {
+      await expect(service.distributeQuantity(key, [
+        { destinationLocationId: key.stockLocationId, quantity: 10 },
+      ], 10, manager)).rejects.toMatchObject({
+        response: { code: 'INVALID_STOCK_DISTRIBUTION_DESTINATION' },
+      });
+      await expect(service.distributeQuantity(key, [
+        { destinationLocationId: destinations[0].destinationLocationId, quantity: 5 },
+        { destinationLocationId: destinations[0].destinationLocationId, quantity: 5 },
+      ], 10, manager)).rejects.toMatchObject({
+        response: { code: 'INVALID_STOCK_DISTRIBUTION_DESTINATION' },
+      });
+    });
+
+    it('nao adiciona destinos quando o saldo definitivo e insuficiente', async () => {
+      positions.removeAtomic.mockResolvedValue(null);
+      positions.findByKey.mockResolvedValue(Object.assign(new StockPositionEntity(), key, {
+        quantity: 3,
+      }));
+      await expect(service.distributeQuantity(key, destinations, 10, manager))
         .rejects.toBeInstanceOf(ConflictException);
       expect(positions.addAtomic).not.toHaveBeenCalled();
     });

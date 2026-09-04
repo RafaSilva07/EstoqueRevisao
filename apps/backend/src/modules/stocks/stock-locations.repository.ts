@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { StockLocationQueryDto } from './dto/stock-location-query.dto';
 import { StockLocationEntity } from './entities/stock-location.entity';
+import { ReviewLocationRole } from './domain/review-location-role.enum';
 
 @Injectable()
 export class StockLocationsRepository {
@@ -15,6 +16,16 @@ export class StockLocationsRepository {
     return (manager?.getRepository(StockLocationEntity) ?? this.repository).findOne({
       where: { id },
       relations: { parent: true, children: true },
+    });
+  }
+
+  findByReviewRole(
+    role: ReviewLocationRole,
+    manager?: EntityManager,
+  ): Promise<StockLocationEntity[]> {
+    return (manager?.getRepository(StockLocationEntity) ?? this.repository).find({
+      where: { reviewRole: role, active: true },
+      order: { name: 'ASC' },
     });
   }
 

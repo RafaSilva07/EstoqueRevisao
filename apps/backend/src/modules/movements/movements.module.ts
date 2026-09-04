@@ -3,12 +3,20 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { StocksModule } from '../stocks/stocks.module';
 import { MovementItemEntity } from './entities/movement-item.entity';
 import { MovementEntity } from './entities/movement.entity';
+import { MovementItemDistributionEntity } from './entities/movement-item-distribution.entity';
 import { MovementsController } from './movements.controller';
 import { MovementsRepository } from './movements.repository';
 import { MovementsService } from './movements.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([MovementEntity, MovementItemEntity]), StocksModule],
+  imports: [
+    TypeOrmModule.forFeature([
+      MovementEntity,
+      MovementItemEntity,
+      MovementItemDistributionEntity,
+    ]),
+    StocksModule,
+  ],
   controllers: [MovementsController],
   providers: [MovementsRepository, MovementsService],
 })

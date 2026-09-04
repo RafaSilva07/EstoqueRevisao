@@ -24,12 +24,12 @@ export class MovementEntity {
   @JoinColumn({ name: 'origin_location_id' })
   originLocation!: StockLocationEntity;
 
-  @Column({ name: 'destination_location_id', type: 'uuid' })
-  destinationLocationId!: string;
+  @Column({ name: 'destination_location_id', type: 'uuid', nullable: true })
+  destinationLocationId!: string | null;
 
-  @ManyToOne(() => StockLocationEntity, { onDelete: 'RESTRICT' })
+  @ManyToOne(() => StockLocationEntity, { nullable: true, onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'destination_location_id' })
-  destinationLocation!: StockLocationEntity;
+  destinationLocation!: StockLocationEntity | null;
 
   @Column({ name: 'responsible_user_id', type: 'uuid' })
   responsibleUserId!: string;

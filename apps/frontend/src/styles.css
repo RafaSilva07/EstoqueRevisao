@@ -156,6 +156,27 @@ dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font-weight: 700; }
 .movement-detail-items li { display: grid; gap: .2rem; border-radius: .7rem; background: #f3f7f8; padding: .75rem; }
 .movement-detail-items span { color: var(--muted); font-size: .85rem; }
 .confirmation-dialog ul { max-height: 14rem; overflow: auto; padding-left: 1.2rem; line-height: 1.6; }
+.review-observation { display: grid; gap: .4rem; margin-top: 1rem; }
+.review-items { display: grid; gap: 1rem; margin: 1rem 0; }
+.review-card { display: grid; gap: 1rem; padding: 1rem; }
+.review-card header { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+.review-card header h2 { margin-bottom: .2rem; font-size: 1.05rem; }
+.review-card header p:last-child { margin: 0; color: var(--muted); font-size: .85rem; }
+.review-balance { display: flex; align-items: center; justify-content: space-between; gap: .75rem; border-radius: .75rem; background: var(--primary-soft); padding: .8rem; }
+.review-balance span { color: var(--primary-dark); font-size: .8rem; font-weight: 700; }
+.review-card fieldset { min-width: 0; margin: 0; border: 1px solid var(--line); border-radius: .8rem; padding: .8rem; }
+.review-card legend { padding: 0 .35rem; font-weight: 800; }
+.review-destinations { display: grid; gap: .7rem; }
+.distribution-feedback { display: flex; flex-direction: column; gap: .2rem; margin: 0; border-radius: .75rem; padding: .75rem; font-weight: 800; }
+.distribution-feedback span { font-size: .8rem; font-weight: 600; }
+.distribution-feedback.complete { background: #e7f7ed; color: #17683a; }
+.distribution-feedback.incomplete { background: #fff2dc; color: #82520a; }
+.review-submit { position: sticky; z-index: 5; bottom: 5.2rem; display: grid; gap: .8rem; border-color: #b5d8df; padding: 1rem; box-shadow: 0 .5rem 1.5rem rgb(24 60 72 / 12%); }
+.review-submit div { display: grid; gap: .2rem; }
+.review-submit span { color: var(--muted); font-size: .75rem; font-weight: 800; text-transform: uppercase; }
+.review-summary > li { margin-bottom: .75rem; }
+.distribution-detail { display: grid; gap: .2rem; margin-top: .4rem; padding: .5rem !important; border-left: 3px solid #8dc8d3; list-style: none; }
+.distribution-detail li { display: block; padding: .2rem .4rem; }
 
 .dialog-backdrop { position: fixed; z-index: 50; inset: 0; display: grid; place-items: end center; padding: 1rem; background: rgb(12 28 37 / 55%); }
 .dialog { width: min(100%, 28rem); border-radius: 1rem; background: #fff; padding: 1.2rem; box-shadow: 0 1rem 3rem rgb(0 0 0 / 20%); }
@@ -180,6 +201,8 @@ dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font-weight: 700; }
   .account-card { grid-column: 1 / -1; }
   .dialog-backdrop { place-items: center; }
   .dialog-actions { grid-template-columns: 1fr 1fr; }
+  .review-destinations { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .review-submit { grid-template-columns: 1fr auto; align-items: center; }
 }
 
 @media (min-width: 760px) {
@@ -211,6 +234,7 @@ dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font-weight: 700; }
   .sidebar nav button.current { background: var(--primary-soft); color: var(--primary-dark); }
   .sidebar-note { margin: 0; padding: .75rem; color: #7a8995; font-size: .73rem; line-height: 1.45; }
   .workspace { grid-column: 2; grid-row: 2; padding: 2rem clamp(1.5rem, 3vw, 3rem); }
+  .review-submit { bottom: 1rem; }
   .bottom-nav { display: none; }
   .content-grid { grid-template-columns: minmax(0, 2fr) minmax(18rem, .8fr); }
   .inventory-grid:has(.detail-panel) { grid-template-columns: minmax(0, 2fr) minmax(18rem, .75fr); }

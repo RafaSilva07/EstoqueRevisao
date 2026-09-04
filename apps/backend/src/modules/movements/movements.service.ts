@@ -5,13 +5,16 @@ import { paginate, PaginatedResult } from '../../shared/pagination/paginated-res
 import { AuditService } from '../audit/audit.service';
 import { AuditRequestMetadata } from '../audit/audit.types';
 import { StockLocationKind } from '../stocks/domain/stock-location-kind.enum';
+import { ReviewLocationRole } from '../stocks/domain/review-location-role.enum';
 import { StockLocationsRepository } from '../stocks/stock-locations.repository';
 import { StockPositionsService } from '../stocks/stock-positions.service';
 import { MovementStatus } from './domain/movement-status.enum';
 import { MovementType } from './domain/movement-type.enum';
 import { CreateEffectiveMovementDto } from './dto/create-effective-movement.dto';
+import { CreateReviewDto } from './dto/create-review.dto';
 import { MovementQueryDto } from './dto/movement-query.dto';
 import { MovementItemEntity } from './entities/movement-item.entity';
+import { MovementItemDistributionEntity } from './entities/movement-item-distribution.entity';
 import { MovementEntity } from './entities/movement.entity';
 import { MovementsRepository } from './movements.repository';
 
@@ -154,6 +157,111 @@ export class MovementsService {
     });
   }
 
+  async createReview(
+    dto: CreateReviewDto,
+    userId: string,
+    metadata: AuditRequestMetadata,
+  ): Promise<MovementEntity> {
+    const existing = await this.repository.findByRequestKey(dto.requestKey);
+    if (existing) return this.resolveIdempotent(existing, userId, MovementType.Review);
+    this.validateReview(dto);
+
+    try {
+      const id = await this.dataSource.transaction(async (manager) => {
+        const sources = await this.locations.findByReviewRole(ReviewLocationRole.Source, manager);
+        const destinations = await this.locations.findByReviewRole(
+          ReviewLocationRole.Destination,
+          manager,
+        );
+        if (sources.length !== 1 || destinations.length === 0) {
+          throw new ConflictException({
+            code: 'REVIEW_CONFIGURATION_INVALID',
+            message: 'A origem e os destinos da revisao nao estao configurados corretamente.',
+          });
+        }
+        const source = sources[0];
+        const allowedDestinationIds = new Set(destinations.map((location) => location.id));
+        for (const item of dto.items) {
+          if (item.distributions.some((distribution) => (
+            !allowedDestinationIds.has(distribution.destinationLocationId)
+          ))) {
+            throw new BadRequestException({
+              code: 'INVALID_REVIEW_DESTINATION',
+              message: 'A revisao possui um destino interno nao permitido.',
+            });
+          }
+        }
+
+        const movement = Object.assign(new MovementEntity(), {
+          requestKey: dto.requestKey,
+          type: MovementType.Review,
+          originLocationId: source.id,
+          destinationLocationId: null,
+          responsibleUserId: userId,
+          occurredAt: dto.occurredAt ? new Date(dto.occurredAt) : new Date(),
+          status: MovementStatus.Effective,
+          observation: dto.observation || null,
+        });
+        await this.repository.save(movement, manager);
+
+        const effectiveItems = [...dto.items].sort((left, right) => (
+          `${left.productId}:${left.batchId}`.localeCompare(`${right.productId}:${right.batchId}`)
+        ));
+        const items: MovementItemEntity[] = [];
+        const distributions: MovementItemDistributionEntity[] = [];
+        for (const dtoItem of effectiveItems) {
+          await this.stockPositions.distributeQuantity({
+            productId: dtoItem.productId,
+            batchId: dtoItem.batchId,
+            stockLocationId: source.id,
+          }, dtoItem.distributions, dtoItem.quantity, manager);
+          const item = Object.assign(new MovementItemEntity(), {
+            movementId: movement.id,
+            productId: dtoItem.productId,
+            batchId: dtoItem.batchId,
+            quantity: dtoItem.quantity,
+          });
+          items.push(item);
+          for (const distribution of dtoItem.distributions) {
+            distributions.push(Object.assign(new MovementItemDistributionEntity(), {
+              movementItemId: item.id,
+              destinationLocationId: distribution.destinationLocationId,
+              quantity: distribution.quantity,
+            }));
+          }
+        }
+        await this.repository.saveItems(items, manager);
+        await this.repository.saveDistributions(distributions, manager);
+        await this.audit.record({
+          ...metadata,
+          manager,
+          userId,
+          action: 'REVIEW_CREATE',
+          entityType: 'MOVEMENT',
+          entityId: movement.id,
+          result: 'SUCCESS',
+          newValues: {
+            type: movement.type,
+            status: movement.status,
+            originLocationId: movement.originLocationId,
+            occurredAt: movement.occurredAt.toISOString(),
+            observation: movement.observation,
+            items: effectiveItems,
+          },
+        });
+        return movement.id;
+      });
+      return this.getById(id);
+    } catch (error: unknown) {
+      if (getPostgresError(error)?.constraint === 'UQ_movements_request_key') {
+        const concurrent = await this.repository.findByRequestKey(dto.requestKey);
+        if (concurrent) return this.resolveIdempotent(concurrent, userId, MovementType.Review);
+        throw this.duplicateRequest();
+      }
+      throw error;
+    }
+  }
+
   private async createEffectiveMovement(
     dto: CreateEffectiveMovementDto,
     userId: string,
@@ -249,6 +357,43 @@ export class MovementsService {
       }
       keys.add(key);
     }
+  }
+
+  private validateReview(dto: CreateReviewDto): void {
+    const itemKeys = new Set<string>();
+    for (const item of dto.items) {
+      const itemKey = `${item.productId}:${item.batchId}`;
+      if (itemKeys.has(itemKey)) {
+        throw new BadRequestException({
+          code: 'DUPLICATE_REVIEW_ITEM',
+          message: 'O mesmo produto e lote nao pode aparecer duas vezes na revisao.',
+        });
+      }
+      itemKeys.add(itemKey);
+
+      const destinationIds = new Set<string>();
+      let distributedUnits = 0;
+      for (const distribution of item.distributions) {
+        if (destinationIds.has(distribution.destinationLocationId)) {
+          throw new BadRequestException({
+            code: 'DUPLICATE_REVIEW_DESTINATION',
+            message: 'Um destino nao pode se repetir na distribuicao do mesmo item.',
+          });
+        }
+        destinationIds.add(distribution.destinationLocationId);
+        distributedUnits += this.toQuantityUnits(distribution.quantity);
+      }
+      if (distributedUnits !== this.toQuantityUnits(item.quantity)) {
+        throw new BadRequestException({
+          code: 'INVALID_REVIEW_DISTRIBUTION_TOTAL',
+          message: 'A soma dos destinos deve ser exatamente igual a quantidade revisada.',
+        });
+      }
+    }
+  }
+
+  private toQuantityUnits(quantity: number): number {
+    return Math.round(quantity * 1_000_000);
   }
 
   private resolveIdempotent(

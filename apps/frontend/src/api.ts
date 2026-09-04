@@ -61,6 +61,7 @@ export interface StockLocation {
   kind: StockLocationKind;
   parentId: string | null;
   active: boolean;
+  reviewRole: 'SOURCE' | 'DESTINATION' | null;
 }
 
 export interface StockPosition {
@@ -83,21 +84,29 @@ export interface MovementItem {
   quantity: number;
   product: Product;
   batch: Batch;
+  distributions: MovementItemDistribution[];
+}
+
+export interface MovementItemDistribution {
+  id: string;
+  destinationLocationId: string;
+  quantity: number;
+  destinationLocation: StockLocation;
 }
 
 export interface Movement {
   id: string;
   requestKey: string;
-  type: 'ENTRADA_EXTERNA' | 'SAIDA_EXTERNA' | 'TRANSFERENCIA_INTERNA';
+  type: 'ENTRADA_EXTERNA' | 'SAIDA_EXTERNA' | 'TRANSFERENCIA_INTERNA' | 'REVISAO';
   originLocationId: string;
-  destinationLocationId: string;
+  destinationLocationId: string | null;
   responsibleUserId: string;
   occurredAt: string;
   status: 'EFETIVADA';
   observation: string | null;
   createdAt: string;
   originLocation: StockLocation;
-  destinationLocation: StockLocation;
+  destinationLocation: StockLocation | null;
   responsibleUser: { id: string; username: string };
   items: MovementItem[];
 }

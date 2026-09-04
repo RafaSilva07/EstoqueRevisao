@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { Column, Entity, JoinColumn, ManyToOne, PrimaryColumn, ValueTransformer } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn, ValueTransformer } from 'typeorm';
 import { BatchEntity } from '../../batches/entities/batch.entity';
 import { ProductEntity } from '../../products/entities/product.entity';
 import { MovementEntity } from './movement.entity';
+import { MovementItemDistributionEntity } from './movement-item-distribution.entity';
 
 const numericTransformer: ValueTransformer = {
   to: (value: number): number => value,
@@ -37,4 +38,7 @@ export class MovementItemEntity {
 
   @Column({ type: 'numeric', precision: 18, scale: 6, transformer: numericTransformer })
   quantity!: number;
+
+  @OneToMany(() => MovementItemDistributionEntity, (distribution) => distribution.movementItem)
+  distributions!: MovementItemDistributionEntity[];
 }

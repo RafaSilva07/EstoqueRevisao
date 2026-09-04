@@ -5,6 +5,7 @@ import { getAuditRequestMetadata } from '../audit/audit-request-metadata';
 import { AuthenticatedUser } from '../auth/authenticated-user.interface';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { CreateEffectiveMovementDto } from './dto/create-effective-movement.dto';
+import { CreateReviewDto } from './dto/create-review.dto';
 import { MovementQueryDto } from './dto/movement-query.dto';
 import { MovementEntity } from './entities/movement.entity';
 import { MovementsService } from './movements.service';
@@ -38,6 +39,13 @@ export class MovementsController {
   ): Promise<MovementEntity> {
     const user = request.user as AuthenticatedUser;
     return this.service.createInternalTransfer(dto, user.id, getAuditRequestMetadata(request));
+  }
+
+  @Post('reviews')
+  @RequirePermissions('movements.create')
+  createReview(@Body() dto: CreateReviewDto, @Req() request: Request): Promise<MovementEntity> {
+    const user = request.user as AuthenticatedUser;
+    return this.service.createReview(dto, user.id, getAuditRequestMetadata(request));
   }
 
   @Get()

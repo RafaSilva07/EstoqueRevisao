@@ -94,7 +94,7 @@ npm run dev:frontend
 - API REST: `http://localhost:3000/api/v1`
 - Health check: `GET http://localhost:3000/api/v1/health`
 
-O frontend restaura a sessao pelo refresh token HttpOnly, mantem o access token apenas em memoria e apresenta os cadastros, o estoque atual, entradas, saidas, transferencias internas e o historico operacional.
+O frontend restaura a sessao pelo refresh token HttpOnly, mantem o access token apenas em memoria e apresenta os cadastros, o estoque atual, entradas, saidas, transferencias internas, revisoes e o historico operacional.
 
 ## API preparada nesta etapa
 
@@ -103,7 +103,7 @@ O frontend restaura a sessao pelo refresh token HttpOnly, mantem o access token 
 - lotes: codigo `CONSERVADI` calculado da fabricacao (ou o inverso), validade obrigatoria e vinculo com produto;
 - estoques/locais: listagem paginada com filtros, detalhe, criacao, edicao e ativacao/inativacao;
 - estoque atual: consulta paginada e detalhe por produto, lote e local, sem endpoint publico de alteracao;
-- movimentacoes: criacao idempotente de entradas, saidas e transferencias internas com varios itens, listagem filtrada por tipo e detalhe somente leitura;
+- movimentacoes: criacao idempotente de entradas, saidas, transferencias internas e revisoes com varios itens, listagem filtrada por tipo e detalhe somente leitura;
 - autenticacao: login, refresh rotativo, logout e consulta da sessao;
 - autorizacao: permissoes especificas aplicadas em todas as rotas de cadastro;
 - auditoria: usuario, acao, entidade, identificador, data/hora, valores anteriores e novos;
@@ -132,6 +132,14 @@ Saidas efetivadas compartilham o historico, os filtros e o detalhe imutavel das 
 Produto e lote devem possuir saldo positivo na origem. Itens repetidos sao rejeitados, as posicoes envolvidas sao bloqueadas em ordem deterministica e os itens sao processados por uma chave estavel para reduzir deadlocks. O destino e criado por UPSERT quando ainda nao possui a combinacao produto/lote, ou recebe a soma quando a posicao ja existe.
 
 A transferencia usa os locais configurados no banco e aceita `STOCK` e `SUBSTOCK`; nomes como Revisar, Lata Boa, Varejo e TUF nao fazem parte da regra. Transferencias efetivadas aparecem no mesmo historico e permanecem imutaveis.
+
+### Revisar produtos
+
+`POST /api/v1/movements/reviews` recebe uma chave UUID de idempotencia, observacao opcional e um ou mais itens. A origem e obtida da configuracao dos locais; cada item informa produto, lote, quantidade revisada e uma ou mais distribuicoes para destinos permitidos.
+
+A soma das distribuicoes deve ser exatamente igual a quantidade revisada. A operacao permite revisao parcial, preserva produto, lote, fabricacao, validade e quantidade total, e confirma cabecalho, itens, distribuicoes, saldos e auditoria na mesma transacao. Locks ordenados e baixa condicional impedem consumo concorrente acima do saldo em Revisar.
+
+A interface `Revisar produtos` mostra somente produto/lote com saldo na origem configurada, acompanha a distribuicao em tempo real, exige confirmacao e reutiliza o historico geral. Revisoes efetivadas sao imutaveis e nao possuem troca ou criacao de lote.
 
 ## Verificacoes
 

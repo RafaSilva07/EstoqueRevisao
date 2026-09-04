@@ -15,7 +15,18 @@ import {
 import { trimString } from '../../../shared/validation/transforms';
 import { HasAtMostDecimalPlaces } from '../../../shared/validation/maximum-decimal-places.decorator';
 
-export class CreateEffectiveMovementItemDto {
+export class CreateReviewDistributionDto {
+  @IsUUID()
+  destinationLocationId!: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @HasAtMostDecimalPlaces(6)
+  @Min(0.000001)
+  quantity!: number;
+}
+
+export class CreateReviewItemDto {
   @IsUUID()
   productId!: string;
 
@@ -27,17 +38,18 @@ export class CreateEffectiveMovementItemDto {
   @HasAtMostDecimalPlaces(6)
   @Min(0.000001)
   quantity!: number;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => CreateReviewDistributionDto)
+  distributions!: CreateReviewDistributionDto[];
 }
 
-export class CreateEffectiveMovementDto {
+export class CreateReviewDto {
   @IsUUID()
   requestKey!: string;
-
-  @IsUUID()
-  originLocationId!: string;
-
-  @IsUUID()
-  destinationLocationId!: string;
 
   @IsOptional()
   @IsISO8601({ strict: true })
@@ -53,6 +65,6 @@ export class CreateEffectiveMovementDto {
   @ArrayMinSize(1)
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
-  @Type(() => CreateEffectiveMovementItemDto)
-  items!: CreateEffectiveMovementItemDto[];
+  @Type(() => CreateReviewItemDto)
+  items!: CreateReviewItemDto[];
 }

@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { DataSource, EntityManager } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import { StockLocationKind } from '../stocks/domain/stock-location-kind.enum';
+import { ReviewLocationRole } from '../stocks/domain/review-location-role.enum';
 import { StockLocationEntity } from '../stocks/entities/stock-location.entity';
 import { StockLocationsRepository } from '../stocks/stock-locations.repository';
 import { StockPositionsService } from '../stocks/stock-positions.service';
@@ -24,9 +25,9 @@ describe('MovementsService', () => {
       { productId: '60000000-0000-4000-8000-000000000002', batchId: '70000000-0000-4000-8000-000000000002', quantity: 2.5 },
     ],
   };
-  const repository = { findByRequestKey: jest.fn(), findById: jest.fn(), findAndCount: jest.fn(), save: jest.fn(), saveItems: jest.fn() };
-  const locations = { findById: jest.fn() };
-  const stock = { addQuantity: jest.fn(), removeQuantity: jest.fn(), transferQuantity: jest.fn() };
+  const repository = { findByRequestKey: jest.fn(), findById: jest.fn(), findAndCount: jest.fn(), save: jest.fn(), saveItems: jest.fn(), saveDistributions: jest.fn() };
+  const locations = { findById: jest.fn(), findByReviewRole: jest.fn() };
+  const stock = { addQuantity: jest.fn(), removeQuantity: jest.fn(), transferQuantity: jest.fn(), distributeQuantity: jest.fn() };
   const audit = { record: jest.fn() };
   const dataSource = { transaction: jest.fn((operation: (value: EntityManager) => unknown) => operation(manager)) };
   const service = new MovementsService(repository as unknown as MovementsRepository, locations as unknown as StockLocationsRepository, stock as unknown as StockPositionsService, audit as unknown as AuditService, dataSource as unknown as DataSource);
@@ -36,11 +37,13 @@ describe('MovementsService', () => {
     repository.findByRequestKey.mockResolvedValue(null);
     repository.save.mockImplementation((value: unknown) => Promise.resolve(value));
     repository.saveItems.mockImplementation((value: unknown) => Promise.resolve(value));
+    repository.saveDistributions.mockImplementation((value: unknown) => Promise.resolve(value));
     repository.findById.mockImplementation((id: string) => Promise.resolve(Object.assign(new MovementEntity(), { id, items: [] })));
     locations.findById.mockImplementation((id: string) => Promise.resolve(Object.assign(new StockLocationEntity(), { id, active: true, kind: id === originId ? StockLocationKind.External : StockLocationKind.Substock })));
     stock.addQuantity.mockResolvedValue({});
     stock.removeQuantity.mockResolvedValue({});
     stock.transferQuantity.mockResolvedValue({});
+    stock.distributeQuantity.mockResolvedValue(undefined);
   });
 
   it('registra cabecalho e varios itens em uma unica transacao', async () => {
@@ -360,6 +363,174 @@ describe('MovementsService', () => {
       repository.findByRequestKey.mockResolvedValue(existing);
       await expect(service.createInternalTransfer(transferDto, userId, {
         requestId: transferDto.requestKey, ipAddress: null, userAgent: null,
+      })).resolves.toBe(existing);
+      expect(dataSource.transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('revisao', () => {
+    const reviewSourceId = '10000000-0000-4000-8000-000000000002';
+    const lataBoaId = '10000000-0000-4000-8000-000000000003';
+    const varejoId = '10000000-0000-4000-8000-000000000004';
+    const tufId = '10000000-0000-4000-8000-000000000005';
+    const reviewDto = {
+      requestKey: '50000000-0000-4000-8000-000000000004',
+      observation: 'Classificacao do turno',
+      items: [
+        {
+          productId: dto.items[0].productId,
+          batchId: dto.items[0].batchId,
+          quantity: 10,
+          distributions: [
+            { destinationLocationId: lataBoaId, quantity: 7 },
+            { destinationLocationId: varejoId, quantity: 2 },
+            { destinationLocationId: tufId, quantity: 1 },
+          ],
+        },
+        {
+          productId: dto.items[1].productId,
+          batchId: dto.items[1].batchId,
+          quantity: 2.5,
+          distributions: [{ destinationLocationId: lataBoaId, quantity: 2.5 }],
+        },
+      ],
+    };
+
+    beforeEach(() => {
+      locations.findByReviewRole.mockImplementation((role: ReviewLocationRole) => Promise.resolve(
+        role === ReviewLocationRole.Source
+          ? [Object.assign(new StockLocationEntity(), { id: reviewSourceId, active: true, reviewRole: role })]
+          : [lataBoaId, varejoId, tufId].map((id) => Object.assign(
+            new StockLocationEntity(),
+            { id, active: true, reviewRole: role },
+          )),
+      ));
+    });
+
+    it('registra uma revisao com varios itens e destinos', async () => {
+      await service.createReview(reviewDto, userId, {
+        requestId: reviewDto.requestKey, ipAddress: null, userAgent: null,
+      });
+      expect(repository.save).toHaveBeenCalledWith(expect.objectContaining({
+        type: MovementType.Review,
+        originLocationId: reviewSourceId,
+        destinationLocationId: null,
+        responsibleUserId: userId,
+      }), manager);
+      expect(stock.distributeQuantity).toHaveBeenCalledTimes(2);
+      expect(repository.saveItems).toHaveBeenCalledWith(expect.arrayContaining([
+        expect.objectContaining({ quantity: 10 }),
+        expect.objectContaining({ quantity: 2.5 }),
+      ]), manager);
+      expect(repository.saveDistributions).toHaveBeenCalledWith(expect.arrayContaining([
+        expect.objectContaining({ destinationLocationId: lataBoaId, quantity: 7 }),
+        expect.objectContaining({ destinationLocationId: varejoId, quantity: 2 }),
+        expect.objectContaining({ destinationLocationId: tufId, quantity: 1 }),
+      ]), manager);
+    });
+
+    it('aceita distribuicao exata para um, dois ou tres destinos', async () => {
+      for (const distributions of [
+        [{ destinationLocationId: lataBoaId, quantity: 10 }],
+        [{ destinationLocationId: lataBoaId, quantity: 8 }, { destinationLocationId: tufId, quantity: 2 }],
+        reviewDto.items[0].distributions,
+      ]) {
+        await expect(service.createReview({
+          ...reviewDto,
+          requestKey: crypto.randomUUID(),
+          items: [{ ...reviewDto.items[0], distributions }],
+        }, userId, {
+          requestId: reviewDto.requestKey, ipAddress: null, userAgent: null,
+        })).resolves.toBeDefined();
+      }
+    });
+
+    it.each([
+      ['menor', 9],
+      ['maior', 11],
+    ])('rejeita distribuicao %s que a quantidade revisada', async (_label, distributed) => {
+      await expect(service.createReview({
+        ...reviewDto,
+        items: [{
+          ...reviewDto.items[0],
+          distributions: [{ destinationLocationId: lataBoaId, quantity: distributed }],
+        }],
+      }, userId, {
+        requestId: reviewDto.requestKey, ipAddress: null, userAgent: null,
+      })).rejects.toMatchObject({ response: { code: 'INVALID_REVIEW_DISTRIBUTION_TOTAL' } });
+      expect(dataSource.transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejeita o mesmo produto e lote duas vezes', async () => {
+      await expect(service.createReview({
+        ...reviewDto,
+        items: [reviewDto.items[0], reviewDto.items[0]],
+      }, userId, {
+        requestId: reviewDto.requestKey, ipAddress: null, userAgent: null,
+      })).rejects.toMatchObject({ response: { code: 'DUPLICATE_REVIEW_ITEM' } });
+    });
+
+    it('rejeita destino duplicado no mesmo item', async () => {
+      await expect(service.createReview({
+        ...reviewDto,
+        items: [{
+          ...reviewDto.items[0],
+          distributions: [
+            { destinationLocationId: lataBoaId, quantity: 5 },
+            { destinationLocationId: lataBoaId, quantity: 5 },
+          ],
+        }],
+      }, userId, {
+        requestId: reviewDto.requestKey, ipAddress: null, userAgent: null,
+      })).rejects.toMatchObject({ response: { code: 'DUPLICATE_REVIEW_DESTINATION' } });
+    });
+
+    it('rejeita Revisar, local externo ou qualquer destino nao configurado', async () => {
+      for (const invalidId of [reviewSourceId, originId]) {
+        await expect(service.createReview({
+          ...reviewDto,
+          items: [{
+            ...reviewDto.items[0],
+            distributions: [{ destinationLocationId: invalidId, quantity: 10 }],
+          }],
+        }, userId, {
+          requestId: reviewDto.requestKey, ipAddress: null, userAgent: null,
+        })).rejects.toMatchObject({ response: { code: 'INVALID_REVIEW_DESTINATION' } });
+      }
+    });
+
+    it('interrompe itens, distribuicoes e auditoria quando qualquer item falha', async () => {
+      stock.distributeQuantity.mockResolvedValueOnce(undefined).mockRejectedValueOnce(
+        new ConflictException({ code: 'INSUFFICIENT_STOCK', message: 'Saldo insuficiente.' }),
+      );
+      await expect(service.createReview(reviewDto, userId, {
+        requestId: reviewDto.requestKey, ipAddress: null, userAgent: null,
+      })).rejects.toBeInstanceOf(ConflictException);
+      expect(repository.saveItems).not.toHaveBeenCalled();
+      expect(repository.saveDistributions).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('registra auditoria e protege o reenvio da revisao', async () => {
+      await service.createReview(reviewDto, userId, {
+        requestId: reviewDto.requestKey, ipAddress: null, userAgent: null,
+      });
+      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
+        manager,
+        userId,
+        action: 'REVIEW_CREATE',
+        entityType: 'MOVEMENT',
+      }));
+
+      const existing = Object.assign(new MovementEntity(), {
+        requestKey: reviewDto.requestKey,
+        responsibleUserId: userId,
+        type: MovementType.Review,
+      });
+      jest.clearAllMocks();
+      repository.findByRequestKey.mockResolvedValue(existing);
+      await expect(service.createReview(reviewDto, userId, {
+        requestId: reviewDto.requestKey, ipAddress: null, userAgent: null,
       })).resolves.toBe(existing);
       expect(dataSource.transaction).not.toHaveBeenCalled();
     });
