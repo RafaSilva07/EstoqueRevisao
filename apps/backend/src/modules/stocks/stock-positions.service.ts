@@ -158,6 +158,58 @@ export class StockPositionsService {
     }
   }
 
+  async restoreDistributedQuantity(
+    source: StockPositionKey,
+    distributions: Array<{ destinationLocationId: string; quantity: number }>,
+    quantity: number,
+    manager: EntityManager,
+  ): Promise<void> {
+    this.validateQuantity(quantity);
+    const destinationIds = new Set<string>();
+    let distributedUnits = 0;
+    for (const distribution of distributions) {
+      this.validateQuantity(distribution.quantity);
+      if (
+        distribution.destinationLocationId === source.stockLocationId
+        || destinationIds.has(distribution.destinationLocationId)
+      ) {
+        throw new BadRequestException({
+          code: 'INVALID_STOCK_DISTRIBUTION_DESTINATION',
+          message: 'Os destinos devem ser diferentes da origem e nao podem se repetir.',
+        });
+      }
+      destinationIds.add(distribution.destinationLocationId);
+      distributedUnits += this.toQuantityUnits(distribution.quantity);
+    }
+    if (
+      destinationIds.size === 0
+      || distributedUnits !== this.toQuantityUnits(quantity)
+    ) {
+      throw new BadRequestException({
+        code: 'INVALID_STOCK_DISTRIBUTION_TOTAL',
+        message: 'A soma dos destinos deve ser exatamente igual a quantidade revisada.',
+      });
+    }
+
+    await this.validateReferences(source, manager, false);
+    for (const destinationLocationId of [...destinationIds].sort()) {
+      await this.validateReferences({ ...source, stockLocationId: destinationLocationId }, manager, false);
+    }
+    await this.positionsRepository.lockForDistribution(source, [...destinationIds], manager);
+    for (const distribution of [...distributions].sort((left, right) => (
+      left.destinationLocationId.localeCompare(right.destinationLocationId)
+    ))) {
+      const destination = { ...source, stockLocationId: distribution.destinationLocationId };
+      const updated = await this.positionsRepository.removeAtomic(
+        destination,
+        distribution.quantity,
+        manager,
+      );
+      if (!updated) throw await this.insufficientStockException(destination, manager);
+    }
+    await this.positionsRepository.addAtomic(source, quantity, manager);
+  }
+
   private async insufficientStockException(
     key: StockPositionKey,
     manager: EntityManager,

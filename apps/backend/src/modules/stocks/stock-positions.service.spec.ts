@@ -243,5 +243,26 @@ describe('StockPositionsService', () => {
         .rejects.toBeInstanceOf(ConflictException);
       expect(positions.addAtomic).not.toHaveBeenCalled();
     });
+
+    it('estorna todas as parcelas e devolve o total para Revisar', async () => {
+      await service.restoreDistributedQuantity(key, destinations, 10, manager);
+      expect(positions.lockForDistribution).toHaveBeenCalledWith(
+        key,
+        destinations.map((item) => item.destinationLocationId),
+        manager,
+      );
+      expect(positions.removeAtomic).toHaveBeenCalledTimes(2);
+      expect(positions.addAtomic).toHaveBeenCalledWith(key, 10, manager);
+    });
+
+    it('bloqueia estorno quando uma classificacao nao possui mais o saldo', async () => {
+      positions.removeAtomic.mockResolvedValueOnce(null);
+      positions.findByKey.mockResolvedValue(Object.assign(new StockPositionEntity(), key, {
+        quantity: 3,
+      }));
+      await expect(service.restoreDistributedQuantity(key, destinations, 10, manager))
+        .rejects.toBeInstanceOf(ConflictException);
+      expect(positions.addAtomic).not.toHaveBeenCalled();
+    });
   });
 });

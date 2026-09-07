@@ -25,9 +25,9 @@ describe('MovementsService', () => {
       { productId: '60000000-0000-4000-8000-000000000002', batchId: '70000000-0000-4000-8000-000000000002', quantity: 2.5 },
     ],
   };
-  const repository = { findByRequestKey: jest.fn(), findById: jest.fn(), findAndCount: jest.fn(), save: jest.fn(), saveItems: jest.fn(), saveDistributions: jest.fn() };
+  const repository = { findByRequestKey: jest.fn(), findById: jest.fn(), findByIdForUpdate: jest.fn(), findAndCount: jest.fn(), save: jest.fn(), saveItems: jest.fn(), saveDistributions: jest.fn() };
   const locations = { findById: jest.fn(), findByReviewRole: jest.fn() };
-  const stock = { addQuantity: jest.fn(), removeQuantity: jest.fn(), transferQuantity: jest.fn(), distributeQuantity: jest.fn() };
+  const stock = { addQuantity: jest.fn(), removeQuantity: jest.fn(), transferQuantity: jest.fn(), distributeQuantity: jest.fn(), restoreDistributedQuantity: jest.fn() };
   const audit = { record: jest.fn() };
   const dataSource = { transaction: jest.fn((operation: (value: EntityManager) => unknown) => operation(manager)) };
   const service = new MovementsService(repository as unknown as MovementsRepository, locations as unknown as StockLocationsRepository, stock as unknown as StockPositionsService, audit as unknown as AuditService, dataSource as unknown as DataSource);
@@ -44,6 +44,75 @@ describe('MovementsService', () => {
     stock.removeQuantity.mockResolvedValue({});
     stock.transferQuantity.mockResolvedValue({});
     stock.distributeQuantity.mockResolvedValue(undefined);
+    stock.restoreDistributedQuantity.mockResolvedValue(undefined);
+  });
+
+  describe('cancelamento', () => {
+    const metadata = { requestId: dto.requestKey, ipAddress: null, userAgent: null };
+    const movement = (type: MovementType): MovementEntity => Object.assign(new MovementEntity(), {
+      id: dto.requestKey,
+      type,
+      status: MovementStatus.Effective,
+      originLocationId: originId,
+      destinationLocationId: type === MovementType.Review ? null : destinationId,
+      items: [Object.assign({
+        productId: dto.items[0].productId,
+        batchId: dto.items[0].batchId,
+        destinationBatchId: '70000000-0000-4000-8000-000000000099',
+        quantity: 10,
+        distributions: [
+          { destinationLocationId: '10000000-0000-4000-8000-000000000004', quantity: 6 },
+          { destinationLocationId: '10000000-0000-4000-8000-000000000005', quantity: 4 },
+        ],
+      })],
+    });
+
+    beforeEach(() => {
+      repository.findByIdForUpdate.mockResolvedValue(movement(MovementType.ExternalEntry));
+    });
+
+    it.each([
+      [MovementType.ExternalEntry, 'removeQuantity'],
+      [MovementType.ExternalExit, 'addQuantity'],
+      [MovementType.InternalTransfer, 'transferQuantity'],
+      [MovementType.Review, 'restoreDistributedQuantity'],
+    ] as const)('estorna integralmente %s pelo servico central de saldo', async (type, method) => {
+      repository.findByIdForUpdate.mockResolvedValue(movement(type));
+      await service.cancel(dto.requestKey, { reason: 'Lancamento incorreto' }, userId, metadata);
+      expect(stock[method]).toHaveBeenCalledTimes(1);
+      expect(repository.save).toHaveBeenCalledWith(expect.objectContaining({
+        status: MovementStatus.Canceled,
+        canceledByUserId: userId,
+        cancellationReason: 'Lancamento incorreto',
+      }), manager);
+      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
+        action: 'MOVEMENT_CANCEL', manager, userId,
+      }));
+    });
+
+    it('bloqueia novo cancelamento sem tocar no estoque', async () => {
+      repository.findByIdForUpdate.mockResolvedValue(Object.assign(
+        movement(MovementType.ExternalEntry),
+        { status: MovementStatus.Canceled },
+      ));
+      await expect(service.cancel(dto.requestKey, { reason: 'Repetido' }, userId, metadata))
+        .rejects.toMatchObject({ response: { code: 'MOVEMENT_ALREADY_CANCELED' } });
+      expect(stock.removeQuantity).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('nao altera status nem audita quando o saldo necessario foi consumido', async () => {
+      const effective = movement(MovementType.ExternalEntry);
+      repository.findByIdForUpdate.mockResolvedValue(effective);
+      stock.removeQuantity.mockRejectedValueOnce(new ConflictException({
+        code: 'INSUFFICIENT_STOCK', message: 'Saldo insuficiente.',
+      }));
+      await expect(service.cancel(dto.requestKey, { reason: 'Lancamento incorreto' }, userId, metadata))
+        .rejects.toBeInstanceOf(ConflictException);
+      expect(effective.status).toBe(MovementStatus.Effective);
+      expect(repository.save).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+    });
   });
 
   it('registra cabecalho e varios itens em uma unica transacao', async () => {

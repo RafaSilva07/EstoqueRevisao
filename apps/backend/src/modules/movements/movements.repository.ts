@@ -35,12 +35,23 @@ export class MovementsRepository {
     return this.detailBuilder().where('movement.id = :id', { id }).getOne();
   }
 
+  async findByIdForUpdate(id: string, manager: EntityManager): Promise<MovementEntity | null> {
+    const transactionalRepository = manager.getRepository(MovementEntity);
+    const locked = await transactionalRepository.createQueryBuilder('movement')
+      .where('movement.id = :id', { id })
+      .setLock('pessimistic_write')
+      .getOne();
+    if (!locked) return null;
+    return this.detailBuilder(transactionalRepository).where('movement.id = :id', { id }).getOne();
+  }
+
   async findAndCount(query: MovementQueryDto): Promise<[MovementEntity[], number]> {
     const builder = this.repository
       .createQueryBuilder('movement')
       .innerJoinAndSelect('movement.originLocation', 'origin')
       .leftJoinAndSelect('movement.destinationLocation', 'destination')
       .innerJoinAndSelect('movement.responsibleUser', 'responsible')
+      .leftJoinAndSelect('movement.canceledByUser', 'canceledBy')
       .leftJoinAndSelect('movement.items', 'item')
       .leftJoinAndSelect('item.product', 'product')
       .leftJoinAndSelect('item.batch', 'batch')
@@ -88,11 +99,12 @@ export class MovementsRepository {
       .getManyAndCount();
   }
 
-  private detailBuilder(): SelectQueryBuilder<MovementEntity> {
-    return this.repository.createQueryBuilder('movement')
+  private detailBuilder(repository = this.repository): SelectQueryBuilder<MovementEntity> {
+    return repository.createQueryBuilder('movement')
       .innerJoinAndSelect('movement.originLocation', 'origin')
       .leftJoinAndSelect('movement.destinationLocation', 'destination')
       .innerJoinAndSelect('movement.responsibleUser', 'responsible')
+      .leftJoinAndSelect('movement.canceledByUser', 'canceledBy')
       .leftJoinAndSelect('movement.items', 'item')
       .leftJoinAndSelect('item.product', 'product')
       .leftJoinAndSelect('item.batch', 'batch')

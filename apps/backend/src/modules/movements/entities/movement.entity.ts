@@ -47,6 +47,19 @@ export class MovementEntity {
   @Column({ type: 'varchar', length: 1000, nullable: true })
   observation!: string | null;
 
+  @Column({ name: 'canceled_by_user_id', type: 'uuid', nullable: true })
+  canceledByUserId!: string | null;
+
+  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'canceled_by_user_id' })
+  canceledByUser!: UserEntity | null;
+
+  @Column({ name: 'canceled_at', type: 'timestamptz', nullable: true })
+  canceledAt!: Date | null;
+
+  @Column({ name: 'cancellation_reason', type: 'varchar', length: 1000, nullable: true })
+  cancellationReason!: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 

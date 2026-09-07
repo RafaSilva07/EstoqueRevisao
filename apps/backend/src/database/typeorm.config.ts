@@ -19,6 +19,7 @@ import { ExternalEntryMovements1788393600000 } from './migrations/1788393600000-
 import { MovementItemDistributionEntity } from '../modules/movements/entities/movement-item-distribution.entity';
 import { ReviewMovements1788480000000 } from './migrations/1788480000000-review-movements';
 import { TransferDestinationBatches1788566400000 } from './migrations/1788566400000-transfer-destination-batches';
+import { MovementCancellations1788652800000 } from './migrations/1788652800000-movement-cancellations';
 
 export const databaseEntities = [
   UserEntity,
@@ -43,6 +44,7 @@ export const databaseMigrations = [
   ExternalEntryMovements1788393600000,
   ReviewMovements1788480000000,
   TransferDestinationBatches1788566400000,
+  MovementCancellations1788652800000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {

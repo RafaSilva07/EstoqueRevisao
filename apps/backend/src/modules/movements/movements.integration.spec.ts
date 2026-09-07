@@ -15,6 +15,7 @@ import { StockLocationsRepository } from '../stocks/stock-locations.repository';
 import { StockPositionsRepository } from '../stocks/stock-positions.repository';
 import { StockPositionsService } from '../stocks/stock-positions.service';
 import { MovementType } from './domain/movement-type.enum';
+import { MovementStatus } from './domain/movement-status.enum';
 import { MovementItemEntity } from './entities/movement-item.entity';
 import { MovementItemDistributionEntity } from './entities/movement-item-distribution.entity';
 import { MovementEntity } from './entities/movement.entity';
@@ -659,5 +660,117 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     expect(await dataSource.getRepository(MovementEntity).count()).toBe(1);
     await expect(dataSource.getRepository(MovementEntity).delete(created.id))
       .rejects.toMatchObject({ code: '23503' });
+  });
+
+  describe('cancelamento e estorno', () => {
+    const cancel = (movementId: string): Promise<MovementEntity> => service.cancel(
+      movementId,
+      { reason: 'Lancamento operacional incorreto' },
+      userId,
+      { requestId: randomUUID(), ipAddress: null, userAgent: 'jest' },
+    );
+
+    it('estorna entrada, preserva o original e registra metadados e auditoria', async () => {
+      const created = await create();
+      const canceled = await cancel(created.id);
+      expect(canceled).toMatchObject({
+        id: created.id,
+        status: MovementStatus.Canceled,
+        canceledByUserId: userId,
+        cancellationReason: 'Lancamento operacional incorreto',
+      });
+      expect(canceled.canceledAt).toBeInstanceOf(Date);
+      expect(canceled.canceledByUser?.username).toBe('movement-integration');
+      expect(await stockService.getBalance({
+        productId: productAId, batchId: batchAId, stockLocationId: destinationId,
+      })).toBe(0);
+      expect(await stockService.getBalance({
+        productId: productBId, batchId: batchBId, stockLocationId: destinationId,
+      })).toBe(0);
+      expect(await dataSource.getRepository(MovementEntity).count()).toBe(1);
+      expect(await dataSource.getRepository(AuditLogEntity).countBy({
+        entityId: created.id,
+        action: 'MOVEMENT_CANCEL',
+      })).toBe(1);
+    });
+
+    it('estorna saida externa devolvendo integralmente o saldo a origem', async () => {
+      await seedStock(productAId, batchAId, 10);
+      const created = await createExit([{ productId: productAId, batchId: batchAId, quantity: 4 }]);
+      await cancel(created.id);
+      expect(await stockService.getBalance({
+        productId: productAId, batchId: batchAId, stockLocationId: destinationId,
+      })).toBe(10);
+    });
+
+    it('estorna transferencia com troca de lote no mesmo local', async () => {
+      await seedStock(productAId, batchAId, 10);
+      const created = await createTransfer([{
+        productId: productAId,
+        batchId: batchAId,
+        destinationBatchId: batchAEmptyId,
+        quantity: 4,
+      }], randomUUID(), destinationId, destinationId);
+      await cancel(created.id);
+      expect(await stockService.getBalance({
+        productId: productAId, batchId: batchAId, stockLocationId: destinationId,
+      })).toBe(10);
+      expect(await stockService.getBalance({
+        productId: productAId, batchId: batchAEmptyId, stockLocationId: destinationId,
+      })).toBe(0);
+    });
+
+    it('estorna revisao com multiplos destinos e devolve ao Revisar', async () => {
+      await seedStock(productAId, batchAId, 10);
+      const created = await createReview([{
+        productId: productAId,
+        batchId: batchAId,
+        quantity: 10,
+        distributions: [
+          { destinationLocationId: lataBoaId, quantity: 6 },
+          { destinationLocationId: varejoId, quantity: 4 },
+        ],
+      }]);
+      await cancel(created.id);
+      expect(await stockService.getBalance({
+        productId: productAId, batchId: batchAId, stockLocationId: destinationId,
+      })).toBe(10);
+      expect(await stockService.getBalance({
+        productId: productAId, batchId: batchAId, stockLocationId: lataBoaId,
+      })).toBe(0);
+      expect(await stockService.getBalance({
+        productId: productAId, batchId: batchAId, stockLocationId: varejoId,
+      })).toBe(0);
+    });
+
+    it('bloqueia estorno com saldo consumido e faz rollback integral', async () => {
+      const entry = await create();
+      await createExit([{ productId: productBId, batchId: batchBId, quantity: 2.5 }]);
+      await expect(cancel(entry.id)).rejects.toBeInstanceOf(ConflictException);
+      expect((await service.getById(entry.id)).status).toBe(MovementStatus.Effective);
+      expect(await stockService.getBalance({
+        productId: productAId, batchId: batchAId, stockLocationId: destinationId,
+      })).toBe(10);
+      expect(await stockService.getBalance({
+        productId: productBId, batchId: batchBId, stockLocationId: destinationId,
+      })).toBe(0);
+      expect(await dataSource.getRepository(AuditLogEntity).countBy({
+        entityId: entry.id,
+        action: 'MOVEMENT_CANCEL',
+      })).toBe(0);
+    });
+
+    it('permite somente um de dois cancelamentos concorrentes', async () => {
+      const entry = await create();
+      const results = await Promise.allSettled([cancel(entry.id), cancel(entry.id)]);
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+      expect(await stockService.getBalance({
+        productId: productAId, batchId: batchAId, stockLocationId: destinationId,
+      })).toBe(0);
+      await expect(cancel(entry.id)).rejects.toMatchObject({
+        response: { code: 'MOVEMENT_ALREADY_CANCELED' },
+      });
+    });
   });
 });

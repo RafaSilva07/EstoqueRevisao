@@ -4,6 +4,7 @@ import { PaginatedResult } from '../../shared/pagination/paginated-result.interf
 import { getAuditRequestMetadata } from '../audit/audit-request-metadata';
 import { AuthenticatedUser } from '../auth/authenticated-user.interface';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
+import { CancelMovementDto } from './dto/cancel-movement.dto';
 import { CreateEffectiveMovementDto } from './dto/create-effective-movement.dto';
 import { CreateInternalTransferDto } from './dto/create-internal-transfer.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
@@ -47,6 +48,17 @@ export class MovementsController {
   createReview(@Body() dto: CreateReviewDto, @Req() request: Request): Promise<MovementEntity> {
     const user = request.user as AuthenticatedUser;
     return this.service.createReview(dto, user.id, getAuditRequestMetadata(request));
+  }
+
+  @Post(':id/cancellation')
+  @RequirePermissions('movements.cancel')
+  cancel(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: CancelMovementDto,
+    @Req() request: Request,
+  ): Promise<MovementEntity> {
+    const user = request.user as AuthenticatedUser;
+    return this.service.cancel(id, dto, user.id, getAuditRequestMetadata(request));
   }
 
   @Get()

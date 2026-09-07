@@ -104,12 +104,16 @@ export interface Movement {
   destinationLocationId: string | null;
   responsibleUserId: string;
   occurredAt: string;
-  status: 'EFETIVADA';
+  status: 'EFETIVADA' | 'CANCELADA';
   observation: string | null;
+  canceledByUserId: string | null;
+  canceledAt: string | null;
+  cancellationReason: string | null;
   createdAt: string;
   originLocation: StockLocation;
   destinationLocation: StockLocation | null;
   responsibleUser: { id: string; username: string };
+  canceledByUser: { id: string; username: string } | null;
   items: MovementItem[];
 }
 

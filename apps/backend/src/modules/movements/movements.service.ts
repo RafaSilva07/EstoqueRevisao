@@ -11,6 +11,7 @@ import { StockPositionsService } from '../stocks/stock-positions.service';
 import { MovementStatus } from './domain/movement-status.enum';
 import { MovementType } from './domain/movement-type.enum';
 import { CreateEffectiveMovementDto } from './dto/create-effective-movement.dto';
+import { CancelMovementDto } from './dto/cancel-movement.dto';
 import { CreateInternalTransferDto } from './dto/create-internal-transfer.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { MovementQueryDto } from './dto/movement-query.dto';
@@ -69,6 +70,61 @@ export class MovementsService {
       });
     }
     return movement;
+  }
+
+  async cancel(
+    id: string,
+    dto: CancelMovementDto,
+    userId: string,
+    metadata: AuditRequestMetadata,
+  ): Promise<MovementEntity> {
+    await this.dataSource.transaction(async (manager) => {
+      const movement = await this.repository.findByIdForUpdate(id, manager);
+      if (!movement) {
+        throw new NotFoundException({
+          code: 'MOVEMENT_NOT_FOUND',
+          message: 'Movimentacao nao encontrada.',
+        });
+      }
+      if (movement.status === MovementStatus.Canceled) {
+        throw new ConflictException({
+          code: 'MOVEMENT_ALREADY_CANCELED',
+          message: 'Esta movimentacao ja foi cancelada.',
+        });
+      }
+
+      const items = [...movement.items].sort((left, right) => (
+        `${left.productId}:${left.batchId}:${left.destinationBatchId ?? ''}`
+          .localeCompare(`${right.productId}:${right.batchId}:${right.destinationBatchId ?? ''}`)
+      ));
+      for (const item of items) {
+        await this.reverseStock(movement, item, manager);
+      }
+
+      const canceledAt = new Date();
+      movement.status = MovementStatus.Canceled;
+      movement.canceledByUserId = userId;
+      movement.canceledAt = canceledAt;
+      movement.cancellationReason = dto.reason;
+      await this.repository.save(movement, manager);
+      await this.audit.record({
+        ...metadata,
+        manager,
+        userId,
+        action: 'MOVEMENT_CANCEL',
+        entityType: 'MOVEMENT',
+        entityId: movement.id,
+        result: 'SUCCESS',
+        oldValues: { status: MovementStatus.Effective },
+        newValues: {
+          status: MovementStatus.Canceled,
+          canceledByUserId: userId,
+          canceledAt: canceledAt.toISOString(),
+          cancellationReason: dto.reason,
+        },
+      });
+    });
+    return this.getById(id);
   }
 
   createExternalEntry(
@@ -382,6 +438,62 @@ export class MovementsService {
       }
       keys.add(key);
     }
+  }
+
+  private async reverseStock(
+    movement: MovementEntity,
+    item: MovementItemEntity,
+    manager: EntityManager,
+  ): Promise<void> {
+    const original = {
+      productId: item.productId,
+      batchId: item.batchId,
+      stockLocationId: movement.originLocationId,
+    };
+    switch (movement.type) {
+      case MovementType.ExternalEntry:
+        await this.stockPositions.removeQuantity({
+          productId: item.productId,
+          batchId: item.batchId,
+          stockLocationId: this.requireDestination(movement),
+        }, item.quantity, manager);
+        return;
+      case MovementType.ExternalExit:
+        await this.stockPositions.addQuantity(original, item.quantity, manager);
+        return;
+      case MovementType.InternalTransfer:
+        if (!item.destinationBatchId) {
+          throw new ConflictException({
+            code: 'MOVEMENT_REVERSAL_DATA_INVALID',
+            message: 'A movimentacao nao possui todos os dados necessarios para o estorno.',
+          });
+        }
+        await this.stockPositions.transferQuantity({
+          productId: item.productId,
+          batchId: item.destinationBatchId,
+          stockLocationId: this.requireDestination(movement),
+        }, original, item.quantity, manager);
+        return;
+      case MovementType.Review:
+        await this.stockPositions.restoreDistributedQuantity(
+          original,
+          item.distributions.map((distribution) => ({
+            destinationLocationId: distribution.destinationLocationId,
+            quantity: distribution.quantity,
+          })),
+          item.quantity,
+          manager,
+        );
+        return;
+    }
+  }
+
+  private requireDestination(movement: MovementEntity): string {
+    if (movement.destinationLocationId) return movement.destinationLocationId;
+    throw new ConflictException({
+      code: 'MOVEMENT_REVERSAL_DATA_INVALID',
+      message: 'A movimentacao nao possui todos os dados necessarios para o estorno.',
+    });
   }
 
   private validateReview(dto: CreateReviewDto): void {
