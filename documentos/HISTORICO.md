@@ -1,0 +1,77 @@
+# Histórico de desenvolvimento
+
+Este documento registra a evolução relevante sem repetir as regras vigentes. Para implementar, use [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md), [ARQUITETURA.md](./ARQUITETURA.md) e [FUNCIONALIDADES.md](./FUNCIONALIDADES.md).
+
+## Etapas concluídas
+
+| Etapa | Data | Entrega principal | Commit funcional |
+| --- | --- | --- | --- |
+| 01 | 2026-08-31 | Fundação: workspaces, NestJS/React, PostgreSQL, autenticação, autorização, logs, auditoria, erros e health check. | `66236dd` |
+| 02 | 2026-08-31 | Produtos, conversões, lotes, locais e PostgreSQL via Docker Compose. | `5cef867` |
+| 03 | 2026-09-01 | Código de lote `CONSERVADI` e saldo por produto/lote/local. | `67d16a2`, `8207da1` |
+| 04 | 2026-09-01 | Interface mobile-first e componentes compartilhados. | `9dc431c` |
+| 05 | 2026-09-01 | Entrada externa, documento de movimentação e histórico. | `8559e6a` |
+| 06 | 2026-09-02 | Saída externa com baixa atômica. | `d115389` |
+| 07 | 2026-09-02 | Transferência interna e preservação de quantidade. | `6cdb738` |
+| 08 | 2026-09-03 | Revisão com múltiplas distribuições por item. | `ef77070` |
+| 09 | 2026-09-03 | Lote de destino na transferência, inclusive troca no mesmo local. | `cd58050` |
+| 10 | 2026-09-06 | Cancelamento e estorno integral das movimentações. | `5045ac0` |
+| 11 | 2026-09-07 | Markdown consolidado como fonte principal; ADRs e relatórios anteriores arquivados. | documentação |
+
+Os relatórios completos dessas etapas foram preservados em [`arquivo/relatorios/`](./arquivo/relatorios/).
+
+## Decisões consolidadas
+
+| Registro histórico | Situação atual |
+| --- | --- |
+| ADR 016 | PostgreSQL 17 via Docker Compose é o ambiente local suportado; dados ficam em volume persistente. |
+| ADR 017 | Código de lote usa `CONSERVADI`; saldo é materializado por produto/lote/local e só muda por serviço interno. |
+| ADR 018 | Movimentações usam cabeçalho e itens, request key idempotente, histórico próprio e transação com auditoria. |
+| ADR 019 | Saída usa baixa condicional e nunca cria saldo em local externo. |
+| ADR 020 | Transferência preserva quantidade e usa locks ordenados. A exigência antiga de manter lote e mudar local foi substituída. |
+| ADR 021 | Revisão registra destinos por item, usa configuração `review_role` e preserva lote. |
+| ADR 022 | Transferência pode escolher lote de destino e usar o mesmo local quando o lote muda. |
+| ADR 023 | Cancelamento marca a original como `CANCELADA` e estorna integralmente sob transação e lock. |
+
+Os ADRs completos estão em [`arquivo/adrs/`](./arquivo/adrs/). As decisões vigentes já foram incorporadas aos documentos canônicos.
+
+## Migrations
+
+| Migration | Conteúdo |
+| --- | --- |
+| `1788134400000-initial-foundation.ts` | Usuários, perfis, permissões, sessões e auditoria. |
+| `1788220800000-base-registries.ts` | Produtos, conversões, lotes, locais iniciais e permissões de cadastro. |
+| `1788307200000-batch-manufacturing-and-stock-positions.ts` | Fabricação/código dos lotes, posições de estoque e permissão de consulta. |
+| `1788393600000-external-entry-movements.ts` | Movimentações, itens, histórico e permissões de movimentação. |
+| `1788480000000-review-movements.ts` | Configuração da revisão e distribuições por item. |
+| `1788566400000-transfer-destination-batches.ts` | Lote de destino e transferência com troca de lote. |
+| `1788652800000-movement-cancellations.ts` | Estado/metadados de cancelamento e permissão `movements.cancel`. |
+
+`synchronize` permanece desativado. Migrations são a única forma autorizada de alterar o schema.
+
+## Decisões substituídas ou obsoletas
+
+- A transferência não exige mais locais diferentes: o mesmo local é válido quando o lote muda.
+- A transferência não preserva mais obrigatoriamente o lote: o produto continua imutável, mas o lote de destino é escolhido.
+- Cancelamento e estorno deixaram de ser pendência na etapa 10.
+- Revisão deixou de ser pendência na etapa 08, mas continua proibida de trocar lote.
+- PostgreSQL instalado diretamente não é o fluxo local oficial; usa-se Docker Compose.
+- Os números de testes e tamanhos de bundle presentes nos relatórios antigos descrevem apenas o momento de cada etapa.
+- Instruções antigas dizendo que serviços deveriam permanecer ativos não definem o estado atual do ambiente.
+
+## Dívidas e próximos limites conhecidos
+
+- O bundle principal do frontend está acima de 500 kB minificado; divisão por rotas é uma melhoria futura.
+- `App.tsx` ainda concentra telas legadas e deve continuar sendo extraído incrementalmente.
+- Algumas telas operacionais ainda não possuem testes completos de interação em DOM ou regressão visual automatizada.
+- Listagens que carregam até 100 registros precisarão de busca remota progressiva em bases maiores.
+- Renovação transparente do access token durante uma requisição expirada ainda pode ser aprimorada.
+- A matriz de perfis além de `ADMIN`, a administração de usuários e a política de retenção/consulta da auditoria ainda dependem de definição.
+- Reversão automática encadeada, trânsito, fotos, conferência e relatórios avançados permanecem fora do escopo atual.
+
+## Política para próximas etapas
+
+- Atualize os documentos canônicos no mesmo commit ou etapa da mudança.
+- Acrescente ao histórico apenas decisões e marcos que ajudem a entender o estado atual.
+- Crie ADR separado somente para decisão arquitetural relevante e, depois, incorpore seu resultado aos documentos canônicos.
+- Relatórios de execução podem ser arquivados; não replique neles todas as regras do sistema.

@@ -1,0 +1,76 @@
+# Documentação do EstoqueRevisao
+
+Este diretório é a fonte principal de contexto para desenvolvimento. Antes de alterar regras, estrutura ou arquitetura, comece por este arquivo e consulte o documento indicado para o assunto.
+
+## Onde consultar
+
+| Assunto | Documento |
+| --- | --- |
+| Regras funcionais e invariantes | [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md) |
+| Stack, módulos, banco, segurança e padrões técnicos | [ARQUITETURA.md](./ARQUITETURA.md) |
+| O que já está implementado na API e na interface | [FUNCIONALIDADES.md](./FUNCIONALIDADES.md) |
+| Evolução do projeto, migrations, decisões substituídas e dívidas | [HISTORICO.md](./HISTORICO.md) |
+
+Os quatro documentos acima são canônicos e devem ser atualizados quando uma etapa mudar o comportamento do sistema. Relatórios e ADRs anteriores permanecem em [`arquivo/`](./arquivo/README.md) apenas como evidência histórica; não devem ser usados isoladamente para determinar o comportamento atual.
+
+Os PDFs [Definição Funcional](./Definicao_Funcional_Sistema_Estoque_Revisao.docx.pdf) e [Arquitetura e Estrutura](./Arquitetura_e_Estrutura_Sistema_Estoque_Revisao.docx.pdf) foram preservados para entrega formal. Eles constituem a base original, mas os Markdown canônicos incorporam as decisões incrementais posteriores e são a referência operacional atual.
+
+## Visão geral
+
+O EstoqueRevisao é um sistema web para controle de produtos por lote e local lógico. Atualmente oferece:
+
+- autenticação, autorização, auditoria e logs estruturados;
+- produtos, conversões de unidade, lotes e locais de estoque;
+- saldo atual por produto, lote e local;
+- entrada e saída externas;
+- transferência interna, inclusive com troca ou criação de lote;
+- revisão com distribuição de cada item entre múltiplos destinos;
+- histórico de movimentações e cancelamento com estorno integral.
+
+O sistema é um monólito modular: React/TypeScript/Vite no frontend, NestJS/TypeScript no backend e PostgreSQL 17 com TypeORM. Não utiliza microserviços.
+
+## Leitura mínima antes de desenvolver
+
+1. Leia [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md).
+2. Leia as seções pertinentes de [ARQUITETURA.md](./ARQUITETURA.md) e [FUNCIONALIDADES.md](./FUNCIONALIDADES.md).
+3. Consulte [HISTORICO.md](./HISTORICO.md) quando a tarefa evoluir uma decisão anterior.
+4. Analise o código e os testes do módulo afetado antes de editar.
+
+Não invente campos ou fluxos ainda não definidos. Mudanças de regra devem ser explícitas e registradas nestes documentos no mesmo trabalho.
+
+## Execução local
+
+Pré-requisitos: Node.js 22+, npm e Docker Desktop com Docker Compose.
+
+```powershell
+Copy-Item .env.example .env
+npm install
+npm run docker:up
+npm run db:migration:run
+npm run db:user:create
+```
+
+Configure previamente no `.env` as senhas, a `DATABASE_URL`, o segredo JWT e o usuário bootstrap. Em terminais separados:
+
+```powershell
+npm run dev:backend
+npm run dev:frontend
+```
+
+- Frontend: `http://localhost:5173`
+- API: `http://localhost:3000/api/v1`
+- Health check: `http://localhost:3000/api/v1/health`
+
+O container PostgreSQL pode ser parado ou recriado; os dados continuam no volume nomeado enquanto ele não for removido explicitamente. `npm run docker:down` remove container e rede, mas preserva o volume.
+
+## Verificações usuais
+
+```powershell
+npm run build
+npm run lint
+npm test
+npm run db:migration:show
+docker compose config --quiet
+```
+
+Testes de integração exigem um banco descartável separado em `TEST_DATABASE_URL`. Eles podem recriar todo o schema desse banco.

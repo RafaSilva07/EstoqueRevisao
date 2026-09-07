@@ -21,8 +21,8 @@ A etapa contemplou a estrutura dos aplicativos, persistência, migrations, auten
 
 As decisões foram implementadas a partir dos documentos oficiais existentes no projeto:
 
-- [Definição Funcional do Sistema](./Definicao_Funcional_Sistema_Estoque_Revisao.docx.pdf);
-- [Arquitetura e Estrutura do Sistema](./Arquitetura_e_Estrutura_Sistema_Estoque_Revisao.docx.pdf).
+- [Definição Funcional do Sistema](../../Definicao_Funcional_Sistema_Estoque_Revisao.docx.pdf);
+- [Arquitetura e Estrutura do Sistema](../../Arquitetura_e_Estrutura_Sistema_Estoque_Revisao.docx.pdf).
 
 Não foram identificadas inconsistências impeditivas entre os documentos. Os pontos ainda não definidos, como a matriz detalhada de permissões e o modelo completo dos módulos de negócio, foram mantidos em aberto sem criação de regras fictícias.
 
@@ -282,7 +282,7 @@ Em outro terminal:
 npm run dev:frontend
 ```
 
-As instruções completas estão no arquivo [README principal](../README.md).
+As instruções completas estão no arquivo [README principal](../../../README.md).
 
 ## 10. Conclusão
 
