@@ -40,7 +40,7 @@ export function ReviewPage({
   const [error, setError] = useState('');
   const prefillApplied = useRef(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (preserveError = false) => {
     setLoading(true);
     try {
       const locationData = await api.get<Paginated<StockLocation>>('/stocks?limit=100&active=true');
@@ -55,7 +55,7 @@ export function ReviewPage({
         `/stock-positions?limit=100&stockLocationId=${source.id}`,
       );
       setPositions(positionData.items);
-      setError('');
+      if (!preserveError) setError('');
     } catch (caught) {
       setError(messageFrom(caught));
     } finally {
@@ -167,7 +167,7 @@ export function ReviewPage({
     } catch (caught) {
       setError(messageFrom(caught));
       setConfirming(false);
-      await load();
+      await load(true);
     } finally {
       setBusy(false);
     }

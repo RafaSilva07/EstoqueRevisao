@@ -480,6 +480,46 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     expect(balances.reduce((total, value) => total + value, 0)).toBe(30);
   });
 
+  it('distribui 600 de 1000 entre Lata Boa, Varejo e TUF em uma unica revisao', async () => {
+    await seedStock(productAId, batchAId, 1000);
+
+    const movement = await createReview([{
+      productId: productAId,
+      batchId: batchAId,
+      quantity: 600,
+      distributions: [
+        { destinationLocationId: lataBoaId, quantity: 300 },
+        { destinationLocationId: varejoId, quantity: 200 },
+        { destinationLocationId: transferDestinationId, quantity: 100 },
+      ],
+    }]);
+
+    const balances = await Promise.all([
+      destinationId,
+      lataBoaId,
+      varejoId,
+      transferDestinationId,
+    ].map((stockLocationId) => stockService.getBalance({
+      productId: productAId,
+      batchId: batchAId,
+      stockLocationId,
+    })));
+    expect(balances).toEqual([400, 300, 200, 100]);
+
+    const detail = await service.getById(movement.id);
+    expect(detail.items).toHaveLength(1);
+    expect(detail.items[0]).toMatchObject({
+      productId: productAId,
+      batchId: batchAId,
+      quantity: 600,
+    });
+    expect(detail.items[0].distributions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ destinationLocationId: lataBoaId, quantity: 300 }),
+      expect.objectContaining({ destinationLocationId: varejoId, quantity: 200 }),
+      expect.objectContaining({ destinationLocationId: transferDestinationId, quantity: 100 }),
+    ]));
+  });
+
   it('realiza revisao completa com varios produtos e preserva lote, fabricacao e validade', async () => {
     await seedStock(productAId, batchAId, 10);
     await seedStock(productBId, batchBId, 5);
