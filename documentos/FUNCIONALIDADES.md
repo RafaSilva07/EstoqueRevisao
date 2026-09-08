@@ -116,20 +116,15 @@ Movimentações efetivadas elegíveis mostram a ação `Cancelar movimentação`
 
 O backend revalida o saldo sob transação e bloqueios. Se uma parcela necessária já tiver sido consumida, nada é alterado. Em sucesso, a listagem e o detalhe passam a mostrar `CANCELADA`, usuário, data/hora e motivo, sem apagar os dados originais.
 
-## Consultas e relatórios
+## Relatório de movimentações
 
 ```text
 GET             /api/v1/reports/movements
-GET             /api/v1/reports/movements.csv
-GET             /api/v1/reports/reviews
-GET             /api/v1/reports/reviews.csv
-GET             /api/v1/reports/stock
-GET             /api/v1/reports/stock.csv
 ```
 
-A área Relatórios possui três consultas somente leitura. Movimentações aceita período, tipo, produto, lote, origem, destino, responsável e status; registros cancelados podem ser exibidos, mas não entram na quantidade válida. Revisão mostra total revisado e distribuição por classificação, com filtros de período, produto, lote e destino. Estoque atual consulta posições positivas por produto, lote, local e validade, destacando lotes vencidos e próximos do vencimento.
+A interface `Relatórios > Movimentações` consulta período, tipo, produto, lote e status. Exibe os resultados paginados em cards no mobile e tabela no desktop, além dos totais entregues pela API, sem recalculá-los no navegador. Possui estados de carregamento, vazio e erro e permite limpar todos os filtros. O acesso exige `movements.read`.
 
-Os resultados são paginados e apresentados em cards mobile-first. Os filtros ativos podem ser limpos, e cada consulta pode ser exportada em CSV com exatamente o mesmo conjunto filtrado. O acesso reutiliza `movements.read` para relatórios históricos e `stock-positions.read` para estoque atual.
+Os demais endpoints de relatório existentes no backend não possuem tela nesta etapa. Exportação CSV e dashboard também não fazem parte desta interface.
 
 ## Experiência de uso
 
