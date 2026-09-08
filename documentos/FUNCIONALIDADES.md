@@ -132,6 +132,10 @@ Os endpoints de estoque e de exportação existentes no backend ainda não possu
 
 A interface `Relatórios > Revisões` apresenta esses totais sem recalculá-los, filtros combináveis, resultados paginados em cards no mobile e tabela no desktop, estados de carregamento, vazio e erro e ação para limpar filtros. Reutiliza `movements.read` e não oferece exportação nem dashboard.
 
+## Consulta backend de estoque e validades
+
+`GET /api/v1/reports/stock` retorna somente posições atuais com saldo positivo, incluindo produto, lote, local/classificação, quantidade, fabricação e validade. Aceita filtros de produto, lote, local e situação da validade. A situação é calculada em relação à data de referência e à janela configurada, resultando em `VALIDO`, `PROXIMO_VENCIMENTO` ou `VENCIDO`; fabricação e validade trafegam como data civil `YYYY-MM-DD`. O acesso exige `stock-positions.read`; não há interface, exportação ou dashboard nesta etapa.
+
 ## Experiência de uso
 
 - Home com atalhos somente para funções disponíveis ao usuário.

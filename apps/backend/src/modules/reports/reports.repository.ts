@@ -421,7 +421,7 @@ export class ReportsRepository {
       positionId: this.string(row.positionId), productId: this.string(row.productId),
       productCode: this.string(row.productCode), productName: this.string(row.productName),
       batchId: this.string(row.batchId), batchCode: this.string(row.batchCode),
-      manufacturingDate: this.string(row.manufacturingDate), expirationDate: this.string(row.expirationDate),
+      manufacturingDate: this.civilDate(row.manufacturingDate), expirationDate: this.civilDate(row.expirationDate),
       stockLocationId: this.string(row.stockLocationId), location: this.string(row.location),
       quantity: this.number(row.quantity), unit: this.string(row.unit),
       expirationStatus: this.string(row.expirationStatus) as ExpirationStatus,
@@ -446,6 +446,14 @@ export class ReportsRepository {
 
   private nullableString(value: string | Date | null | undefined): string | null {
     return value === null || value === undefined ? null : String(value);
+  }
+
+  private civilDate(value: string | Date | null | undefined): string {
+    if (!(value instanceof Date)) return this.string(value).slice(0, 10);
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   private iso(value: string | Date | null | undefined): string {

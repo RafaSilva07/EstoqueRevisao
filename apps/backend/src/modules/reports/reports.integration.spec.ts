@@ -74,8 +74,12 @@ describeWithDatabase('Reports (PostgreSQL)', () => {
   async function seedData(): Promise<void> {
     await dataSource.query(`
       INSERT INTO stock_positions (id, product_id, batch_id, stock_location_id, quantity) VALUES
-        ($1, $4, $5, $7, 2), ($2, $4, $6, $7, 3), ($3, $4, $8, $7, 4)
-    `, [randomUUID(), randomUUID(), randomUUID(), productId, expiredBatchId, soonBatchId, reviewId, validBatchId]);
+        ($1, $4, $5, $7, 2), ($2, $4, $6, $7, 3), ($3, $4, $8, $7, 4),
+        ($9, $4, $5, $10, 0)
+    `, [
+      randomUUID(), randomUUID(), randomUUID(), productId, expiredBatchId,
+      soonBatchId, reviewId, validBatchId, randomUUID(), productionId,
+    ]);
 
     const effectiveEntry = randomUUID();
     const canceledEntry = randomUUID();
@@ -183,7 +187,13 @@ describeWithDatabase('Reports (PostgreSQL)', () => {
       productId, stockLocationId: reviewId, product: 'Relatorio', batch: 'COC', location: 'Revisar',
     }));
     expect(expired.items).toHaveLength(1);
-    expect(expired.items[0].batchId).toBe(expiredBatchId);
+    expect(expired.items[0]).toMatchObject({
+      batchId: expiredBatchId,
+      manufacturingDate: '2026-09-01',
+      expirationDate: '2026-09-06',
+      expirationStatus: ExpirationStatus.Expired,
+      quantity: 2,
+    });
   });
 
   it('gera CSV com exatamente os dados do filtro', async () => {
