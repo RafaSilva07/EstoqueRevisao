@@ -181,6 +181,26 @@ export interface ReviewReportTotals {
   byClassification: ReviewClassificationTotal[];
 }
 
+export type ExpirationStatus = 'VENCIDO' | 'PROXIMO_VENCIMENTO' | 'VALIDO';
+
+export interface StockReportItem {
+  positionId: string;
+  productCode: string;
+  productName: string;
+  batchCode: string;
+  manufacturingDate: string;
+  expirationDate: string;
+  location: string;
+  quantity: number;
+  unit: string;
+  expirationStatus: ExpirationStatus;
+}
+
+export interface StockReportTotals {
+  positions: number;
+  quantityByUnit: QuantityByUnit[];
+}
+
 interface ErrorEnvelope {
   error?: { message?: string };
 }

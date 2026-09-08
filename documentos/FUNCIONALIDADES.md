@@ -124,7 +124,7 @@ GET             /api/v1/reports/movements
 
 A interface `Relatórios > Movimentações` consulta período, tipo, produto, lote e status. Exibe os resultados paginados em cards no mobile e tabela no desktop, além dos totais entregues pela API, sem recalculá-los no navegador. Possui estados de carregamento, vazio e erro e permite limpar todos os filtros. O acesso exige `movements.read`.
 
-Os endpoints de estoque e de exportação existentes no backend ainda não possuem tela. Dashboard também não faz parte desta interface.
+Os endpoints de exportação existentes no backend ainda não possuem tela. Dashboard também não faz parte desta interface.
 
 ## Relatório de revisões
 
@@ -132,9 +132,11 @@ Os endpoints de estoque e de exportação existentes no backend ainda não possu
 
 A interface `Relatórios > Revisões` apresenta esses totais sem recalculá-los, filtros combináveis, resultados paginados em cards no mobile e tabela no desktop, estados de carregamento, vazio e erro e ação para limpar filtros. Reutiliza `movements.read` e não oferece exportação nem dashboard.
 
-## Consulta backend de estoque e validades
+## Relatório de estoque e validades
 
-`GET /api/v1/reports/stock` retorna somente posições atuais com saldo positivo, incluindo produto, lote, local/classificação, quantidade, fabricação e validade. Aceita filtros de produto, lote, local e situação da validade. A situação é calculada em relação à data de referência e à janela configurada, resultando em `VALIDO`, `PROXIMO_VENCIMENTO` ou `VENCIDO`; fabricação e validade trafegam como data civil `YYYY-MM-DD`. O acesso exige `stock-positions.read`; não há interface, exportação ou dashboard nesta etapa.
+`GET /api/v1/reports/stock` retorna somente posições atuais com saldo positivo, incluindo produto, lote, local/classificação, quantidade, fabricação e validade. Aceita filtros de produto, lote, local e situação da validade. A situação é calculada em relação à data de referência e à janela configurada, resultando em `VALIDO`, `PROXIMO_VENCIMENTO` ou `VENCIDO`; fabricação e validade trafegam como data civil `YYYY-MM-DD`.
+
+A interface `Relatórios > Estoque e validades` apresenta saldo, lote, fabricação, validade e situação, com destaque visual simples para cada estado. Possui os mesmos filtros, paginação da API, estados de carregamento, vazio e erro e ação para limpar filtros. O acesso exige `stock-positions.read`; exportação e dashboard não fazem parte desta etapa.
 
 ## Experiência de uso
 

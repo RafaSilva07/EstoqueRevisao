@@ -25,7 +25,7 @@ const movementLabels: Record<MovementReportItem['type'], string> = {
   REVISAO: 'Revisao',
 };
 
-export function ReportsPage({ onReviews }: { onReviews: () => void }) {
+export function ReportsPage({ onReviews, onStock }: { onReviews: () => void; onStock?: () => void }) {
   const [draft, setDraft] = useState<MovementFilters>({ ...initialFilters });
   const [applied, setApplied] = useState<MovementFilters>({ ...initialFilters });
   const [page, setPage] = useState(1);
@@ -68,7 +68,7 @@ export function ReportsPage({ onReviews }: { onReviews: () => void }) {
 
   return <>
     <PageHeader eyebrow="Relatorios" title="Movimentacoes" description="Consulte movimentacoes e totais conforme os filtros selecionados." />
-    <ReportNavigation current="movements" onMovements={() => undefined} onReviews={onReviews} />
+    <ReportNavigation current="movements" onMovements={() => undefined} onReviews={onReviews} onStock={onStock} />
     {error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
     <section className="surface filters-panel filters-open report-filters">
       <div className="panel-heading">
