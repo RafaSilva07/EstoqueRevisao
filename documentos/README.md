@@ -13,7 +13,7 @@ Este diretório é a fonte principal de contexto para desenvolvimento. Antes de 
 
 Os quatro documentos acima são canônicos e devem ser atualizados quando uma etapa mudar o comportamento do sistema. Relatórios e ADRs anteriores permanecem em [`arquivo/`](./arquivo/README.md) apenas como evidência histórica; não devem ser usados isoladamente para determinar o comportamento atual.
 
-Os PDFs [Definição Funcional](./Definicao_Funcional_Sistema_Estoque_Revisao.docx.pdf) e [Arquitetura e Estrutura](./Arquitetura_e_Estrutura_Sistema_Estoque_Revisao.docx.pdf) foram preservados para entrega formal. Eles constituem a base original, mas os Markdown canônicos incorporam as decisões incrementais posteriores e são a referência operacional atual.
+Artefatos PDF/DOCX eventualmente mantidos para entrega formal constituem apenas a base original. Os Markdown canônicos incorporam as decisões incrementais posteriores e são a referência operacional atual.
 
 ## Visão geral
 
@@ -26,6 +26,7 @@ O EstoqueRevisao é um sistema web para controle de produtos por lote e local l�
 - transferência interna, inclusive com troca ou criação de lote;
 - revisão com distribuição de cada item entre múltiplos destinos;
 - histórico de movimentações e cancelamento com estorno integral.
+- relatórios filtráveis de movimentações, classificação da revisão e estoque atual, com exportação CSV.
 
 O sistema é um monólito modular: React/TypeScript/Vite no frontend, NestJS/TypeScript no backend e PostgreSQL 17 com TypeORM. Não utiliza microserviços.
 

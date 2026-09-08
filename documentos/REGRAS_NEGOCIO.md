@@ -142,6 +142,17 @@ Reversões:
 - A auditoria registra usuário, ação, entidade, identificador, resultado, data/hora, request ID, IP, user-agent e dados anteriores/novos quando aplicável.
 - Auditoria não substitui o histórico operacional e não possui endpoints de edição ou exclusão.
 
+## Consultas e relatórios
+
+- Relatórios são somente leitura e não criam estado paralelo nem alteram estoque.
+- Dados históricos usam movimentações, itens e distribuições como fonte; a posição atual usa `stock_positions`.
+- Movimentações canceladas permanecem consultáveis, mas suas quantidades não integram totais válidos.
+- Totais de quantidade são separados por unidade de medida; unidades incompatíveis nunca são somadas entre si.
+- Consultas extensas são paginadas e os filtros podem ser combinados.
+- A exportação CSV usa os mesmos filtros da consulta e exporta todas as linhas correspondentes, sem a paginação da tela.
+- Períodos históricos usam instantes ISO 8601. Validade usa data civil e é classificada em vencida, próxima do vencimento ou válida em relação à data de referência e à janela informada.
+- A distribuição da revisão considera apenas movimentações `REVISAO` efetivadas e totaliza cada classificação de destino.
+
 ## Fora do escopo atual
 
 - solicitação, trânsito, fotos e conferência posterior de movimentações;
@@ -149,4 +160,4 @@ Reversões:
 - mapa físico detalhado de armazenagem;
 - reversão automática de uma cadeia de operações dependentes;
 - administração completa de usuários e perfis;
-- notificações, dashboard e relatórios avançados.
+- notificações, dashboard e relatórios analíticos avançados além das consultas operacionais implementadas.

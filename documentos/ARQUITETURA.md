@@ -29,6 +29,7 @@ apps/
       batches/       lotes e código CONSERVADI
       stocks/        locais e posições de estoque
       movements/     operações e histórico
+      reports/       consultas operacionais e exportação CSV
       health/        saúde da aplicação e do banco
     shared/          logs, erros, validação e paginação
   frontend/src/      shell, páginas, componentes e cliente da API
@@ -44,6 +45,7 @@ docker-compose.yml   PostgreSQL do desenvolvimento
 - Entities refletem o modelo relacional, sem transformar DTOs em contratos implícitos.
 - `StockPositionsService` é a única fronteira de alteração do saldo.
 - `MovementsService` coordena documento, itens, distribuições, efeitos no estoque e auditoria.
+- `ReportsRepository` concentra consultas de leitura, agregações e filtros sem duplicar histórico ou saldo.
 - `AuditService` aceita o `EntityManager` da operação para participar da mesma transação.
 - O frontend nunca substitui validação ou autorização do backend.
 
@@ -79,6 +81,7 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 - Prefixo global: `/api/v1`.
 - Entrada é validada por DTOs com `whitelist`, rejeição de campos desconhecidos e transformação controlada.
 - Listagens usam paginação e filtros definidos por DTO.
+- Relatórios aplicam os mesmos filtros nas linhas e totais; a exportação CSV remove apenas a paginação.
 - Erros seguem envelope padronizado com código, mensagem, request ID, timestamp e caminho.
 - Erros internos não expõem stack trace, SQL ou detalhes de infraestrutura ao cliente.
 - Criações de movimentação usam `request_key` UUID para idempotência.
@@ -128,6 +131,7 @@ movements.read / movements.create / movements.cancel
 - Tabelas se tornam cards em telas estreitas.
 - Formulários possuem feedback de carregamento, erro, sucesso, estados vazios e confirmação para ações críticas.
 - Ações são ocultadas conforme permissões, mas a proteção definitiva permanece no backend.
+- A área Relatórios usa cards/listas no celular e reutiliza `movements.read` e `stock-positions.read`, sem criar permissões redundantes.
 - Componentes compartilhados atuais incluem cabeçalho de página, avisos, loading, estado vazio, confirmação e criação rápida de lote.
 
 ## Testes e critérios de mudança

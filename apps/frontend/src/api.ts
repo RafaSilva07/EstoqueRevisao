@@ -117,6 +117,83 @@ export interface Movement {
   items: MovementItem[];
 }
 
+export interface QuantityByUnit {
+  unit: string;
+  quantity: number;
+}
+
+export interface ReportResult<T, TTotals> extends Paginated<T> {
+  totals: TTotals;
+}
+
+export interface MovementReportItem {
+  itemId: string;
+  movementId: string;
+  occurredAt: string;
+  type: Movement['type'];
+  status: Movement['status'];
+  responsible: string;
+  origin: string;
+  destination: string;
+  productCode: string;
+  productName: string;
+  batchCode: string;
+  destinationBatchCode: string | null;
+  quantity: number;
+  unit: string;
+  reviewDestinations: string;
+  canceledAt: string | null;
+  canceledBy: string | null;
+  cancellationReason: string | null;
+}
+
+export interface MovementReportTotals {
+  rows: number;
+  movements: number;
+  effectiveMovements: number;
+  canceledMovements: number;
+  effectiveQuantityByUnit: QuantityByUnit[];
+}
+
+export interface ReviewReportItem {
+  distributionId: string;
+  movementId: string;
+  occurredAt: string;
+  productCode: string;
+  productName: string;
+  batchCode: string;
+  destination: string;
+  quantity: number;
+  unit: string;
+  responsible: string;
+}
+
+export interface ReviewReportTotals {
+  rows: number;
+  reviewedQuantityByUnit: QuantityByUnit[];
+  byClassification: Array<QuantityByUnit & { destinationLocationId: string; destination: string }>;
+}
+
+export type ExpirationStatus = 'VENCIDO' | 'PROXIMO_VENCIMENTO' | 'VALIDO';
+
+export interface StockReportItem {
+  positionId: string;
+  productCode: string;
+  productName: string;
+  batchCode: string;
+  manufacturingDate: string;
+  expirationDate: string;
+  location: string;
+  quantity: number;
+  unit: string;
+  expirationStatus: ExpirationStatus;
+}
+
+export interface StockReportTotals {
+  positions: number;
+  quantityByUnit: QuantityByUnit[];
+}
+
 interface ErrorEnvelope {
   error?: { message?: string };
 }
@@ -165,6 +242,22 @@ export class ApiClient {
 
   patch<T>(path: string, body: unknown): Promise<T> {
     return this.request<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
+  }
+
+  async downloadCsv(path: string, filename: string): Promise<void> {
+    const headers = new Headers();
+    if (this.accessToken) headers.set('Authorization', `Bearer ${this.accessToken}`);
+    const response = await fetch(`${apiUrl}${path}`, { headers, credentials: 'include' });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({})) as ErrorEnvelope;
+      throw new Error(payload.error?.message ?? 'Nao foi possivel exportar o relatorio.');
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
   private async request<T>(path: string, options: RequestInit = {}, authenticated = true): Promise<T> {

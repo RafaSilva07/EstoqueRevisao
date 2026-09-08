@@ -17,6 +17,7 @@ Este documento registra a evolução relevante sem repetir as regras vigentes. P
 | 09 | 2026-09-03 | Lote de destino na transferência, inclusive troca no mesmo local. | `cd58050` |
 | 10 | 2026-09-06 | Cancelamento e estorno integral das movimentações. | `5045ac0` |
 | 11 | 2026-09-07 | Markdown consolidado como fonte principal; ADRs e relatórios anteriores arquivados. | documentação |
+| 12 | 2026-09-07 | Relatórios de movimentações, revisão e estoque atual com filtros, totais, paginação e CSV. | este commit |
 
 Os relatórios completos dessas etapas foram preservados em [`arquivo/relatorios/`](./arquivo/relatorios/).
 
@@ -63,11 +64,12 @@ Os ADRs completos estão em [`arquivo/adrs/`](./arquivo/adrs/). As decisões vig
 
 - O bundle principal do frontend está acima de 500 kB minificado; divisão por rotas é uma melhoria futura.
 - `App.tsx` ainda concentra telas legadas e deve continuar sendo extraído incrementalmente.
+- A exportação CSV é processada em memória; para volumes muito grandes deverá evoluir para streaming.
 - Algumas telas operacionais ainda não possuem testes completos de interação em DOM ou regressão visual automatizada.
 - Listagens que carregam até 100 registros precisarão de busca remota progressiva em bases maiores.
 - Renovação transparente do access token durante uma requisição expirada ainda pode ser aprimorada.
 - A matriz de perfis além de `ADMIN`, a administração de usuários e a política de retenção/consulta da auditoria ainda dependem de definição.
-- Reversão automática encadeada, trânsito, fotos, conferência e relatórios avançados permanecem fora do escopo atual.
+- Reversão automática encadeada, trânsito, fotos, conferência e relatórios analíticos avançados permanecem fora do escopo atual.
 
 ## Política para próximas etapas
 

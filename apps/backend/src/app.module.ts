@@ -14,6 +14,7 @@ import { ProductsModule } from './modules/products/products.module';
 import { BatchesModule } from './modules/batches/batches.module';
 import { StocksModule } from './modules/stocks/stocks.module';
 import { MovementsModule } from './modules/movements/movements.module';
+import { ReportsModule } from './modules/reports/reports.module';
 import { GlobalExceptionFilter } from './shared/http/global-exception.filter';
 import { LoggingModule } from './shared/logging/logging.module';
 import { RequestContextMiddleware } from './shared/logging/request-context.middleware';
@@ -38,6 +39,7 @@ import { RequestContextMiddleware } from './shared/logging/request-context.middl
     BatchesModule,
     StocksModule,
     MovementsModule,
+    ReportsModule,
     HealthModule,
   ],
   providers: [
