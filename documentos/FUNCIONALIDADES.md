@@ -126,6 +126,10 @@ A interface `Relatórios > Movimentações` consulta período, tipo, produto, lo
 
 Os demais endpoints de relatório existentes no backend não possuem tela nesta etapa. Exportação CSV e dashboard também não fazem parte desta interface.
 
+### Consulta backend de revisões
+
+`GET /api/v1/reports/reviews` aceita período, produto, lote, classificação/destino e paginação. Retorna as distribuições de revisões efetivadas compatíveis, a quantidade total revisada separada por unidade e os totais de todos os destinos configurados para revisão — inicialmente Lata Boa, Varejo e TUF. Classificações sem quantidade válida são retornadas com total zero nas unidades presentes no resultado; revisões canceladas não entram nos resultados nem nos totais. Esta etapa não adiciona interface, exportação ou dashboard para revisões.
+
 ## Experiência de uso
 
 - Home com atalhos somente para funções disponíveis ao usuário.

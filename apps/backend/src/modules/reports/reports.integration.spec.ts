@@ -41,6 +41,7 @@ describeWithDatabase('Reports (PostgreSQL)', () => {
       dataSource.getRepository(MovementItemEntity),
       dataSource.getRepository(MovementItemDistributionEntity),
       dataSource.getRepository(StockPositionEntity),
+      dataSource.getRepository(StockLocationEntity),
     ));
     userId = randomUUID();
     productId = randomUUID();
@@ -144,8 +145,18 @@ describeWithDatabase('Reports (PostgreSQL)', () => {
     expect(report.meta.total).toBe(2);
     expect(report.totals.reviewedQuantityByUnit).toEqual([{ unit: 'UN', quantity: 8 }]);
     expect(report.totals.byClassification).toEqual(expect.arrayContaining([
-      expect.objectContaining({ destination: 'Lata Boa', quantity: 5 }),
-      expect.objectContaining({ destination: 'Varejo', quantity: 3 }),
+      expect.objectContaining({
+        destinationCode: 'LATA_BOA', destination: 'Lata Boa',
+        quantityByUnit: [{ unit: 'UN', quantity: 5 }],
+      }),
+      expect.objectContaining({
+        destinationCode: 'VAREJO', destination: 'Varejo',
+        quantityByUnit: [{ unit: 'UN', quantity: 3 }],
+      }),
+      expect.objectContaining({
+        destinationCode: 'TUF', destination: 'TUF',
+        quantityByUnit: [{ unit: 'UN', quantity: 0 }],
+      }),
     ]));
     const filtered = await service.reviews(Object.assign(new ReviewReportQueryDto(), {
       productId, batchId: expiredBatchId, destinationLocationId: lataBoaId,
@@ -153,6 +164,9 @@ describeWithDatabase('Reports (PostgreSQL)', () => {
     }));
     expect(filtered.items).toHaveLength(1);
     expect(filtered.items[0].quantity).toBe(5);
+    expect(filtered.totals.byClassification).toEqual([
+      expect.objectContaining({ destinationCode: 'LATA_BOA', quantityByUnit: [{ unit: 'UN', quantity: 5 }] }),
+    ]);
   });
 
   it('classifica validade e filtra posicoes atuais usando data civil', async () => {

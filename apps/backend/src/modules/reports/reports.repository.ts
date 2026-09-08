@@ -6,6 +6,8 @@ import { MovementItemEntity } from '../movements/entities/movement-item.entity';
 import { MovementStatus } from '../movements/domain/movement-status.enum';
 import { MovementType } from '../movements/domain/movement-type.enum';
 import { StockPositionEntity } from '../stocks/entities/stock-position.entity';
+import { StockLocationEntity } from '../stocks/entities/stock-location.entity';
+import { ReviewLocationRole } from '../stocks/domain/review-location-role.enum';
 import { PaginationMeta } from '../../shared/pagination/paginated-result.interface';
 import { ExpirationStatus, StockReportQueryDto } from './dto/stock-report-query.dto';
 import { MovementReportQueryDto } from './dto/movement-report-query.dto';
@@ -33,6 +35,8 @@ export class ReportsRepository {
     private readonly distributions: Repository<MovementItemDistributionEntity>,
     @InjectRepository(StockPositionEntity)
     private readonly stockPositions: Repository<StockPositionEntity>,
+    @InjectRepository(StockLocationEntity)
+    private readonly stockLocations: Repository<StockLocationEntity>,
   ) {}
 
   async movements(
@@ -141,29 +145,66 @@ export class ReportsRepository {
     }
     const totalsBuilder = this.applyReviewFilters(this.reviewBuilder(), query)
       .select('destination.id', 'destinationLocationId')
+      .addSelect('destination.code', 'destinationCode')
       .addSelect('destination.name', 'destination')
       .addSelect('product.defaultUnit', 'unit')
       .addSelect('COUNT(distribution.id)', 'rows')
       .addSelect('COALESCE(SUM(distribution.quantity), 0)', 'quantity')
       .groupBy('destination.id')
+      .addGroupBy('destination.code')
       .addGroupBy('destination.name')
       .addGroupBy('product.defaultUnit')
       .orderBy('destination.name', 'ASC')
       .addOrderBy('product.defaultUnit', 'ASC');
 
-    const [rawRows, rawTotals] = await Promise.all([
+    const classificationsBuilder = this.stockLocations.createQueryBuilder('classification')
+      .select('classification.id', 'destinationLocationId')
+      .addSelect('classification.code', 'destinationCode')
+      .addSelect('classification.name', 'destination')
+      .where('classification.reviewRole = :destinationRole', {
+        destinationRole: ReviewLocationRole.Destination,
+      })
+      .orderBy('classification.name', 'ASC');
+    if (query.destinationLocationId) {
+      classificationsBuilder.andWhere('classification.id = :classificationId', {
+        classificationId: query.destinationLocationId,
+      });
+    }
+    if (query.destination) {
+      classificationsBuilder.andWhere(
+        '(classification.code ILIKE :classification OR classification.name ILIKE :classification)',
+        { classification: `%${query.destination}%` },
+      );
+    }
+
+    const [rawRows, rawTotals, rawClassifications] = await Promise.all([
       rowsBuilder.getRawMany<RawValues>(),
       totalsBuilder.getRawMany<RawValues>(),
+      classificationsBuilder.getRawMany<RawValues>(),
     ]);
-    const byClassification = rawTotals.map((row): ReviewClassificationTotal => ({
-      destinationLocationId: this.string(row.destinationLocationId),
-      destination: this.string(row.destination),
-      unit: this.string(row.unit),
-      quantity: this.number(row.quantity),
-    }));
+    const units = [...new Set(rawTotals.map((row) => this.string(row.unit)))];
+    const classifications = new Map<string, ReviewClassificationTotal>();
+    for (const row of [...rawClassifications, ...rawTotals]) {
+      const id = this.string(row.destinationLocationId);
+      if (!classifications.has(id)) {
+        classifications.set(id, {
+          destinationLocationId: id,
+          destinationCode: this.string(row.destinationCode),
+          destination: this.string(row.destination),
+          quantityByUnit: units.map((unit) => ({ unit, quantity: 0 })),
+        });
+      }
+    }
+    for (const row of rawTotals) {
+      const classification = classifications.get(this.string(row.destinationLocationId));
+      const total = classification?.quantityByUnit.find(({ unit }) => unit === this.string(row.unit));
+      if (total) total.quantity = this.number(row.quantity);
+    }
+    const byClassification = [...classifications.values()];
     const reviewed = new Map<string, number>();
-    for (const total of byClassification) {
-      reviewed.set(total.unit, (reviewed.get(total.unit) ?? 0) + total.quantity);
+    for (const total of rawTotals) {
+      const unit = this.string(total.unit);
+      reviewed.set(unit, (reviewed.get(unit) ?? 0) + this.number(total.quantity));
     }
     const total = rawTotals.reduce((sum, row) => sum + this.number(row.rows), 0);
     return {

@@ -65,9 +65,11 @@ export interface ReviewReportItem {
   responsible: string;
 }
 
-export interface ReviewClassificationTotal extends QuantityByUnit {
+export interface ReviewClassificationTotal {
   destinationLocationId: string;
+  destinationCode: string;
   destination: string;
+  quantityByUnit: QuantityByUnit[];
 }
 
 export interface ReviewReportTotals {
