@@ -18,6 +18,14 @@ Este documento registra a evolução relevante sem repetir as regras vigentes. P
 | 10 | 2026-09-06 | Cancelamento e estorno integral das movimentações. | `5045ac0` |
 | 11 | 2026-09-07 | Markdown consolidado como fonte principal; ADRs e relatórios anteriores arquivados. | documentação |
 | 12 | 2026-09-07 | Relatórios de movimentações, revisão e estoque atual com filtros, totais, paginação e CSV. | este commit |
+| 13 | 2026-09-08 | Interface do relatório de revisões com filtros, totais por classificação e paginação. | este commit |
+
+### Registro da etapa 13
+
+- **Objetivo:** disponibilizar no frontend a consulta de revisões já fornecida pelo backend.
+- **Alterações:** nova rota interna `Relatórios > Revisões`, navegação entre relatórios, filtros, totais e resultados responsivos, sem alterar regras ou API.
+- **Testes:** build e lint do frontend aprovados; 4 arquivos e 11 testes Vitest aprovados.
+- **Pendências:** testes completos de interação/visual permanecem incrementais; exportação, dashboard e outros relatórios não fazem parte desta etapa.
 
 Os relatórios completos dessas etapas foram preservados em [`arquivo/relatorios/`](./arquivo/relatorios/).
 

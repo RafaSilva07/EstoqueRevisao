@@ -155,6 +155,32 @@ export interface MovementReportTotals {
   effectiveQuantityByUnit: QuantityByUnit[];
 }
 
+export interface ReviewReportItem {
+  distributionId: string;
+  movementId: string;
+  occurredAt: string;
+  productCode: string;
+  productName: string;
+  batchCode: string;
+  destination: string;
+  quantity: number;
+  unit: string;
+  responsible: string;
+}
+
+export interface ReviewClassificationTotal {
+  destinationLocationId: string;
+  destinationCode: string;
+  destination: string;
+  quantityByUnit: QuantityByUnit[];
+}
+
+export interface ReviewReportTotals {
+  rows: number;
+  reviewedQuantityByUnit: QuantityByUnit[];
+  byClassification: ReviewClassificationTotal[];
+}
+
 interface ErrorEnvelope {
   error?: { message?: string };
 }
