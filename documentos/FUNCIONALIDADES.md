@@ -136,7 +136,13 @@ A interface `Relatórios > Revisões` apresenta esses totais sem recalculá-los,
 
 `GET /api/v1/reports/stock` retorna somente posições atuais com saldo positivo, incluindo produto, lote, local/classificação, quantidade, fabricação e validade. Aceita filtros de produto, lote, local e situação da validade. A situação é calculada em relação à data de referência e à janela configurada, resultando em `VALIDO`, `PROXIMO_VENCIMENTO` ou `VENCIDO`; fabricação e validade trafegam como data civil `YYYY-MM-DD`.
 
-A interface `Relatórios > Estoque e validades` apresenta saldo, lote, fabricação, validade e situação, com destaque visual simples para cada estado. Possui os mesmos filtros, paginação da API, estados de carregamento, vazio e erro e ação para limpar filtros. O acesso exige `stock-positions.read`; exportação e dashboard não fazem parte desta etapa.
+A interface `Relatórios > Estoque e validades` apresenta saldo, lote, fabricação, validade e situação, com destaque visual simples para cada estado. Possui os mesmos filtros, paginação da API, estados de carregamento, vazio e erro e ação para limpar filtros. O acesso exige `stock-positions.read`; exportação não faz parte desta interface.
+
+## Dashboard operacional
+
+A Home apresenta os saldos atuais de Revisar, Lata Boa, Varejo e TUF, a quantidade de posições vencidas e próximas do vencimento e as cinco movimentações mais recentes. Os dados são obtidos dos relatórios de estoque e do histórico de movimentações, respeitando as permissões existentes e sem recalcular regras de validade ou saldo no navegador.
+
+Os atalhos operacionais levam diretamente a Entrada, Saída, Revisão, Transferência e consulta de Estoque. A visualização usa cards no mobile e tabela responsiva para a atividade recente, sem gráficos, exportações ou indicadores de BI.
 
 ## Experiência de uso
 
