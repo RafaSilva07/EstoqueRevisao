@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, Movement, Paginated, Product, StockLocation, StockPosition } from './api';
-import { EmptyState, LoadingState, Notice, PageHeader } from './components';
+import { EmptyState, LoadingState, Modal, Notice, OperationGuide, PageHeader } from './components';
 import { formatDate } from './format';
 import { calculateDistribution, isIntegerQuantity, quantityUnits } from './review';
 
@@ -183,6 +183,7 @@ export function ReviewPage({
       title="Revisar produtos"
       description="Distribua integralmente a quantidade revisada entre os destinos permitidos."
     />
+    <OperationGuide review />
     {error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
     <section className="surface form-panel">
       <h2>Adicionar produto/lote</h2>
@@ -202,7 +203,7 @@ export function ReviewPage({
         {selectedPosition && <div className="available-balance" role="status"><span>Disponivel em Revisar</span><strong>{selectedPosition.quantity} {selectedPosition.product.defaultUnit}</strong><small>Validade {formatDate(selectedPosition.batch.expirationDate)}</small></div>}
         <div className="form-actions"><button type="button" onClick={addSelected}>+ Adicionar produto/lote</button></div>
       </div>}
-      <label className="review-observation">Observacao
+      <label className="review-observation">Observação (opcional)
         <textarea value={observation} onChange={(event) => setObservation(event.target.value)} maxLength={1000} rows={3} />
       </label>
     </section>
@@ -227,13 +228,13 @@ export function ReviewPage({
         return <article className="surface review-card" key={item.key}>
           <header><div><p className="eyebrow">Produto/lote</p><h2>{item.position.product.code} - {item.position.product.name}</h2><p>Lote {item.position.batch.code} · validade {formatDate(item.position.batch.expirationDate)}</p></div><button className="secondary" onClick={() => setItems((current) => current.filter((candidate) => candidate.key !== item.key))}>Remover</button></header>
           <div className="review-balance"><span>Disponivel em Revisar</span><strong>{item.position.quantity} {item.position.product.defaultUnit}</strong></div>
-          <label><span>Quantidade a revisar <span className="required">*</span></span><input type="number" min="1" max={item.position.quantity} step="1" value={item.quantity} onChange={(event) => updateItem(item.key, (current) => ({ ...current, quantity: event.target.value }))} /></label>
-          <fieldset><legend>Distribuicao</legend><div className="review-destinations">{destinations.map((destination) => <label key={destination.id}>{destination.name}<input type="number" min="0" step="1" value={item.distributions[destination.id] ?? ''} placeholder="0" onChange={(event) => updateItem(item.key, (current) => ({ ...current, distributions: { ...current.distributions, [destination.id]: event.target.value } }))} /></label>)}</div></fieldset>
+          <label><span>Quantidade a revisar <span className="required">*</span></span><input inputMode="numeric" type="number" min="1" max={item.position.quantity} step="1" value={item.quantity} onChange={(event) => updateItem(item.key, (current) => ({ ...current, quantity: event.target.value }))} /></label>
+          <fieldset><legend>Distribuicao</legend><div className="review-destinations">{destinations.map((destination) => <label key={destination.id}>{destination.name}<input inputMode="numeric" type="number" min="0" step="1" value={item.distributions[destination.id] ?? ''} placeholder="0" onChange={(event) => updateItem(item.key, (current) => ({ ...current, distributions: { ...current.distributions, [destination.id]: event.target.value } }))} /></label>)}</div></fieldset>
           <p className={`distribution-feedback ${complete ? 'complete' : 'incomplete'}`} role="status">{feedback}<span>Distribuido: {state.distributed} / {state.reviewed}</span></p>
         </article>;
       })}
     </section>
-    <section className="surface review-submit"><div><span>Total revisado</span><strong>{totalReviewed} unidade(s) em {items.length} produto(s)/lote(s)</strong></div><button disabled={!ready || busy} onClick={() => setConfirming(true)}>Revisar operacao</button></section>
-    {confirming && <div className="dialog-backdrop"><section className="dialog confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="review-confirm-title"><p className="eyebrow">Resumo</p><h2 id="review-confirm-title">Confirmar revisao?</h2><p>{items.length} produto(s)/lote(s), total revisado de <strong>{totalReviewed}</strong>.</p><ul className="review-summary">{items.map((item) => <li key={item.key}><strong>{item.position.product.name} / lote {item.position.batch.code}: {item.quantity}</strong><ul>{destinations.map((destination) => ({ destination, quantity: Number(item.distributions[destination.id] || 0) })).filter(({ quantity }) => quantity > 0).map(({ destination, quantity }) => <li key={destination.id}>{quantity} → {destination.name}</li>)}</ul></li>)}</ul><p>A quantidade sera retirada de Revisar e distribuida integralmente em uma unica operacao.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={() => setConfirming(false)}>Voltar e corrigir</button><button disabled={busy} onClick={() => void submit()}>{busy ? 'Processando revisao...' : 'Confirmar revisao'}</button></div></section></div>}
+    {!ready && <p className="action-hint">Adicione um item e complete a distribuição para conferir a revisão.</p>}<section className="surface review-submit"><div><span>Total revisado</span><strong>{totalReviewed} unidade(s) em {items.length} produto(s)/lote(s)</strong></div><button disabled={!ready || busy} onClick={() => setConfirming(true)}>Revisar operacao</button></section>
+    {confirming && <Modal labelledBy="review-confirm-title" busy={busy} onClose={() => setConfirming(false)}><p className="eyebrow">Resumo</p><h2 id="review-confirm-title">Confirmar revisao?</h2><p>{items.length} produto(s)/lote(s), total revisado de <strong>{totalReviewed}</strong>.</p><ul className="review-summary">{items.map((item) => <li key={item.key}><strong>{item.position.product.name} / lote {item.position.batch.code}: {item.quantity}</strong><ul>{destinations.map((destination) => ({ destination, quantity: Number(item.distributions[destination.id] || 0) })).filter(({ quantity }) => quantity > 0).map(({ destination, quantity }) => <li key={destination.id}>{quantity} → {destination.name}</li>)}</ul></li>)}</ul><p>A quantidade sera retirada de Revisar e distribuida integralmente em uma unica operacao.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={() => setConfirming(false)}>Voltar e corrigir</button><button disabled={busy} onClick={() => void submit()}>{busy ? 'Processando revisao...' : 'Confirmar revisao'}</button></div></Modal>}
   </>;
 }

@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ReportResult, StockReportItem, StockReportTotals } from './api';
-import { EmptyState, LoadingState, Notice, PageHeader } from './components';
+import { EmptyState, FilterPanel, LoadingState, Notice, PageHeader } from './components';
 import { formatDate } from './format';
 import { ReportNavigation } from './ReportNavigation';
 import { buildReportQuery, formatQuantities, ReportFilters } from './report-utils';
@@ -73,9 +73,9 @@ export function StockReportsPage({
     <PageHeader eyebrow="Relatorios" title="Estoque e validades" description="Consulte saldos atuais e acompanhe a situacao dos lotes." />
     <ReportNavigation current="stock" onMovements={onMovements} onReviews={onReviews} onStock={() => undefined} />
     {error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
-    <section className="surface filters-panel filters-open report-filters">
+    <FilterPanel count={activeFilters}>
       <div className="panel-heading">
-        <div><p className="eyebrow">Filtros</p><h2>{activeFilters} filtro(s) ativo(s)</h2></div>
+        <p className="muted">Ajuste os campos e aplique os filtros.</p>
         <button type="button" className="secondary" onClick={clearFilters}>Limpar filtros</button>
       </div>
       <form className="filter-grid" onSubmit={applyFilters}>
@@ -85,7 +85,7 @@ export function StockReportsPage({
         <label>Situacao da validade<select value={draft.expirationStatus} onChange={(event) => setDraft({ ...draft, expirationStatus: event.target.value })}><option value="">Todas</option><option value="VALIDO">Valido</option><option value="PROXIMO_VENCIMENTO">Proximo do vencimento</option><option value="VENCIDO">Vencido</option></select></label>
         <div className="form-actions report-filter-actions"><button>Aplicar filtros</button></div>
       </form>
-    </section>
+    </FilterPanel>
     {loading ? <LoadingState label="Carregando relatorio" /> : report && <>
       <section className="report-summary" aria-label="Totais do relatorio">
         <article><span>Posicoes</span><strong>{report.totals.positions}</strong></article>

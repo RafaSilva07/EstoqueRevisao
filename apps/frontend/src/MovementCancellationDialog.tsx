@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { api, Movement } from './api';
+import { Modal, Notice } from './components';
 import { movementCancellationImpact } from './movement-cancellation-impact';
 
 export function MovementCancellationDialog({
@@ -43,11 +44,10 @@ export function MovementCancellationDialog({
     }
   }
 
-  return <div className="dialog-backdrop" role="presentation">
-    <section className="dialog confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="cancel-title">
+  return <Modal labelledBy="cancel-title" busy={busy} onClose={onClose}>
       <p className="eyebrow">Cancelamento integral</p>
       <h2 id="cancel-title">{showImpact ? 'Confirme o impacto no estoque' : 'Cancelar movimentacao'}</h2>
-      {error && <p className="dialog-error" role="alert">{error}</p>}
+      {error && <Notice kind="error">{error}</Notice>}
       {!showImpact ? <form onSubmit={review}>
         <label>Motivo <span className="required">*</span><textarea value={reason} onChange={(event) => setReason(event.target.value)} maxLength={1000} rows={4} autoFocus required /></label>
         <p>A movimentacao original permanecera no historico como cancelada.</p>
@@ -58,6 +58,5 @@ export function MovementCancellationDialog({
         <p>O cancelamento sera bloqueado se algum saldo necessario ja tiver sido consumido.</p>
         <div className="dialog-actions"><button type="button" className="secondary" disabled={busy} onClick={() => setShowImpact(false)}>Alterar motivo</button><button type="button" className="danger" disabled={busy} onClick={() => void confirm()}>{busy ? 'Cancelando...' : 'Confirmar cancelamento'}</button></div>
       </>}
-    </section>
-  </div>;
+  </Modal>;
 }

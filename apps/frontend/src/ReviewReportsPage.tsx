@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ReportResult, ReviewReportItem, ReviewReportTotals } from './api';
-import { EmptyState, LoadingState, Notice, PageHeader } from './components';
+import { EmptyState, FilterPanel, LoadingState, Notice, PageHeader } from './components';
 import { formatDateTime } from './format';
 import { ReportNavigation } from './ReportNavigation';
 import { buildReportQuery, formatQuantities, ReportFilters } from './report-utils';
@@ -62,9 +62,9 @@ export function ReviewReportsPage({ onMovements, onStock }: { onMovements: () =>
     <PageHeader eyebrow="Relatorios" title="Revisoes" description="Consulte as quantidades revisadas e sua distribuicao por classificacao." />
     <ReportNavigation current="reviews" onMovements={onMovements} onReviews={() => undefined} onStock={onStock} />
     {error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
-    <section className="surface filters-panel filters-open report-filters">
+    <FilterPanel count={activeFilters}>
       <div className="panel-heading">
-        <div><p className="eyebrow">Filtros</p><h2>{activeFilters} filtro(s) ativo(s)</h2></div>
+        <p className="muted">Ajuste os campos e aplique os filtros.</p>
         <button type="button" className="secondary" onClick={clearFilters}>Limpar filtros</button>
       </div>
       <form className="filter-grid" onSubmit={applyFilters}>
@@ -75,7 +75,7 @@ export function ReviewReportsPage({ onMovements, onStock }: { onMovements: () =>
         <label>Classificacao/destino<input value={draft.destination} onChange={(event) => setDraft({ ...draft, destination: event.target.value })} maxLength={150} placeholder="Lata Boa, Varejo ou TUF" /></label>
         <div className="form-actions report-filter-actions"><button>Aplicar filtros</button></div>
       </form>
-    </section>
+    </FilterPanel>
     {loading ? <LoadingState label="Carregando relatorio" /> : report && <>
       <ReviewTotals totals={report.totals} />
       <ReviewResults items={report.items} />

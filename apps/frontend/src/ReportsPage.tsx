@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, MovementReportItem, MovementReportTotals, ReportResult } from './api';
-import { EmptyState, LoadingState, Notice, PageHeader } from './components';
+import { EmptyState, FilterPanel, LoadingState, Notice, PageHeader } from './components';
 import { formatDateTime } from './format';
 import { ReportNavigation } from './ReportNavigation';
 import { buildReportQuery, formatQuantities, ReportFilters } from './report-utils';
@@ -70,9 +70,9 @@ export function ReportsPage({ onReviews, onStock }: { onReviews: () => void; onS
     <PageHeader eyebrow="Relatorios" title="Movimentacoes" description="Consulte movimentacoes e totais conforme os filtros selecionados." />
     <ReportNavigation current="movements" onMovements={() => undefined} onReviews={onReviews} onStock={onStock} />
     {error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
-    <section className="surface filters-panel filters-open report-filters">
+    <FilterPanel count={activeFilters}>
       <div className="panel-heading">
-        <div><p className="eyebrow">Filtros</p><h2>{activeFilters} filtro(s) ativo(s)</h2></div>
+        <p className="muted">Ajuste os campos e aplique os filtros.</p>
         <button type="button" className="secondary" onClick={clearFilters}>Limpar filtros</button>
       </div>
       <form className="filter-grid" onSubmit={applyFilters}>
@@ -84,7 +84,7 @@ export function ReportsPage({ onReviews, onStock }: { onReviews: () => void; onS
         <label>Status<select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}><option value="">Todos</option><option value="EFETIVADA">Efetivada</option><option value="CANCELADA">Cancelada</option></select></label>
         <div className="form-actions report-filter-actions"><button>Aplicar filtros</button></div>
       </form>
-    </section>
+    </FilterPanel>
     {loading ? <LoadingState label="Carregando relatorio" /> : report && <>
       <ReportTotals totals={report.totals} />
       <MovementResults items={report.items} />

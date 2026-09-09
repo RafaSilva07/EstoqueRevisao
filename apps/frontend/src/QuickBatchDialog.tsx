@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { api, Batch, Product } from './api';
-import { Notice } from './components';
+import { Modal, Notice } from './components';
 
 const messageFrom = (error: unknown) => error instanceof Error
   ? error.message
@@ -37,7 +37,7 @@ export function QuickBatchDialog({
     }
   }
 
-  return <div className="dialog-backdrop"><section className="dialog" role="dialog" aria-modal="true" aria-labelledby="quick-batch-title">
+  return <Modal labelledBy="quick-batch-title" busy={busy} onClose={onCancel}>
     <p className="eyebrow">Novo lote</p>
     <h2 id="quick-batch-title">{product.name}</h2>
     <p>A fabricacao gera o codigo pela regra CONSERVADI. Informe a validade manualmente.</p>
@@ -47,5 +47,5 @@ export function QuickBatchDialog({
       <label><span>Validade <span className="required">*</span></span><input name="expirationDate" type="date" required /></label>
       <div className="form-actions"><button type="button" className="secondary" disabled={busy} onClick={onCancel}>Cancelar</button><button disabled={busy}>{busy ? 'Criando...' : 'Criar e selecionar'}</button></div>
     </form>
-  </section></div>;
+  </Modal>;
 }

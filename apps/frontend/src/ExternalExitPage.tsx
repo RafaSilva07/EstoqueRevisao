@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, Movement, Paginated, Product, StockLocation, StockPosition } from './api';
-import { EmptyState, LoadingState, Notice, PageHeader } from './components';
+import { EmptyState, LoadingState, Modal, Notice, OperationGuide, PageHeader } from './components';
 import { formatDate } from './format';
 
 export interface ExitPrefill {
@@ -153,12 +153,13 @@ export function ExternalExitPage({
   return <>
     <PageHeader
       eyebrow="Movimentacao"
-      title="Nova saida externa"
+      title="Saída externa"
       description="Selecione uma origem controlada; produtos e lotes exibidos possuem saldo disponivel."
     />
+    <OperationGuide />
     {error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
     <section className="surface form-panel">
-      <h2>Origem e destino</h2>
+      <h2><span className="step-number">1</span> Origem e destino</h2>
       <div className="form-grid">
         <label><span>Origem controlada <span className="required">*</span></span>
           <select value={originId} onChange={(event) => changeOrigin(event.target.value)} required>
@@ -172,13 +173,13 @@ export function ExternalExitPage({
             {destinations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
           </select>
         </label>
-        <label className="wide">Observacao
+        <label className="wide">Observação (opcional)
           <textarea value={observation} onChange={(event) => setObservation(event.target.value)} maxLength={1000} rows={3} />
         </label>
       </div>
     </section>
     <section className="surface form-panel">
-      <h2>Adicionar item</h2>
+      <h2><span className="step-number">2</span> Adicionar item</h2>
       {!originId ? <p className="muted">Escolha a origem para consultar o saldo.</p> : loadingStock ? <LoadingState label="Consultando saldo da origem" /> : positions.length === 0 ? <EmptyState title="Origem sem saldo disponivel" description="Escolha outro local ou registre uma entrada antes da saida." /> : <form className="form-grid" onSubmit={addItem}>
         <label><span>Produto <span className="required">*</span></span>
           <select value={productId} onChange={(event) => { setProductId(event.target.value); setBatchId(''); }} required>
@@ -194,16 +195,16 @@ export function ExternalExitPage({
         </label>
         {selectedPosition && <div className="available-balance" role="status"><span>Saldo disponivel</span><strong>{selectedPosition.quantity} {selectedPosition.product.defaultUnit}</strong><small>Validade {formatDate(selectedPosition.batch.expirationDate)}</small></div>}
         <label><span>Quantidade <span className="required">*</span></span>
-          <input type="number" min="1" max={selectedPosition?.quantity} step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} required />
+          <input inputMode="numeric" type="number" min="1" max={selectedPosition?.quantity} step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} required />
         </label>
         <div className="form-actions"><button>+ Adicionar</button></div>
       </form>}
     </section>
     <section className="surface list-panel">
-      <h2>Itens da saida ({items.length})</h2>
+      <h2><span className="step-number">3</span> Itens da saida ({items.length})</h2>
       {items.length === 0 ? <EmptyState title="Nenhum item adicionado" description="Adicione ao menos um produto e lote com saldo." /> : <div className="entry-items">{items.map((item) => <article key={item.key} className="entry-item"><div><strong>{item.position.product.name}</strong><span>Lote {item.position.batch.code}</span><span>{item.quantity} de {item.position.quantity} {item.position.product.defaultUnit} disponiveis</span></div><button className="secondary" onClick={() => setItems((current) => current.filter((candidate) => candidate.key !== item.key))}>Remover</button></article>)}</div>}
-      <button className="button-wide" disabled={!originId || !destinationId || items.length === 0 || busy} onClick={() => setConfirming(true)}>Revisar saida</button>
+      {(!originId || !destinationId || items.length === 0) && <p className="action-hint">Selecione origem, destino e adicione ao menos um item para continuar.</p>}<button className="button-wide" disabled={!originId || !destinationId || items.length === 0 || busy} onClick={() => setConfirming(true)}>Revisar saida</button>
     </section>
-    {confirming && <div className="dialog-backdrop"><section className="dialog confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="exit-confirm-title"><p className="eyebrow">Confirmacao</p><h2 id="exit-confirm-title">Confirmar saida para {locationFor(destinationId)?.name}?</h2><p>Origem: <strong>{locationFor(originId)?.name}</strong>. {items.length} item(ns).</p><ul>{items.map((item) => <li key={item.key}>{item.position.product.name} / lote {item.position.batch.code}: <strong>{item.quantity} {item.position.product.defaultUnit}</strong></li>)}</ul><p>O saldo da origem sera reduzido e o registro ficara imutavel no historico.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={() => setConfirming(false)}>Voltar e corrigir</button><button disabled={busy} onClick={() => void submit()}>{busy ? 'Efetivando...' : 'Confirmar saida'}</button></div></section></div>}
+    {confirming && <Modal labelledBy="exit-confirm-title" busy={busy} onClose={() => setConfirming(false)}><p className="eyebrow">Confirmacao</p><h2 id="exit-confirm-title">Confirmar saida para {locationFor(destinationId)?.name}?</h2><p>Origem: <strong>{locationFor(originId)?.name}</strong>. {items.length} item(ns).</p><ul>{items.map((item) => <li key={item.key}>{item.position.product.name} / lote {item.position.batch.code}: <strong>{item.quantity} {item.position.product.defaultUnit}</strong></li>)}</ul><p>O saldo da origem sera reduzido e o registro ficara imutavel no historico.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={() => setConfirming(false)}>Voltar e corrigir</button><button disabled={busy} onClick={() => void submit()}>{busy ? 'Efetivando...' : 'Confirmar saida'}</button></div></Modal>}
   </>;
 }
