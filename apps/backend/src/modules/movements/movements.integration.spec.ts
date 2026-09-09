@@ -812,5 +812,67 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
         response: { code: 'MOVEMENT_ALREADY_CANCELED' },
       });
     });
+
+    it('preserva saldos e historico no ciclo completo com estornos em ordem reversa', async () => {
+      const entry = await create();
+      const review = await createReview([{
+        productId: productAId,
+        batchId: batchAId,
+        quantity: 6,
+        distributions: [
+          { destinationLocationId: lataBoaId, quantity: 3 },
+          { destinationLocationId: varejoId, quantity: 2 },
+          { destinationLocationId: transferDestinationId, quantity: 1 },
+        ],
+      }]);
+      const transfer = await createTransfer([{
+        productId: productAId,
+        batchId: batchAId,
+        destinationBatchId: batchAEmptyId,
+        quantity: 2,
+      }]);
+      const exit = await service.createExternalExit({
+        requestKey: randomUUID(),
+        originLocationId: transferDestinationId,
+        destinationLocationId: originId,
+        items: [{ productId: productAId, batchId: batchAId, quantity: 1 }],
+      }, userId, { requestId: randomUUID(), ipAddress: null, userAgent: 'jest' });
+
+      expect(await Promise.all([
+        [batchAId, destinationId],
+        [batchAId, lataBoaId],
+        [batchAId, varejoId],
+        [batchAId, transferDestinationId],
+        [batchAEmptyId, transferDestinationId],
+      ].map(([batchId, stockLocationId]) => stockService.getBalance({
+        productId: productAId,
+        batchId,
+        stockLocationId,
+      })))).toEqual([2, 3, 2, 0, 2]);
+
+      await cancel(exit.id);
+      await cancel(transfer.id);
+      await cancel(review.id);
+      await cancel(entry.id);
+
+      expect(await Promise.all([
+        [batchAId, destinationId],
+        [batchBId, destinationId],
+        [batchAId, lataBoaId],
+        [batchAId, varejoId],
+        [batchAId, transferDestinationId],
+        [batchAEmptyId, transferDestinationId],
+      ].map(([batchId, stockLocationId], index) => stockService.getBalance({
+        productId: index === 1 ? productBId : productAId,
+        batchId,
+        stockLocationId,
+      })))).toEqual([0, 0, 0, 0, 0, 0]);
+
+      const history = await service.list({ page: 1, limit: 20 });
+      expect(history.meta.total).toBe(4);
+      expect(history.items.every((movement) => movement.status === MovementStatus.Canceled)).toBe(true);
+      expect((await service.getById(review.id)).items[0].distributions).toHaveLength(3);
+      expect((await service.getById(transfer.id)).items[0].destinationBatchId).toBe(batchAEmptyId);
+    });
   });
 });
