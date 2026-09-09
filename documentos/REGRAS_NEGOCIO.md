@@ -10,7 +10,7 @@ Este documento consolida o comportamento funcional vigente. Regras históricas s
 - Correções operacionais são registradas por novas movimentações. O cancelamento apenas marca a original e estorna integralmente seus efeitos.
 - Operações de estoque, histórico e auditoria são atômicas: qualquer falha causa rollback integral.
 - O backend é a autoridade final sobre permissões, referências, saldo e concorrência; validações do frontend são apenas orientação.
-- Quantidades devem ser positivas, finitas e possuir no máximo seis casas decimais.
+- Quantidades de estoque e movimentações devem ser números inteiros positivos; valores fracionários não são permitidos.
 - Datas e horários de eventos usam instante com fuso (`timestamptz`) e trafegam em ISO 8601. Fabricação e validade de lote usam somente data civil (`date`).
 
 ## Produtos e conversões

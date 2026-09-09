@@ -22,7 +22,7 @@ describe('MovementsService', () => {
     destinationLocationId: destinationId, observation: 'Recebimento direto',
     items: [
       { productId: '60000000-0000-4000-8000-000000000001', batchId: '70000000-0000-4000-8000-000000000001', quantity: 10 },
-      { productId: '60000000-0000-4000-8000-000000000002', batchId: '70000000-0000-4000-8000-000000000002', quantity: 2.5 },
+      { productId: '60000000-0000-4000-8000-000000000002', batchId: '70000000-0000-4000-8000-000000000002', quantity: 3 },
     ],
   };
   const repository = { findByRequestKey: jest.fn(), findById: jest.fn(), findByIdForUpdate: jest.fn(), findAndCount: jest.fn(), save: jest.fn(), saveItems: jest.fn(), saveDistributions: jest.fn() };
@@ -118,14 +118,14 @@ describe('MovementsService', () => {
   it('registra cabecalho e varios itens em uma unica transacao', async () => {
     const result = await service.createExternalEntry(dto, userId, { requestId: dto.requestKey, ipAddress: null, userAgent: null });
     expect(dataSource.transaction).toHaveBeenCalledTimes(1);
-    expect(repository.saveItems).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ quantity: 10 }), expect.objectContaining({ quantity: 2.5 })]), manager);
+    expect(repository.saveItems).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ quantity: 10 }), expect.objectContaining({ quantity: 3 })]), manager);
     expect(result.id).toBeDefined();
   });
 
   it('soma cada item ao destino somente pelo servico central de saldo', async () => {
     await service.createExternalEntry(dto, userId, { requestId: dto.requestKey, ipAddress: null, userAgent: null });
     expect(stock.addQuantity).toHaveBeenNthCalledWith(1, { productId: dto.items[0].productId, batchId: dto.items[0].batchId, stockLocationId: destinationId }, 10, manager);
-    expect(stock.addQuantity).toHaveBeenNthCalledWith(2, { productId: dto.items[1].productId, batchId: dto.items[1].batchId, stockLocationId: destinationId }, 2.5, manager);
+    expect(stock.addQuantity).toHaveBeenNthCalledWith(2, { productId: dto.items[1].productId, batchId: dto.items[1].batchId, stockLocationId: destinationId }, 3, manager);
   });
 
   it('nao tenta reduzir saldo da origem externa', async () => {
@@ -223,7 +223,7 @@ describe('MovementsService', () => {
         productId: exitDto.items[1].productId,
         batchId: exitDto.items[1].batchId,
         stockLocationId: destinationId,
-      }, 2.5, manager);
+      }, 3, manager);
       expect(stock.addQuantity).not.toHaveBeenCalled();
     });
 
@@ -525,8 +525,8 @@ describe('MovementsService', () => {
         {
           productId: dto.items[1].productId,
           batchId: dto.items[1].batchId,
-          quantity: 2.5,
-          distributions: [{ destinationLocationId: lataBoaId, quantity: 2.5 }],
+          quantity: 3,
+          distributions: [{ destinationLocationId: lataBoaId, quantity: 3 }],
         },
       ],
     };
@@ -555,7 +555,7 @@ describe('MovementsService', () => {
       expect(stock.distributeQuantity).toHaveBeenCalledTimes(2);
       expect(repository.saveItems).toHaveBeenCalledWith(expect.arrayContaining([
         expect.objectContaining({ quantity: 10 }),
-        expect.objectContaining({ quantity: 2.5 }),
+        expect.objectContaining({ quantity: 3 }),
       ]), manager);
       expect(repository.saveDistributions).toHaveBeenCalledWith(expect.arrayContaining([
         expect.objectContaining({ destinationLocationId: lataBoaId, quantity: 7 }),

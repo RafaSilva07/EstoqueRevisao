@@ -26,7 +26,7 @@ describe('CreateReviewDto', () => {
     await expect(errorsFor(validPayload)).resolves.toHaveLength(0);
   });
 
-  it.each([0, -1, 0.0000001])('rejeita quantidade revisada invalida: %s', async (quantity) => {
+  it.each([0, -1, 0.5])('rejeita quantidade revisada invalida: %s', async (quantity) => {
     const errors = await errorsFor({
       ...validPayload,
       items: [{ ...validPayload.items[0], quantity }],
@@ -34,8 +34,8 @@ describe('CreateReviewDto', () => {
     expect(errors).not.toHaveLength(0);
   });
 
-  it('rejeita distribuicao zero, negativa ou com mais de seis casas', async () => {
-    for (const quantity of [0, -1, 0.0000001]) {
+  it('rejeita distribuicao zero, negativa ou fracionaria', async () => {
+    for (const quantity of [0, -1, 0.5]) {
       const errors = await errorsFor({
         ...validPayload,
         items: [{

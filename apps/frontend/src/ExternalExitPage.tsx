@@ -99,8 +99,8 @@ export function ExternalExitPage({
   function addItem(event: FormEvent) {
     event.preventDefault();
     const numericQuantity = Number(quantity);
-    if (!selectedPosition || !Number.isFinite(numericQuantity) || numericQuantity <= 0) {
-      setError('Selecione uma posicao com saldo e informe uma quantidade positiva.');
+    if (!selectedPosition || !Number.isInteger(numericQuantity) || numericQuantity <= 0) {
+      setError('Selecione uma posicao com saldo e informe uma quantidade inteira positiva.');
       return;
     }
     if (numericQuantity > selectedPosition.quantity) {
@@ -194,7 +194,7 @@ export function ExternalExitPage({
         </label>
         {selectedPosition && <div className="available-balance" role="status"><span>Saldo disponivel</span><strong>{selectedPosition.quantity} {selectedPosition.product.defaultUnit}</strong><small>Validade {formatDate(selectedPosition.batch.expirationDate)}</small></div>}
         <label><span>Quantidade <span className="required">*</span></span>
-          <input type="number" min="0.000001" max={selectedPosition?.quantity} step="0.000001" value={quantity} onChange={(event) => setQuantity(event.target.value)} required />
+          <input type="number" min="1" max={selectedPosition?.quantity} step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} required />
         </label>
         <div className="form-actions"><button>+ Adicionar</button></div>
       </form>}

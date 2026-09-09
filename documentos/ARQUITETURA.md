@@ -74,7 +74,7 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 - Transferências e distribuições bloqueiam posições com `pessimistic_write` em ordem determinística.
 - Cancelamento bloqueia primeiro a movimentação original e depois as posições necessárias.
 - Uma falha deve ser propagada para o limite transacional; não se deve capturar erro para confirmar estado parcial.
-- Quantidade é `numeric(18,6)` e data/hora de evento é `timestamptz`.
+- Quantidade permanece armazenada como `numeric(18,6)` por compatibilidade com o histórico, mas novas operações aceitam somente números inteiros positivos. Data/hora de evento é `timestamptz`.
 
 ## API, validação e erros
 

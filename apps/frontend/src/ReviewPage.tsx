@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, Movement, Paginated, Product, StockLocation, StockPosition } from './api';
 import { EmptyState, LoadingState, Notice, PageHeader } from './components';
 import { formatDate } from './format';
-import { calculateDistribution, quantityUnits } from './review';
+import { calculateDistribution, isIntegerQuantity, quantityUnits } from './review';
 
 export interface ReviewPrefill {
   productId: string;
@@ -135,7 +135,9 @@ export function ReviewPage({
   };
   const ready = items.length > 0 && items.every((item) => {
     const state = itemState(item);
-    return state.reviewed > 0
+    return isIntegerQuantity(item.quantity)
+      && Object.values(item.distributions).every(isIntegerQuantity)
+      && state.reviewed > 0
       && state.reviewed <= quantityUnits(item.position.quantity)
       && state.difference === 0;
   });
@@ -208,22 +210,26 @@ export function ReviewPage({
       {items.length === 0 ? <div className="surface list-panel"><EmptyState title="Nenhum item adicionado" description="Adicione um produto e lote que possua saldo em Revisar." /></div> : items.map((item) => {
         const state = itemState(item);
         const available = quantityUnits(item.position.quantity);
-        const feedback = state.reviewed <= 0
+        const integerValues = isIntegerQuantity(item.quantity)
+          && Object.values(item.distributions).every(isIntegerQuantity);
+        const feedback = !integerValues
+          ? 'Use apenas quantidades inteiras.'
+          : state.reviewed <= 0
           ? 'Informe a quantidade que sera revisada.'
           : state.reviewed > available
             ? `Saldo insuficiente em Revisar. Disponivel: ${item.position.quantity}.`
             : state.difference > 0
-              ? `Faltam distribuir: ${state.difference / 1_000_000}`
+              ? `Faltam distribuir: ${state.difference}`
               : state.difference < 0
-                ? `A distribuicao excede a quantidade revisada em ${Math.abs(state.difference) / 1_000_000}`
+                ? `A distribuicao excede a quantidade revisada em ${Math.abs(state.difference)}`
                 : 'Distribuicao completa.';
-        const complete = state.reviewed > 0 && state.reviewed <= available && state.difference === 0;
+        const complete = integerValues && state.reviewed > 0 && state.reviewed <= available && state.difference === 0;
         return <article className="surface review-card" key={item.key}>
           <header><div><p className="eyebrow">Produto/lote</p><h2>{item.position.product.code} - {item.position.product.name}</h2><p>Lote {item.position.batch.code} · validade {formatDate(item.position.batch.expirationDate)}</p></div><button className="secondary" onClick={() => setItems((current) => current.filter((candidate) => candidate.key !== item.key))}>Remover</button></header>
           <div className="review-balance"><span>Disponivel em Revisar</span><strong>{item.position.quantity} {item.position.product.defaultUnit}</strong></div>
-          <label><span>Quantidade a revisar <span className="required">*</span></span><input type="number" min="0.000001" max={item.position.quantity} step="0.000001" value={item.quantity} onChange={(event) => updateItem(item.key, (current) => ({ ...current, quantity: event.target.value }))} /></label>
-          <fieldset><legend>Distribuicao</legend><div className="review-destinations">{destinations.map((destination) => <label key={destination.id}>{destination.name}<input type="number" min="0" step="0.000001" value={item.distributions[destination.id] ?? ''} placeholder="0" onChange={(event) => updateItem(item.key, (current) => ({ ...current, distributions: { ...current.distributions, [destination.id]: event.target.value } }))} /></label>)}</div></fieldset>
-          <p className={`distribution-feedback ${complete ? 'complete' : 'incomplete'}`} role="status">{feedback}<span>Distribuido: {state.distributed / 1_000_000} / {state.reviewed / 1_000_000}</span></p>
+          <label><span>Quantidade a revisar <span className="required">*</span></span><input type="number" min="1" max={item.position.quantity} step="1" value={item.quantity} onChange={(event) => updateItem(item.key, (current) => ({ ...current, quantity: event.target.value }))} /></label>
+          <fieldset><legend>Distribuicao</legend><div className="review-destinations">{destinations.map((destination) => <label key={destination.id}>{destination.name}<input type="number" min="0" step="1" value={item.distributions[destination.id] ?? ''} placeholder="0" onChange={(event) => updateItem(item.key, (current) => ({ ...current, distributions: { ...current.distributions, [destination.id]: event.target.value } }))} /></label>)}</div></fieldset>
+          <p className={`distribution-feedback ${complete ? 'complete' : 'incomplete'}`} role="status">{feedback}<span>Distribuido: {state.distributed} / {state.reviewed}</span></p>
         </article>;
       })}
     </section>

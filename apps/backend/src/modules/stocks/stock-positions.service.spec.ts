@@ -76,7 +76,7 @@ describe('StockPositionsService', () => {
       .rejects.toBeInstanceOf(ConflictException);
   });
 
-  it.each([0, -1, 0.0000001])('rejeita quantidade invalida: %s', async (quantity) => {
+  it.each([0, -1, 0.5])('rejeita quantidade invalida: %s', async (quantity) => {
     await expect(service.addQuantity(key, quantity, manager))
       .rejects.toBeInstanceOf(BadRequestException);
     expect(positions.addAtomic).not.toHaveBeenCalled();
@@ -123,7 +123,7 @@ describe('StockPositionsService', () => {
       expect(result).toMatchObject({ source: { quantity: 6 }, destination: { quantity: 4 } });
     });
 
-    it.each([0, -1, 0.0000001])('rejeita quantidade invalida: %s', async (quantity) => {
+    it.each([0, -1, 0.5])('rejeita quantidade invalida: %s', async (quantity) => {
       await expect(service.transferQuantity(key, destination, quantity, manager))
         .rejects.toBeInstanceOf(BadRequestException);
       expect(positions.lockForTransfer).not.toHaveBeenCalled();

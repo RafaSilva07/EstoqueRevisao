@@ -530,7 +530,7 @@ export class MovementsService {
   }
 
   private toQuantityUnits(quantity: number): number {
-    return Math.round(quantity * 1_000_000);
+    return quantity;
   }
 
   private resolveIdempotent(

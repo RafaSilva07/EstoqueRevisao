@@ -52,7 +52,7 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
   });
   afterAll(async () => { if (dataSource?.isInitialized) await dataSource.destroy(); });
 
-  const create = (requestKey = randomUUID()): Promise<MovementEntity> => service.createExternalEntry({ requestKey, originLocationId: originId, destinationLocationId: destinationId, items: [{ productId: productAId, batchId: batchAId, quantity: 10 }, { productId: productBId, batchId: batchBId, quantity: 2.5 }] }, userId, { requestId: randomUUID(), ipAddress: null, userAgent: 'jest' });
+  const create = (requestKey = randomUUID()): Promise<MovementEntity> => service.createExternalEntry({ requestKey, originLocationId: originId, destinationLocationId: destinationId, items: [{ productId: productAId, batchId: batchAId, quantity: 10 }, { productId: productBId, batchId: batchBId, quantity: 3 }] }, userId, { requestId: randomUUID(), ipAddress: null, userAgent: 'jest' });
   const seedStock = (productId: string, batchId: string, quantity: number, stockLocationId = destinationId): Promise<StockPositionEntity> => dataSource.transaction(
     (manager) => stockService.addQuantity({
       productId,
@@ -101,7 +101,7 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     const movement = await create();
     expect(movement.items).toHaveLength(2);
     expect(await stockService.getBalance({ productId: productAId, batchId: batchAId, stockLocationId: destinationId })).toBe(10);
-    expect(await stockService.getBalance({ productId: productBId, batchId: batchBId, stockLocationId: destinationId })).toBe(2.5);
+    expect(await stockService.getBalance({ productId: productBId, batchId: batchBId, stockLocationId: destinationId })).toBe(3);
     expect(await dataSource.getRepository(AuditLogEntity).countBy({ entityId: movement.id })).toBe(1);
   });
 
@@ -146,19 +146,19 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
 
   it('reverte todos os itens da saida quando o ultimo possui saldo insuficiente', async () => {
     await seedStock(productAId, batchAId, 10);
-    await seedStock(productBId, batchBId, 2.5);
+    await seedStock(productBId, batchBId, 3);
     try {
       await createExit([
         { productId: productAId, batchId: batchAId, quantity: 4 },
-        { productId: productBId, batchId: batchBId, quantity: 3 },
+        { productId: productBId, batchId: batchBId, quantity: 4 },
       ]);
       throw new Error('A saida deveria falhar por saldo insuficiente.');
     } catch (error: unknown) {
       expect(error).toBeInstanceOf(ConflictException);
       expect((error as ConflictException).getResponse()).toEqual({
         code: 'INSUFFICIENT_STOCK',
-        message: 'Saldo insuficiente. Disponivel: 2.5.',
-        available: 2.5,
+        message: 'Saldo insuficiente. Disponivel: 3.',
+        available: 3,
       });
     }
     expect(await stockService.getBalance({
@@ -166,7 +166,7 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     })).toBe(10);
     expect(await stockService.getBalance({
       productId: productBId, batchId: batchBId, stockLocationId: destinationId,
-    })).toBe(2.5);
+    })).toBe(3);
     expect(await dataSource.getRepository(MovementEntity).count()).toBe(0);
     expect(await dataSource.getRepository(AuditLogEntity).count()).toBe(0);
   });
@@ -238,7 +238,7 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     await seedStock(productBId, batchBId, 5);
     await seedStock(productAId, batchAId, 2, transferDestinationId);
     const created = await createTransfer([
-      { productId: productBId, batchId: batchBId, quantity: 1.5 },
+      { productId: productBId, batchId: batchBId, quantity: 2 },
       { productId: productAId, batchId: batchAId, quantity: 4 },
     ]);
     expect(created.items).toHaveLength(2);
@@ -247,7 +247,7 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     })).toBe(6);
     expect(await stockService.getBalance({
       productId: productBId, batchId: batchBId, stockLocationId: transferDestinationId,
-    })).toBe(1.5);
+    })).toBe(2);
   });
 
   it('transfere para outro lote do mesmo produto e preserva o total do produto', async () => {
@@ -340,7 +340,7 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     expect(await dataSource.getRepository(MovementEntity).count()).toBe(0);
   });
 
-  it.each([0, -1])('rejeita quantidade invalida na transferencia: %s', async (quantity) => {
+  it.each([0, -1, 0.5])('rejeita quantidade invalida na transferencia: %s', async (quantity) => {
     await seedStock(productAId, batchAId, 10);
     await expect(createTransfer([{ productId: productAId, batchId: batchAId, quantity }]))
       .rejects.toBeInstanceOf(BadRequestException);
@@ -588,7 +588,7 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     expect(await dataSource.getRepository(MovementEntity).count()).toBe(0);
   });
 
-  it.each([0, -1])('rejeita quantidade revisada invalida: %s', async (quantity) => {
+  it.each([0, -1, 0.5])('rejeita quantidade revisada invalida: %s', async (quantity) => {
     await seedStock(productAId, batchAId, 10);
     await expect(createReview([{
       productId: productAId,
@@ -785,7 +785,7 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
 
     it('bloqueia estorno com saldo consumido e faz rollback integral', async () => {
       const entry = await create();
-      await createExit([{ productId: productBId, batchId: batchBId, quantity: 2.5 }]);
+      await createExit([{ productId: productBId, batchId: batchBId, quantity: 3 }]);
       await expect(cancel(entry.id)).rejects.toBeInstanceOf(ConflictException);
       expect((await service.getById(entry.id)).status).toBe(MovementStatus.Effective);
       expect(await stockService.getBalance({

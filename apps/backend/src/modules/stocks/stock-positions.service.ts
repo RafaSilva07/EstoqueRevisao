@@ -226,17 +226,17 @@ export class StockPositionsService {
     if (
       !Number.isFinite(quantity)
       || quantity <= 0
-      || !Number.isInteger(quantity * 1_000_000)
+      || !Number.isInteger(quantity)
     ) {
       throw new BadRequestException({
         code: 'INVALID_STOCK_QUANTITY',
-        message: 'A quantidade deve ser positiva e possuir no maximo 6 casas decimais.',
+        message: 'A quantidade deve ser um numero inteiro positivo.',
       });
     }
   }
 
   private toQuantityUnits(quantity: number): number {
-    return Math.round(quantity * 1_000_000);
+    return quantity;
   }
 
   private async validateReferences(

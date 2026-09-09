@@ -4,7 +4,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsISO8601,
-  IsNumber,
+  IsInt,
   IsOptional,
   IsString,
   IsUUID,
@@ -13,7 +13,6 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { trimString } from '../../../shared/validation/transforms';
-import { HasAtMostDecimalPlaces } from '../../../shared/validation/maximum-decimal-places.decorator';
 
 export class CreateEffectiveMovementItemDto {
   @IsUUID()
@@ -23,9 +22,8 @@ export class CreateEffectiveMovementItemDto {
   batchId!: string;
 
   @Type(() => Number)
-  @IsNumber()
-  @HasAtMostDecimalPlaces(6)
-  @Min(0.000001)
+  @IsInt()
+  @Min(1)
   quantity!: number;
 }
 

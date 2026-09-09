@@ -1,5 +1,9 @@
 export const quantityUnits = (value: string | number): number => (
-  Math.round(Number(value || 0) * 1_000_000)
+  Number(value || 0)
+);
+
+export const isIntegerQuantity = (value: string | number): boolean => (
+  Number.isInteger(quantityUnits(value))
 );
 
 export function calculateDistribution(

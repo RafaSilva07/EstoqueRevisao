@@ -125,10 +125,10 @@ export function InternalTransferPage({
       !selectedPosition
       || !selectedDestinationBatch
       || !destinationId
-      || !Number.isFinite(numericQuantity)
+      || !Number.isInteger(numericQuantity)
       || numericQuantity <= 0
     ) {
-      setError('Selecione origem, destino, lotes e informe uma quantidade positiva.');
+      setError('Selecione origem, destino, lotes e informe uma quantidade inteira positiva.');
       return;
     }
     if (numericQuantity > selectedPosition.quantity) {
@@ -234,7 +234,7 @@ export function InternalTransferPage({
         </label>
         {selectedPosition && <div className="available-balance" role="status"><span>Disponivel em {locationFor(originId)?.name}</span><strong>{selectedPosition.quantity} {selectedPosition.product.defaultUnit}</strong><small>Validade {formatDate(selectedPosition.batch.expirationDate)}</small></div>}
         <label><span>Quantidade <span className="required">*</span></span>
-          <input type="number" min="0.000001" max={selectedPosition?.quantity} step="0.000001" value={quantity} onChange={(event) => setQuantity(event.target.value)} required />
+          <input type="number" min="1" max={selectedPosition?.quantity} step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} required />
         </label>
         <label><span>Lote de destino <span className="required">*</span></span>
           <select value={destinationBatchId} onChange={(event) => setDestinationBatchId(event.target.value)} disabled={!productId} required>

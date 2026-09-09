@@ -40,6 +40,16 @@ describe('CreateInternalTransferDto', () => {
     await expect(errorsFor(CreateInternalTransferDto, payload)).resolves.toHaveLength(0);
   });
 
+  it.each([CreateEffectiveMovementDto, CreateInternalTransferDto])(
+    'rejeita quantidade fracionaria em %p',
+    async (type) => {
+      await expect(errorsFor(type, {
+        ...payload,
+        items: [{ ...payload.items[0], quantity: 1.5 }],
+      })).resolves.not.toHaveLength(0);
+    },
+  );
+
   it('rejeita lote de destino nos contratos de entrada e saida', async () => {
     const errors = await errorsFor(CreateEffectiveMovementDto, payload);
     expect(errors[0]?.children?.[0]?.children?.map((error) => error.property))
