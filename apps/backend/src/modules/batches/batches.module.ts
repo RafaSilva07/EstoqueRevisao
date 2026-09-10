@@ -7,10 +7,12 @@ import { BatchesRepository } from './batches.repository';
 import { BatchesService } from './batches.service';
 import { BatchCodeCodec } from './domain/batch-code.codec';
 
+import { OperationalLotsService } from './operational-lots.service';
+
 @Module({
   imports: [TypeOrmModule.forFeature([BatchEntity]), ProductsModule],
   controllers: [BatchesController],
-  providers: [BatchesRepository, BatchesService, BatchCodeCodec],
-  exports: [BatchesRepository, BatchCodeCodec],
+  providers: [BatchesRepository, BatchesService, BatchCodeCodec, OperationalLotsService],
+  exports: [BatchesRepository, BatchCodeCodec, OperationalLotsService],
 })
 export class BatchesModule {}

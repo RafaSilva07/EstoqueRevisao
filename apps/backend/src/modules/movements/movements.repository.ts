@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository, SelectQueryBuilder } from 'typeorm';
+import { EntityManager, In, Repository, SelectQueryBuilder } from 'typeorm';
+import { ProductEntity } from '../products/entities/product.entity';
 import { MovementQueryDto } from './dto/movement-query.dto';
 import { MovementItemEntity } from './entities/movement-item.entity';
 import { MovementEntity } from './entities/movement.entity';
@@ -16,7 +17,13 @@ export class MovementsRepository {
     return manager.getRepository(MovementEntity).save(movement);
   }
 
-  saveItems(items: MovementItemEntity[], manager: EntityManager): Promise<MovementItemEntity[]> {
+  async saveItems(items: MovementItemEntity[], manager: EntityManager): Promise<MovementItemEntity[]> {
+    const products = await manager.getRepository(ProductEntity).findBy({ id: In([...new Set(items.map((item) => item.productId))]) });
+    const byId = new Map(products.map((product) => [product.id, product]));
+    for (const item of items) {
+      const product = byId.get(item.productId)!;
+      item.productSnapshot = { code: product.code, name: product.name, defaultUnit: product.defaultUnit };
+    }
     return manager.getRepository(MovementItemEntity).save(items);
   }
 

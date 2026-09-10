@@ -25,6 +25,7 @@ export interface Product {
   code: string;
   name: string;
   defaultUnit: string;
+  shelfLifeYears?: number | null;
   active: boolean;
 }
 
@@ -83,6 +84,7 @@ export interface MovementItem {
   batchId: string;
   quantity: number;
   product: Product;
+  productSnapshot?: Pick<Product, 'code' | 'name' | 'defaultUnit'> | null;
   batch: Batch;
   destinationBatchId: string | null;
   destinationBatch: Batch | null;
@@ -138,7 +140,11 @@ export interface MovementReportItem {
   productCode: string;
   productName: string;
   batchCode: string;
+  manufacturingDate: string;
+  expirationDate: string;
   destinationBatchCode: string | null;
+  destinationManufacturingDate: string | null;
+  destinationExpirationDate: string | null;
   quantity: number;
   unit: string;
   reviewDestinations: string;
@@ -162,6 +168,8 @@ export interface ReviewReportItem {
   productCode: string;
   productName: string;
   batchCode: string;
+  manufacturingDate: string;
+  expirationDate: string;
   destination: string;
   quantity: number;
   unit: string;
@@ -202,7 +210,13 @@ export interface StockReportTotals {
 }
 
 interface ErrorEnvelope {
-  error?: { message?: string };
+  error?: { message?: string; code?: string; details?: { expirationKeys?: string[] } };
+}
+
+export class ApiError extends Error {
+  constructor(message: string, readonly code?: string, readonly details?: { expirationKeys?: string[] }) {
+    super(message);
+  }
 }
 
 const configuredUrl: unknown = import.meta.env.VITE_API_URL;
@@ -262,7 +276,7 @@ export class ApiClient {
     });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({})) as ErrorEnvelope;
-      throw new Error(payload.error?.message ?? 'Nao foi possivel concluir a operacao.');
+      throw new ApiError(payload.error?.message ?? 'Nao foi possivel concluir a operacao.', payload.error?.code, payload.error?.details);
     }
     return response.status === 204 ? undefined as T : response.json() as Promise<T>;
   }

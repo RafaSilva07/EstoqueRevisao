@@ -29,11 +29,13 @@ export class ReportsService {
       'Movimentacao', 'Data/hora', 'Tipo', 'Status', 'Responsavel', 'Origem', 'Destino',
       'Produto', 'Lote origem', 'Lote destino', 'Quantidade', 'Unidade', 'Destinos revisao',
       'Cancelada em', 'Cancelada por', 'Motivo cancelamento',
+      'Fabricacao origem', 'Validade origem', 'Fabricacao destino', 'Validade destino',
     ], report.items.map((item) => [
       item.movementId, item.occurredAt, item.type, item.status, item.responsible, item.origin,
       item.destination, `${item.productCode} - ${item.productName}`, item.batchCode,
       item.destinationBatchCode, item.quantity, item.unit, item.reviewDestinations,
       item.canceledAt, item.canceledBy, item.cancellationReason,
+      item.manufacturingDate, item.expirationDate, item.destinationManufacturingDate, item.destinationExpirationDate,
     ]));
   }
 
@@ -47,10 +49,10 @@ export class ReportsService {
     const report = await this.repository.reviews(query, false);
     return this.csv([
       'Movimentacao', 'Data/hora', 'Produto', 'Lote', 'Classificacao', 'Quantidade',
-      'Unidade', 'Responsavel',
+      'Unidade', 'Responsavel', 'Fabricacao', 'Validade',
     ], report.items.map((item) => [
       item.movementId, item.occurredAt, `${item.productCode} - ${item.productName}`,
-      item.batchCode, item.destination, item.quantity, item.unit, item.responsible,
+      item.batchCode, item.destination, item.quantity, item.unit, item.responsible, item.manufacturingDate, item.expirationDate,
     ]));
   }
 

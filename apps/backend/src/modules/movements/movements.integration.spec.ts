@@ -1,3 +1,6 @@
+import { ReportsRepository } from '../reports/reports.repository';
+import { OperationalLotsService } from '../batches/operational-lots.service';
+import { BatchCodeCodec } from '../batches/domain/batch-code.codec';
 import { randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
@@ -32,9 +35,12 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
   beforeAll(async () => {
     dataSource = new DataSource({ type: 'postgres', url: databaseUrl, entities: databaseEntities, migrations: databaseMigrations, migrationsTableName: 'schema_migrations', dropSchema: true, migrationsRun: true, synchronize: false, logging: false });
     await dataSource.initialize();
+    // Exercise the new migration's safe rollback on an empty schema, then reapply.
+    await dataSource.undoLastMigration();
+    await dataSource.runMigrations();
     const locations = new StockLocationsRepository(dataSource.getRepository(StockLocationEntity));
     stockService = new StockPositionsService(new StockPositionsRepository(dataSource.getRepository(StockPositionEntity)), new ProductsRepository(dataSource.getRepository(ProductEntity)), new BatchesRepository(dataSource.getRepository(BatchEntity)), locations);
-    service = new MovementsService(new MovementsRepository(dataSource.getRepository(MovementEntity)), locations, stockService, new AuditService(new AuditRepository(dataSource.getRepository(AuditLogEntity))), dataSource);
+    service = new MovementsService(new MovementsRepository(dataSource.getRepository(MovementEntity)), locations, stockService, new AuditService(new AuditRepository(dataSource.getRepository(AuditLogEntity))), dataSource, new OperationalLotsService(dataSource, new BatchCodeCodec()));
     userId = randomUUID(); productAId = randomUUID(); batchAId = randomUUID(); batchAEmptyId = randomUUID(); productBId = randomUUID(); batchBId = randomUUID();
     await dataSource.query(`INSERT INTO users (id, username, password_hash, status) VALUES ($1, 'movement-integration', '$argon2id$integration-test-placeholder', 'ACTIVE')`, [userId]);
     await dataSource.query(`INSERT INTO products (id, code, name, default_unit, created_by, updated_by) VALUES ($1, 'MOV-A', 'Produto A', 'UN', $3, $3), ($2, 'MOV-B', 'Produto B', 'KG', $3, $3)`, [productAId, productBId, userId]);
@@ -875,4 +881,208 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
       expect((await service.getById(transfer.id)).items[0].destinationBatchId).toBe(batchAEmptyId);
     });
   });
+
+  describe('lote operacional e validades separadas', () => {
+    const metadata = { requestId: randomUUID(), ipAddress: null, userAgent: 'jest' };
+    const lot = { code: 'SOCDNV', manufacturingDate: '2026-08-31', expirationDate: '2029-08-31' };
+    const otherLot = { code: 'COCINV', manufacturingDate: '2026-09-01', expirationDate: '2029-09-01' };
+    let productId: string;
+    beforeEach(async () => {
+      productId = randomUUID();
+      await dataSource.getRepository(ProductEntity).save(Object.assign(new ProductEntity(), {
+        id: productId, code: productId, name: 'Produto operacional', defaultUnit: 'UN',
+        shelfLifeYears: 3, createdById: userId, updatedById: userId,
+      }));
+    });
+    const entry = (expirationDate = lot.expirationDate, confirmedExpirationKeys: string[] = [], quantity = 1000, requestKey = randomUUID()): Promise<MovementEntity> =>
+      service.createExternalEntry({
+        requestKey, originLocationId: originId, destinationLocationId: destinationId,
+        confirmedExpirationKeys, items: [{ productId, lot: { ...lot, expirationDate }, quantity }],
+      }, userId, metadata);
+    const balance = (batchId: string, stockLocationId = destinationId): Promise<number> =>
+      stockService.getBalance({ productId, batchId, stockLocationId });
+    const cancel = (movement: MovementEntity): Promise<MovementEntity> => service.cancel(movement.id, { reason: 'Teste de estorno' }, userId, metadata);
+    const reports = (): ReportsRepository => new ReportsRepository(
+      dataSource.getRepository(MovementItemEntity), dataSource.getRepository(MovementItemDistributionEntity),
+      dataSource.getRepository(StockPositionEntity), dataSource.getRepository(StockLocationEntity),
+    );
+
+    it('confirma validade divergente e consolida apenas a mesma validade', async () => {
+      const first = await entry();
+      const requestKey = randomUUID();
+      await expect(entry('2030-08-31', [], 200, requestKey)).rejects.toMatchObject({
+        response: { code: 'LOT_EXPIRATION_CONFIRMATION_REQUIRED', details: { expirationKeys: [`${productId}:SOCDNV:2029-08-31`] } },
+      });
+      expect(await dataSource.getRepository(MovementEntity).count()).toBe(1);
+      expect(await dataSource.getRepository(BatchEntity).countBy({ productId })).toBe(1);
+      const second = await entry('2030-08-31', [`${productId}:SOCDNV:2029-08-31`], 200, requestKey);
+      await entry('2030-08-31', [`${productId}:SOCDNV:2029-08-31`], 300);
+      expect(second.items[0].batchId).not.toBe(first.items[0].batchId);
+      expect(await balance(first.items[0].batchId)).toBe(1000);
+      expect(await balance(second.items[0].batchId)).toBe(500);
+      expect(await dataSource.getRepository(StockPositionEntity).countBy({ productId })).toBe(2);
+      const report = await reports().stock({ page: 1, limit: 20, productId, expiringWithinDays: 30 }, '2029-09-01');
+      expect(report.items.map((item) => [item.expirationDate, item.quantity, item.expirationStatus])).toEqual([
+        ['2029-08-31', 1000, 'VENCIDO'], ['2030-08-31', 500, 'VALIDO'],
+      ]);
+      const audit = await dataSource.getRepository(AuditLogEntity).findOneByOrFail({ entityId: second.id });
+      expect(audit.newValues).toMatchObject({ confirmedExpirationKeys: [`${productId}:SOCDNV:2029-08-31`] });
+    });
+
+    it('não permite contornar confirmação usando o identificador da variante', async () => {
+      const first = await entry();
+      await entry('2030-08-31', [`${productId}:SOCDNV:2029-08-31`], 200);
+      await expect(service.createExternalEntry({
+        requestKey: randomUUID(), originLocationId: originId, destinationLocationId: destinationId,
+        items: [{ productId, batchId: first.items[0].batchId, quantity: 1 }],
+      }, userId, metadata)).rejects.toMatchObject({ response: { code: 'LOT_EXPIRATION_CONFIRMATION_REQUIRED' } });
+    });
+
+    it('revisa múltiplas validades e produtos sem misturar suas parcelas e estorna', async () => {
+      const first = await entry();
+      const second = await entry('2030-08-31', [`${productId}:SOCDNV:2029-08-31`], 100);
+      await seedStock(productBId, batchBId, 100);
+      const review = await createReview([
+        { productId, batchId: first.items[0].batchId, quantity: 600, distributions: [
+          { destinationLocationId: lataBoaId, quantity: 300 }, { destinationLocationId: varejoId, quantity: 200 },
+          { destinationLocationId: transferDestinationId, quantity: 100 },
+        ] },
+        { productId, batchId: second.items[0].batchId, quantity: 60, distributions: [{ destinationLocationId: lataBoaId, quantity: 60 }] },
+        { productId: productBId, batchId: batchBId, quantity: 50, distributions: [{ destinationLocationId: varejoId, quantity: 50 }] },
+      ]);
+      expect(await Promise.all([destinationId, lataBoaId, varejoId, transferDestinationId].map((id) => balance(first.items[0].batchId, id)))).toEqual([400, 300, 200, 100]);
+      expect(await balance(second.items[0].batchId)).toBe(40);
+      expect(await balance(second.items[0].batchId, lataBoaId)).toBe(60);
+      const report = await reports().reviews({ page: 1, limit: 20, productId });
+      expect(report.totals.reviewedQuantityByUnit).toEqual([{ unit: 'UN', quantity: 660 }]);
+      expect(new Set(report.items.map((item) => item.expirationDate))).toEqual(new Set(['2029-08-31', '2030-08-31']));
+      await cancel(review);
+      expect(await balance(first.items[0].batchId)).toBe(1000);
+      expect(await balance(second.items[0].batchId)).toBe(100);
+      expect(await balance(first.items[0].batchId, lataBoaId)).toBe(0);
+      expect((await service.getById(review.id)).items).toHaveLength(3);
+    });
+
+    it('saída e estorno consomem exclusivamente a validade escolhida', async () => {
+      const first = await entry();
+      const second = await entry('2030-08-31', [`${productId}:SOCDNV:2029-08-31`], 100);
+      const exit = await createExit([{ productId, batchId: second.items[0].batchId, quantity: 80 }]);
+      expect(await balance(first.items[0].batchId)).toBe(1000);
+      expect(await balance(second.items[0].batchId)).toBe(20);
+      await expect(cancel(second)).rejects.toBeInstanceOf(ConflictException);
+      await cancel(exit);
+      await cancel(second);
+      expect(await balance(second.items[0].batchId)).toBe(0);
+      expect(await balance(first.items[0].batchId)).toBe(1000);
+      await expect(cancel(second)).rejects.toMatchObject({ response: { code: 'MOVEMENT_ALREADY_CANCELED' } });
+    });
+
+    it('transferência cria lote inline e estorno restaura origem e datas exatas', async () => {
+      const first = await entry();
+      const transfer = await service.createInternalTransfer({
+        requestKey: randomUUID(), originLocationId: destinationId, destinationLocationId: destinationId,
+        items: [{ productId, batchId: first.items[0].batchId, destinationLot: otherLot, quantity: 200 }],
+      }, userId, metadata);
+      expect(await balance(first.items[0].batchId)).toBe(800);
+      expect(await balance(transfer.items[0].destinationBatchId!)).toBe(200);
+      expect(transfer.items[0].destinationBatch).toMatchObject(otherLot);
+      await cancel(transfer);
+      expect(await balance(first.items[0].batchId)).toBe(1000);
+      expect(await balance(transfer.items[0].destinationBatchId!)).toBe(0);
+      expect((await service.getById(transfer.id)).items[0].destinationBatch).toMatchObject(otherLot);
+      await expect(service.createInternalTransfer({
+        requestKey: randomUUID(), originLocationId: destinationId, destinationLocationId: destinationId,
+        items: [{ productId, batchId: first.items[0].batchId, destinationLot: lot, quantity: 1 }],
+      }, userId, metadata)).rejects.toMatchObject({ response: { code: 'TRANSFER_WITHOUT_CHANGE' } });
+    });
+
+    it('bloqueia validade divergente na transferência até confirmação explícita', async () => {
+      const first = await entry();
+      const payload = {
+        requestKey: randomUUID(), originLocationId: destinationId, destinationLocationId: transferDestinationId,
+        items: [{ productId, batchId: first.items[0].batchId, destinationLot: { ...lot, expirationDate: '2030-08-31' }, quantity: 20 }],
+      };
+      await expect(service.createInternalTransfer(payload, userId, metadata)).rejects.toMatchObject({ response: { code: 'LOT_EXPIRATION_CONFIRMATION_REQUIRED' } });
+      const transfer = await service.createInternalTransfer({ ...payload, confirmedExpirationKeys: [`${productId}:SOCDNV:2029-08-31`] }, userId, metadata);
+      expect(await balance(first.items[0].batchId)).toBe(980);
+      expect(await balance(transfer.items[0].destinationBatchId!, transferDestinationId)).toBe(20);
+      await cancel(transfer);
+      expect(await balance(first.items[0].batchId)).toBe(1000);
+    });
+
+    it('rollback remove lote recém-resolvido quando estoque ou auditoria falha', async () => {
+      const first = await entry();
+      const payload = {
+        requestKey: randomUUID(), originLocationId: destinationId, destinationLocationId: transferDestinationId,
+        items: [{ productId, batchId: first.items[0].batchId, destinationLot: otherLot, quantity: 1001 }],
+      };
+      await expect(service.createInternalTransfer(payload, userId, metadata)).rejects.toBeInstanceOf(ConflictException);
+      expect(await dataSource.getRepository(BatchEntity).countBy({ productId })).toBe(1);
+      expect(await balance(first.items[0].batchId)).toBe(1000);
+      const auditSpy = jest.spyOn(AuditService.prototype, 'record').mockRejectedValueOnce(new Error('audit unavailable'));
+      try {
+        await expect(service.createInternalTransfer({ ...payload, items: [{ ...payload.items[0], quantity: 10 }] }, userId, metadata)).rejects.toThrow('audit unavailable');
+      } finally { auditSpy.mockRestore(); }
+      expect(await dataSource.getRepository(BatchEntity).countBy({ productId })).toBe(1);
+      expect(await dataSource.getRepository(MovementEntity).count()).toBe(1);
+      expect(await balance(first.items[0].batchId)).toBe(1000);
+    });
+
+    it('concorrência resolve a mesma variante uma vez e mantém idempotência', async () => {
+      const [first, second] = await Promise.all([entry(), entry()]);
+      expect(first.items[0].batchId).toBe(second.items[0].batchId);
+      expect(await balance(first.items[0].batchId)).toBe(2000);
+      const requestKey = randomUUID();
+      const results = await Promise.all([entry(lot.expirationDate, [], 10, requestKey), entry(lot.expirationDate, [], 10, requestKey)]);
+      expect(results[0].id).toBe(results[1].id);
+      expect(await balance(first.items[0].batchId)).toBe(2010);
+    });
+
+    it('resolução de lote não bloqueia locks de FK usados por outras operações', async () => {
+      const runner = dataSource.createQueryRunner();
+      await runner.connect();
+      await runner.startTransaction();
+      const repository = new MovementsRepository(dataSource.getRepository(MovementEntity));
+      const originalSave = repository.save.bind(repository);
+      // At save(), product resolution has acquired its lock but stock is not updated yet.
+      const spy = jest.spyOn(MovementsRepository.prototype, 'save').mockImplementation(async (movement, manager) => {
+        await runner.query('SELECT id FROM products WHERE id = $1 FOR KEY SHARE NOWAIT', [productId]);
+        return originalSave(movement, manager);
+      });
+      try {
+        await expect(entry()).resolves.toBeDefined();
+      } finally {
+        spy.mockRestore();
+        await runner.rollbackTransaction();
+        await runner.release();
+      }
+    });
+
+    it('duas validades novas na mesma operação podem ser confirmadas após rollback', async () => {
+      const payload = {
+        requestKey: randomUUID(), originLocationId: originId, destinationLocationId: destinationId,
+        items: [{ productId, lot, quantity: 10 }, { productId, lot: { ...lot, expirationDate: '2030-08-31' }, quantity: 20 }],
+      };
+      await expect(service.createExternalEntry(payload, userId, metadata)).rejects.toMatchObject({ response: { code: 'LOT_EXPIRATION_CONFIRMATION_REQUIRED' } });
+      expect(await dataSource.getRepository(BatchEntity).countBy({ productId })).toBe(0);
+      const movement = await service.createExternalEntry({ ...payload, confirmedExpirationKeys: [`${productId}:SOCDNV:2029-08-31`] }, userId, metadata);
+      expect(movement.items).toHaveLength(2);
+      expect(await dataSource.getRepository(StockPositionEntity).countBy({ productId })).toBe(2);
+    });
+
+    it('alterar produto não reescreve datas ou dados já confirmados', async () => {
+      const first = await entry();
+      await dataSource.getRepository(ProductEntity).update(productId, { name: 'Descrição nova', defaultUnit: 'CX', shelfLifeYears: 5 });
+      const historical = await service.getById(first.id);
+      expect(historical.items[0].batch).toMatchObject(lot);
+      expect(historical.items[0].productSnapshot).toMatchObject({ name: 'Produto operacional', defaultUnit: 'UN' });
+      const report = await reports().movements({ page: 1, limit: 20, productId, product: 'Produto operacional' });
+      expect(report.items[0]).toMatchObject({ productName: 'Produto operacional', unit: 'UN', expirationDate: lot.expirationDate });
+      expect(report.totals.effectiveQuantityByUnit).toEqual([{ unit: 'UN', quantity: 1000 }]);
+      const preview = await new OperationalLotsService(dataSource, new BatchCodeCodec()).preview({ productId, code: lot.code });
+      expect(preview.suggestedExpirationDate).toBe('2031-08-31');
+      await expect(dataSource.getRepository(BatchEntity).update(first.items[0].batchId, { expirationDate: '2035-01-01' })).rejects.toMatchObject({ driverError: { code: '23514' } });
+    });
+  });
+
 });

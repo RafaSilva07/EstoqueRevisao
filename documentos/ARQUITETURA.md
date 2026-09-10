@@ -26,7 +26,7 @@ apps/
       users/         usuários, perfis e permissões
       audit/         auditoria persistente
       products/      produtos e conversões
-      batches/       lotes e código CONSERVADI
+      batches/       variantes operacionais imutáveis e codec CONSERVADI
       stocks/        locais e posições de estoque
       movements/     operações e histórico
       reports/       consultas operacionais e exportação CSV
@@ -56,11 +56,12 @@ Evite abstrações prematuras. Uma regra compartilhada deve ser extraída quando
 - `users`, `roles`, `permissions`, `user_roles`, `role_permissions`: identidade e autorização.
 - `auth_sessions`: refresh tokens e revogação de sessão.
 - `audit_logs`: trilha técnica/administrativa persistente.
-- `products`, `product_unit_conversions`, `batches`: cadastros de produto e lote.
+- `products`, `product_unit_conversions`: cadastro mestre e conversões. Produto possui `shelf_life_years`, obrigatório em novas criações da API e nulo apenas para legados ainda não configurados.
+- `batches`: referências internas imutáveis de produto/código/fabricação/validade; unicidade por produto + código normalizado + validade, sem cadastro mestre público.
 - `stock_locations`: locais lógicos hierárquicos e configuração da revisão.
-- `stock_positions`: saldo materializado por produto, lote e local.
+- `stock_positions`: saldo materializado por produto, variante de lote/validade e local. O `batch_id` identifica a validade; as chaves de saldo e os serviços atômicos existentes permanecem.
 - `movements`: cabeçalho, estado e metadados de cancelamento.
-- `movement_items`: produto, lote de origem, lote de destino quando aplicável e quantidade.
+- `movement_items`: produto, referências imutáveis de lote/datas de origem e destino, quantidade e `product_snapshot` de código/descrição/unidade nas novas operações. Legados não recebem snapshots inventados.
 - `movement_item_distributions`: destinos e parcelas de itens revisados.
 
 UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o histórico deve ser preservado. O banco aplica checks, unicidades e chaves compostas para impedir dados incompatíveis.
@@ -69,6 +70,8 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 
 - `synchronize` é desativado; toda evolução do schema ocorre por migration versionada.
 - Operações críticas recebem um único `EntityManager` e confirmam documento, saldo e auditoria juntos.
+- Resolução/criação de lotes usa `OperationalLotsService` dentro do `EntityManager` da movimentação. Locks `FOR NO KEY UPDATE` de produtos são adquiridos em ordem antes dos locks de saldo, compatíveis com os locks de FK usados por revisão/estorno; índice único evita variantes duplicadas. A identidade dos lotes também é protegida por trigger contra edição.
+- Divergências de validade retornam `LOT_EXPIRATION_CONFIRMATION_REQUIRED` (409), com mensagem operacional e `details.expirationKeys`. O reenvio usa `confirmedExpirationKeys` vinculadas a produto/código/data e a mesma `requestKey`; o aceite fica na auditoria. Chaves estáveis permitem confirmar inclusive duas validades novas após rollback.
 - Adição de saldo usa UPSERT atômico.
 - Remoção usa `UPDATE` condicionado a `quantity >= requested`.
 - Transferências e distribuições bloqueiam posições com `pessimistic_write` em ordem determinística.
@@ -97,12 +100,12 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 - Guards globais exigem autenticação e permissões; rotas públicas usam declaração explícita.
 - O perfil inicial `ADMIN` recebe as permissões criadas pelas migrations. Perfis adicionais não devem ser presumidos.
 
-Permissões atuais:
+Permissões usadas pelas rotas atuais (as antigas `batches.create`/`batches.update` permanecem apenas nos registros de perfis existentes, sem endpoints associados):
 
 ```text
 products.read / products.create / products.update
 product-conversions.read / product-conversions.create / product-conversions.update
-batches.read / batches.create / batches.update
+batches.read
 stocks.read / stocks.create / stocks.update
 stock-positions.read
 movements.read / movements.create / movements.cancel
@@ -132,7 +135,7 @@ movements.read / movements.create / movements.cancel
 - Formulários possuem feedback de carregamento, erro, sucesso, estados vazios e confirmação para ações críticas.
 - Ações são ocultadas conforme permissões, mas a proteção definitiva permanece no backend.
 - A área Relatórios usa cards/listas no celular e reutiliza `movements.read` e `stock-positions.read`, sem criar permissões redundantes.
-- Componentes compartilhados atuais incluem cabeçalho de página, avisos, loading, estado vazio, confirmação e criação rápida de lote.
+- Componentes compartilhados atuais incluem cabeçalho de página, avisos, loading, estado vazio, confirmação, campos operacionais de lote/datas e envio idempotente com confirmação de validade divergente.
 
 ## Testes e critérios de mudança
 

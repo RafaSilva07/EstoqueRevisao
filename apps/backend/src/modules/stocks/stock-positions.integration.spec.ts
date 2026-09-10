@@ -75,8 +75,8 @@ describeWithDatabase('StockPositionsService (PostgreSQL)', () => {
   });
 
   it('mantem uma unica posicao e acumula adicoes atomicas', async () => {
-    await dataSource.transaction((manager) => service.addQuantity(key, 4.5, manager));
-    await dataSource.transaction((manager) => service.addQuantity(key, 5.5, manager));
+    await dataSource.transaction((manager) => service.addQuantity(key, 4, manager));
+    await dataSource.transaction((manager) => service.addQuantity(key, 6, manager));
 
     expect(await service.getBalance(key)).toBe(10);
     expect(await dataSource.getRepository(StockPositionEntity).count()).toBe(1);
@@ -89,11 +89,11 @@ describeWithDatabase('StockPositionsService (PostgreSQL)', () => {
 
   it('remove saldo valido e rejeita saldo insuficiente sem alterar a posicao', async () => {
     await dataSource.transaction((manager) => service.addQuantity(key, 10, manager));
-    await dataSource.transaction((manager) => service.removeQuantity(key, 3.25, manager));
+    await dataSource.transaction((manager) => service.removeQuantity(key, 4, manager));
 
     await expect(dataSource.transaction((manager) => service.removeQuantity(key, 7, manager)))
       .rejects.toBeInstanceOf(ConflictException);
-    expect(await service.getBalance(key)).toBe(6.75);
+    expect(await service.getBalance(key)).toBe(6);
   });
 
   it('reverte a alteracao quando a transacao externa falha', async () => {

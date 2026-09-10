@@ -33,6 +33,8 @@ export class BatchesRepository {
     return builder
       .orderBy('product.name', 'ASC')
       .addOrderBy('batch.code', 'ASC')
+      .addOrderBy('batch.expirationDate', 'ASC')
+      .addOrderBy('batch.id', 'ASC')
       .skip((query.page - 1) * query.limit)
       .take(query.limit)
       .getManyAndCount();

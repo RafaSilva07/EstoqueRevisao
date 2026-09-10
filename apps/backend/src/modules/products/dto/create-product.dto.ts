@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsString, MaxLength, MinLength } from 'class-validator';
+import { IsInt, Min, IsString, MaxLength, MinLength } from 'class-validator';
 import { trimString, uppercaseString } from '../../../shared/validation/transforms';
 
 export class CreateProductDto {
@@ -20,4 +20,8 @@ export class CreateProductDto {
   @MinLength(1)
   @MaxLength(20)
   defaultUnit!: string;
+
+  @IsInt()
+  @Min(1)
+  shelfLifeYears!: number;
 }

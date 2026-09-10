@@ -45,6 +45,7 @@ export class ProductsService {
       product.code = dto.code;
       product.name = dto.name;
       product.defaultUnit = dto.defaultUnit;
+      product.shelfLifeYears = dto.shelfLifeYears;
       product.active = true;
       product.createdById = userId;
       product.updatedById = userId;
@@ -99,6 +100,7 @@ export class ProductsService {
       product.code = dto.code ?? product.code;
       product.name = dto.name ?? product.name;
       product.defaultUnit = dto.defaultUnit ?? product.defaultUnit;
+      product.shelfLifeYears = dto.shelfLifeYears ?? product.shelfLifeYears;
       product.updatedById = userId;
 
       try {
@@ -160,6 +162,7 @@ export class ProductsService {
       code: product.code,
       name: product.name,
       defaultUnit: product.defaultUnit,
+      shelfLifeYears: product.shelfLifeYears,
       active: product.active,
     };
   }

@@ -29,7 +29,7 @@ describe('ProductsService', () => {
     repository.save.mockImplementation((product: ProductEntity) => Promise.resolve(product));
 
     const product = await service.create(
-      { code: 'P001', name: 'Produto teste', defaultUnit: 'UN' },
+      { code: 'P001', name: 'Produto teste', defaultUnit: 'UN', shelfLifeYears: 3 },
       '10000000-0000-4000-8000-000000000001',
       { requestId: 'request-1', ipAddress: null, userAgent: null },
     );

@@ -1,3 +1,4 @@
+import { OperationalLotsService } from '../batches/operational-lots.service';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
@@ -13,7 +14,10 @@ import { MovementsRepository } from './movements.repository';
 import { MovementsService } from './movements.service';
 
 describe('MovementsService', () => {
-  const manager = {} as EntityManager;
+  const findBatch = jest.fn(({ id }: { id: string }) => Promise.resolve({ id, code: id }));
+  const lockQuery = { where: jest.fn().mockReturnThis(), setLock: jest.fn().mockReturnThis(), getOne: jest.fn() };
+  const manager = { getRepository: () => ({ findOneBy: findBatch, createQueryBuilder: (): typeof lockQuery => lockQuery }) } as unknown as EntityManager;
+  const lots = { resolveExistingInTransaction: jest.fn() };
   const originId = '10000000-0000-4000-8000-000000000006';
   const destinationId = '10000000-0000-4000-8000-000000000002';
   const userId = '40000000-0000-4000-8000-000000000001';
@@ -30,7 +34,7 @@ describe('MovementsService', () => {
   const stock = { addQuantity: jest.fn(), removeQuantity: jest.fn(), transferQuantity: jest.fn(), distributeQuantity: jest.fn(), restoreDistributedQuantity: jest.fn() };
   const audit = { record: jest.fn() };
   const dataSource = { transaction: jest.fn((operation: (value: EntityManager) => unknown) => operation(manager)) };
-  const service = new MovementsService(repository as unknown as MovementsRepository, locations as unknown as StockLocationsRepository, stock as unknown as StockPositionsService, audit as unknown as AuditService, dataSource as unknown as DataSource);
+  const service = new MovementsService(repository as unknown as MovementsRepository, locations as unknown as StockLocationsRepository, stock as unknown as StockPositionsService, audit as unknown as AuditService, dataSource as unknown as DataSource, lots as unknown as OperationalLotsService);
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -481,7 +485,7 @@ describe('MovementsService', () => {
         ...transferDto,
         items: [{
           ...transferDto.items[0],
-          destinationBatchId: undefined as unknown as string,
+          destinationBatchId: undefined,
         }],
       }, userId, {
         requestId: transferDto.requestKey, ipAddress: null, userAgent: null,

@@ -56,14 +56,18 @@ export class ReportsRepository {
       .addSelect('destination.id', 'destinationLocationId')
       .addSelect(`COALESCE(destination.name, 'Varios destinos')`, 'destination')
       .addSelect('product.id', 'productId')
-      .addSelect('product.code', 'productCode')
-      .addSelect('product.name', 'productName')
+      .addSelect(`COALESCE(item.product_snapshot->>'code', product.code)`, 'productCode')
+      .addSelect(`COALESCE(item.product_snapshot->>'name', product.name)`, 'productName')
       .addSelect('batch.id', 'batchId')
       .addSelect('batch.code', 'batchCode')
+      .addSelect('batch.manufacturingDate', 'manufacturingDate')
+      .addSelect('batch.expirationDate', 'expirationDate')
       .addSelect('destinationBatch.id', 'destinationBatchId')
       .addSelect('destinationBatch.code', 'destinationBatchCode')
+      .addSelect('destinationBatch.manufacturingDate', 'destinationManufacturingDate')
+      .addSelect('destinationBatch.expirationDate', 'destinationExpirationDate')
       .addSelect('item.quantity', 'quantity')
-      .addSelect('product.defaultUnit', 'unit')
+      .addSelect(`COALESCE(item.product_snapshot->>'defaultUnit', product.default_unit)`, 'unit')
       .addSelect(`(
         SELECT COALESCE(string_agg(report_location.name, ' | ' ORDER BY report_location.name), '')
         FROM movement_item_distributions report_distribution
@@ -93,11 +97,11 @@ export class ReportsRepository {
         'canceledMovements',
       );
     const unitsBuilder = this.applyMovementFilters(this.movementBuilder(), query)
-      .select('product.defaultUnit', 'unit')
+      .select(`COALESCE(item.product_snapshot->>'defaultUnit', product.default_unit)`, 'unit')
       .addSelect('COALESCE(SUM(item.quantity), 0)', 'quantity')
       .andWhere('movement.status = :effectiveStatus', { effectiveStatus: MovementStatus.Effective })
-      .groupBy('product.defaultUnit')
-      .orderBy('product.defaultUnit', 'ASC');
+      .groupBy(`COALESCE(item.product_snapshot->>'defaultUnit', product.default_unit)`)
+      .orderBy(`COALESCE(item.product_snapshot->>'defaultUnit', product.default_unit)`, 'ASC');
 
     const [rawRows, summary, rawUnits] = await Promise.all([
       rowsBuilder.getRawMany<RawValues>(),
@@ -127,19 +131,22 @@ export class ReportsRepository {
       .addSelect('movement.id', 'movementId')
       .addSelect('movement.occurredAt', 'occurredAt')
       .addSelect('product.id', 'productId')
-      .addSelect('product.code', 'productCode')
-      .addSelect('product.name', 'productName')
+      .addSelect(`COALESCE(item.product_snapshot->>'code', product.code)`, 'productCode')
+      .addSelect(`COALESCE(item.product_snapshot->>'name', product.name)`, 'productName')
       .addSelect('batch.id', 'batchId')
       .addSelect('batch.code', 'batchCode')
+      .addSelect('batch.manufacturingDate', 'manufacturingDate')
+      .addSelect('batch.expirationDate', 'expirationDate')
       .addSelect('destination.id', 'destinationLocationId')
       .addSelect('destination.name', 'destination')
       .addSelect('distribution.quantity', 'quantity')
-      .addSelect('product.defaultUnit', 'unit')
+      .addSelect(`COALESCE(item.product_snapshot->>'defaultUnit', product.default_unit)`, 'unit')
       .addSelect('responsible.username', 'responsible')
       .orderBy('movement.occurredAt', 'DESC')
       .addOrderBy('movement.id', 'ASC')
-      .addOrderBy('product.name', 'ASC')
-      .addOrderBy('destination.name', 'ASC');
+      .addOrderBy(`COALESCE(item.product_snapshot->>'name', product.name)`, 'ASC')
+      .addOrderBy('destination.name', 'ASC')
+      .addOrderBy('distribution.id', 'ASC');
     if (paginated) {
       rowsBuilder.offset((query.page - 1) * query.limit).limit(query.limit);
     }
@@ -147,15 +154,15 @@ export class ReportsRepository {
       .select('destination.id', 'destinationLocationId')
       .addSelect('destination.code', 'destinationCode')
       .addSelect('destination.name', 'destination')
-      .addSelect('product.defaultUnit', 'unit')
+      .addSelect(`COALESCE(item.product_snapshot->>'defaultUnit', product.default_unit)`, 'unit')
       .addSelect('COUNT(distribution.id)', 'rows')
       .addSelect('COALESCE(SUM(distribution.quantity), 0)', 'quantity')
       .groupBy('destination.id')
       .addGroupBy('destination.code')
       .addGroupBy('destination.name')
-      .addGroupBy('product.defaultUnit')
+      .addGroupBy(`COALESCE(item.product_snapshot->>'defaultUnit', product.default_unit)`)
       .orderBy('destination.name', 'ASC')
-      .addOrderBy('product.defaultUnit', 'ASC');
+      .addOrderBy(`COALESCE(item.product_snapshot->>'defaultUnit', product.default_unit)`, 'ASC');
 
     const classificationsBuilder = this.stockLocations.createQueryBuilder('classification')
       .select('classification.id', 'destinationLocationId')
@@ -243,7 +250,8 @@ export class ReportsRepository {
       })
       .orderBy('batch.expirationDate', 'ASC')
       .addOrderBy('product.name', 'ASC')
-      .addOrderBy('location.name', 'ASC');
+      .addOrderBy('location.name', 'ASC')
+      .addOrderBy('position.id', 'ASC');
     if (paginated) {
       rowsBuilder.offset((query.page - 1) * query.limit).limit(query.limit);
     }
@@ -289,7 +297,7 @@ export class ReportsRepository {
     if (query.dateTo) builder.andWhere('movement.occurredAt <= :dateTo', { dateTo: query.dateTo });
     if (query.type) builder.andWhere('movement.type = :type', { type: query.type });
     if (query.productId) builder.andWhere('item.productId = :productId', { productId: query.productId });
-    if (query.product) builder.andWhere('(product.code ILIKE :product OR product.name ILIKE :product)', { product: `%${query.product}%` });
+    if (query.product) builder.andWhere(`(COALESCE(item.product_snapshot->>'code', product.code) ILIKE :product OR COALESCE(item.product_snapshot->>'name', product.name) ILIKE :product)`, { product: `%${query.product}%` });
     if (query.batchId) builder.andWhere('item.batchId = :batchId', { batchId: query.batchId });
     if (query.batch) builder.andWhere('batch.code ILIKE :batch', { batch: `%${query.batch}%` });
     if (query.originLocationId) builder.andWhere('movement.originLocationId = :originLocationId', { originLocationId: query.originLocationId });
@@ -341,7 +349,7 @@ export class ReportsRepository {
     if (query.dateFrom) builder.andWhere('movement.occurredAt >= :dateFrom', { dateFrom: query.dateFrom });
     if (query.dateTo) builder.andWhere('movement.occurredAt <= :dateTo', { dateTo: query.dateTo });
     if (query.productId) builder.andWhere('item.productId = :productId', { productId: query.productId });
-    if (query.product) builder.andWhere('(product.code ILIKE :product OR product.name ILIKE :product)', { product: `%${query.product}%` });
+    if (query.product) builder.andWhere(`(COALESCE(item.product_snapshot->>'code', product.code) ILIKE :product OR COALESCE(item.product_snapshot->>'name', product.name) ILIKE :product)`, { product: `%${query.product}%` });
     if (query.batchId) builder.andWhere('item.batchId = :batchId', { batchId: query.batchId });
     if (query.batch) builder.andWhere('batch.code ILIKE :batch', { batch: `%${query.batch}%` });
     if (query.destinationLocationId) builder.andWhere('distribution.destinationLocationId = :destinationLocationId', { destinationLocationId: query.destinationLocationId });
@@ -399,6 +407,9 @@ export class ReportsRepository {
       destinationLocationId: this.nullableString(row.destinationLocationId), destination: this.string(row.destination),
       productId: this.string(row.productId), productCode: this.string(row.productCode), productName: this.string(row.productName),
       batchId: this.string(row.batchId), batchCode: this.string(row.batchCode),
+      manufacturingDate: this.civilDate(row.manufacturingDate), expirationDate: this.civilDate(row.expirationDate),
+      destinationManufacturingDate: row.destinationManufacturingDate ? this.civilDate(row.destinationManufacturingDate) : null,
+      destinationExpirationDate: row.destinationExpirationDate ? this.civilDate(row.destinationExpirationDate) : null,
       destinationBatchId: this.nullableString(row.destinationBatchId), destinationBatchCode: this.nullableString(row.destinationBatchCode),
       quantity: this.number(row.quantity), unit: this.string(row.unit), reviewDestinations: this.string(row.reviewDestinations),
       canceledAt: row.canceledAt ? this.iso(row.canceledAt) : null,
@@ -411,6 +422,7 @@ export class ReportsRepository {
       distributionId: this.string(row.distributionId), movementId: this.string(row.movementId), occurredAt: this.iso(row.occurredAt),
       productId: this.string(row.productId), productCode: this.string(row.productCode), productName: this.string(row.productName),
       batchId: this.string(row.batchId), batchCode: this.string(row.batchCode),
+      manufacturingDate: this.civilDate(row.manufacturingDate), expirationDate: this.civilDate(row.expirationDate),
       destinationLocationId: this.string(row.destinationLocationId), destination: this.string(row.destination),
       quantity: this.number(row.quantity), unit: this.string(row.unit), responsible: this.string(row.responsible),
     };

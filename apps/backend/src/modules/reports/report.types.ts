@@ -31,8 +31,12 @@ export interface MovementReportItem {
   productName: string;
   batchId: string;
   batchCode: string;
+  manufacturingDate: string;
+  expirationDate: string;
   destinationBatchId: string | null;
   destinationBatchCode: string | null;
+  destinationManufacturingDate: string | null;
+  destinationExpirationDate: string | null;
   quantity: number;
   unit: string;
   reviewDestinations: string;
@@ -58,6 +62,8 @@ export interface ReviewReportItem {
   productName: string;
   batchId: string;
   batchCode: string;
+  manufacturingDate: string;
+  expirationDate: string;
   destinationLocationId: string;
   destination: string;
   quantity: number;

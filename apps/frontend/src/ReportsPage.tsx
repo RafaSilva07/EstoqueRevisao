@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, MovementReportItem, MovementReportTotals, ReportResult } from './api';
 import { EmptyState, FilterPanel, LoadingState, Notice, PageHeader } from './components';
-import { formatDateTime } from './format';
+import { formatDate, formatDateTime } from './format';
 import { ReportNavigation } from './ReportNavigation';
 import { buildReportQuery, formatQuantities, ReportFilters } from './report-utils';
 
@@ -116,7 +116,7 @@ function MovementResults({ items }: { items: MovementReportItem[] }) {
       <tbody>{items.map((item) => <tr key={item.itemId}>
         <td data-label="Data">{formatDateTime(item.occurredAt)}</td>
         <td data-label="Tipo">{movementLabels[item.type]}</td>
-        <td data-label="Produto/lote"><strong>{item.productCode} - {item.productName}</strong><small className="cell-note">Lote {item.batchCode}{item.destinationBatchCode ? ` para ${item.destinationBatchCode}` : ''}</small></td>
+        <td data-label="Produto/lote"><strong>{item.productCode} - {item.productName}</strong><small className="cell-note">Lote {item.batchCode}</small><small className="cell-note">Fabricação {formatDate(item.manufacturingDate)} · validade {formatDate(item.expirationDate)}</small>{item.destinationBatchCode && <small className="cell-note">Destino: {item.destinationBatchCode} · fabricação {formatDate(item.destinationManufacturingDate ?? '')} · validade {formatDate(item.destinationExpirationDate ?? '')}</small>}</td>
         <td data-label="Origem/destino">{item.origin}<small className="cell-note">para {item.reviewDestinations || item.destination}</small></td>
         <td data-label="Quantidade" className="quantity">{item.quantity.toLocaleString('pt-BR')} {item.unit}</td>
         <td data-label="Status"><span className={`badge ${item.status === 'EFETIVADA' ? 'active' : 'canceled'}`}>{item.status === 'EFETIVADA' ? 'Efetivada' : 'Cancelada'}</span><small className="cell-note">{item.responsible}</small></td>

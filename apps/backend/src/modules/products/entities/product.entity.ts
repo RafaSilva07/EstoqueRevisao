@@ -27,6 +27,9 @@ export class ProductEntity {
   @Column({ name: 'default_unit', type: 'varchar', length: 20 })
   defaultUnit!: string;
 
+  @Column({ name: 'shelf_life_years', type: 'integer', nullable: true })
+  shelfLifeYears!: number | null;
+
   @Column({ type: 'boolean', default: true })
   active = true;
 

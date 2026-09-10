@@ -29,6 +29,9 @@ export class MovementItemEntity {
   @JoinColumn({ name: 'product_id' })
   product!: ProductEntity;
 
+  @Column({ name: 'product_snapshot', type: 'jsonb', nullable: true })
+  productSnapshot!: { code: string; name: string; defaultUnit: string } | null;
+
   @Column({ name: 'batch_id', type: 'uuid' })
   batchId!: string;
 

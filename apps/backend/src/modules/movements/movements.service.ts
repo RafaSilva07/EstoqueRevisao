@@ -10,6 +10,11 @@ import { StockLocationsRepository } from '../stocks/stock-locations.repository';
 import { StockPositionsService } from '../stocks/stock-positions.service';
 import { MovementStatus } from './domain/movement-status.enum';
 import { MovementType } from './domain/movement-type.enum';
+import { BatchEntity } from '../batches/entities/batch.entity';
+import { ProductEntity } from '../products/entities/product.entity';
+import { OperationalLotsService } from '../batches/operational-lots.service';
+import { OperationalLotDto } from '../batches/dto/operational-lot.dto';
+import { CreateExternalEntryDto } from './dto/create-external-entry.dto';
 import { CreateEffectiveMovementDto } from './dto/create-effective-movement.dto';
 import { CancelMovementDto } from './dto/cancel-movement.dto';
 import { CreateInternalTransferDto } from './dto/create-internal-transfer.dto';
@@ -22,10 +27,13 @@ import { MovementsRepository } from './movements.repository';
 
 type EffectiveMovementItem = CreateEffectiveMovementDto['items'][number] & {
   destinationBatchId?: string;
+  lot?: OperationalLotDto;
+  destinationLot?: OperationalLotDto;
 };
 
 type EffectiveMovementDto = Omit<CreateEffectiveMovementDto, 'items'> & {
   items: EffectiveMovementItem[];
+  confirmedExpirationKeys?: string[];
 };
 
 interface EffectiveMovementRules {
@@ -54,6 +62,7 @@ export class MovementsService {
     private readonly stockPositions: StockPositionsService,
     private readonly audit: AuditService,
     private readonly dataSource: DataSource,
+    private readonly operationalLots: OperationalLotsService,
   ) {}
 
   async list(query: MovementQueryDto): Promise<PaginatedResult<MovementEntity>> {
@@ -128,11 +137,11 @@ export class MovementsService {
   }
 
   createExternalEntry(
-    dto: CreateEffectiveMovementDto,
+    dto: CreateExternalEntryDto,
     userId: string,
     metadata: AuditRequestMetadata,
   ): Promise<MovementEntity> {
-    return this.createEffectiveMovement(dto, userId, metadata, {
+    return this.createEffectiveMovement({ ...dto, items: dto.items.map((item) => ({ ...item, batchId: item.batchId ?? '' })) }, userId, metadata, {
       type: MovementType.ExternalEntry,
       auditAction: 'EXTERNAL_ENTRY_CREATE',
       invalidOrigin: {
@@ -146,6 +155,7 @@ export class MovementsService {
       originIsValid: (kind) => kind === StockLocationKind.External,
       destinationIsValid: (kind) => kind !== StockLocationKind.External,
       rejectDuplicateItems: false,
+      deterministicItemOrder: true,
       applyStock: (service, item, movement, manager) => service.addQuantity({
         productId: item.productId,
         batchId: item.batchId,
@@ -348,7 +358,7 @@ export class MovementsService {
     const existing = await this.repository.findByRequestKey(dto.requestKey);
     if (existing) return this.resolveIdempotent(existing, userId, rules.type);
     if (rules.rejectDuplicateItems) this.validateNoDuplicateItems(dto);
-    rules.validateRoute?.(dto);
+    if (!dto.items.some((item) => item.destinationLot)) rules.validateRoute?.(dto);
 
     try {
       const id = await this.dataSource.transaction(async (manager) => {
@@ -361,6 +371,47 @@ export class MovementsService {
         }
         if (!destination?.active || !rules.destinationIsValid(destination.kind)) {
           throw new BadRequestException(rules.invalidDestination);
+        }
+
+        // Resolve all inline lots within the movement transaction. Lock products before stock
+        // rows, in a stable order, so competing entries cannot create duplicate variants.
+        // NO KEY UPDATE stays compatible with FK key-share locks used by reviews/estornos.
+        const inlineItems = dto.items.filter((item) => rules.type === MovementType.ExternalEntry || item.lot || item.destinationLot);
+        if (inlineItems.length) {
+          for (const productId of [...new Set(inlineItems.map((item) => item.productId))].sort()) {
+            await manager.getRepository(ProductEntity).createQueryBuilder('product')
+              .where('product.id = :productId', { productId }).setLock('for_no_key_update').getOne();
+          }
+        }
+        const resolvedItems: EffectiveMovementItem[] = [];
+        for (const item of dto.items) {
+          if (item.lot && item.batchId || item.destinationLot && item.destinationBatchId) {
+            throw new BadRequestException({ code: 'AMBIGUOUS_LOT', message: 'Informe os dados do lote ou selecione uma posição, não ambos.' });
+          }
+          const resolved = { ...item };
+          const lot = item.lot ?? item.destinationLot;
+          if (lot) {
+            const batch = await this.operationalLots.resolveInTransaction(
+              item.productId, lot, userId, dto.confirmedExpirationKeys ?? [], manager,
+            );
+            if (item.lot) resolved.batchId = batch.id;
+            else resolved.destinationBatchId = batch.id;
+          } else if (rules.type === MovementType.ExternalEntry && item.batchId) {
+            await this.operationalLots.resolveExistingInTransaction(item.productId, item.batchId, userId, dto.confirmedExpirationKeys ?? [], manager);
+          }
+          if (!resolved.batchId) throw new BadRequestException({ code: 'LOT_REQUIRED', message: 'Informe lote ou fabricação e validade de todos os itens.' });
+          resolvedItems.push(resolved);
+        }
+        dto = { ...dto, items: resolvedItems };
+        rules.validateRoute?.(dto);
+        if (rules.type === MovementType.InternalTransfer && dto.originLocationId === dto.destinationLocationId) {
+          for (const item of dto.items) {
+            const sourceBatch = await manager.getRepository(BatchEntity).findOneBy({ id: item.batchId });
+            const targetBatch = await manager.getRepository(BatchEntity).findOneBy({ id: item.destinationBatchId });
+            if (sourceBatch && targetBatch && sourceBatch.code === targetBatch.code) {
+              throw new BadRequestException({ code: 'TRANSFER_WITHOUT_CHANGE', message: 'No mesmo local, a transferência deve alterar o lote, não apenas a validade.' });
+            }
+          }
         }
 
         const movement = Object.assign(new MovementEntity(), {
@@ -411,6 +462,7 @@ export class MovementsService {
             occurredAt: movement.occurredAt.toISOString(),
             observation: movement.observation,
             items: effectiveItems,
+            confirmedExpirationKeys: dto.confirmedExpirationKeys ?? [],
           },
         });
         return movement.id;

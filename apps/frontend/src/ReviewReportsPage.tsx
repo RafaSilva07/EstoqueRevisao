@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ReportResult, ReviewReportItem, ReviewReportTotals } from './api';
 import { EmptyState, FilterPanel, LoadingState, Notice, PageHeader } from './components';
-import { formatDateTime } from './format';
+import { formatDate, formatDateTime } from './format';
 import { ReportNavigation } from './ReportNavigation';
 import { buildReportQuery, formatQuantities, ReportFilters } from './report-utils';
 
@@ -107,7 +107,7 @@ function ReviewResults({ items }: { items: ReviewReportItem[] }) {
       <thead><tr><th>Data</th><th>Produto/lote</th><th>Classificacao</th><th>Quantidade</th><th>Responsavel</th></tr></thead>
       <tbody>{items.map((item) => <tr key={item.distributionId}>
         <td data-label="Data">{formatDateTime(item.occurredAt)}</td>
-        <td data-label="Produto/lote"><strong>{item.productCode} - {item.productName}</strong><small className="cell-note">Lote {item.batchCode}</small></td>
+        <td data-label="Produto/lote"><strong>{item.productCode} - {item.productName}</strong><small className="cell-note">Lote {item.batchCode} · fabricação {formatDate(item.manufacturingDate)} · validade {formatDate(item.expirationDate)}</small></td>
         <td data-label="Classificacao"><span className="badge active">{item.destination}</span></td>
         <td data-label="Quantidade" className="quantity">{item.quantity.toLocaleString('pt-BR')} {item.unit}</td>
         <td data-label="Responsavel">{item.responsible}</td>

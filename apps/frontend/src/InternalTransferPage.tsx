@@ -1,8 +1,10 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { api, Batch, Movement, Paginated, Product, StockLocation, StockPosition } from './api';
+import { api, Paginated, Product, StockLocation, StockPosition } from './api';
 import { EmptyState, LoadingState, Modal, Notice, OperationGuide, PageHeader } from './components';
 import { formatDate } from './format';
-import { QuickBatchDialog } from './QuickBatchDialog';
+import { OperationalLotFields } from './OperationalLotFields';
+import { emptyLot, OperationalLot } from './operational-lot';
+import { useMovementSubmission } from './useMovementSubmission';
 
 export interface TransferPrefill {
   originLocationId: string;
@@ -13,7 +15,8 @@ export interface TransferPrefill {
 interface TransferDraftItem {
   key: string;
   position: StockPosition;
-  destinationBatch: Batch;
+  destinationBatch: OperationalLot;
+  destinationBatchId?: string;
   quantity: number;
 }
 
@@ -23,41 +26,39 @@ const messageFrom = (error: unknown) => error instanceof Error
 
 export function InternalTransferPage({
   prefill,
-  canCreateBatch,
   onCreated,
 }: {
   prefill?: TransferPrefill;
-  canCreateBatch: boolean;
   onCreated: (id: string) => void;
 }) {
   const [locations, setLocations] = useState<StockLocation[]>([]);
-  const [batches, setBatches] = useState<Batch[]>([]);
+  const [destinationLot, setDestinationLot] = useState(emptyLot);
+  const [lotReady, setLotReady] = useState(false);
+  const [lotKey, setLotKey] = useState(0);
+  const [changeLot, setChangeLot] = useState(false);
   const [positions, setPositions] = useState<StockPosition[]>([]);
   const [originId, setOriginId] = useState(prefill?.originLocationId ?? '');
   const [destinationId, setDestinationId] = useState('');
   const [productId, setProductId] = useState(prefill?.productId ?? '');
   const [batchId, setBatchId] = useState(prefill?.batchId ?? '');
-  const [destinationBatchId, setDestinationBatchId] = useState(prefill?.batchId ?? '');
+
   const [quantity, setQuantity] = useState('');
   const [observation, setObservation] = useState('');
   const [items, setItems] = useState<TransferDraftItem[]>([]);
-  const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
+  const submission = useMovementSubmission('/movements/internal-transfers', onCreated);
+  const busy = submission.busy;
   const [loading, setLoading] = useState(true);
   const [loadingStock, setLoadingStock] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [quickBatch, setQuickBatch] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       void Promise.all([
         api.get<Paginated<StockLocation>>('/stocks?limit=100&active=true'),
-        api.get<Paginated<Batch>>('/batches?limit=100'),
       ])
-        .then(([locationData, batchData]) => {
+        .then(([locationData]) => {
           setLocations(locationData.items);
-          setBatches(batchData.items);
         })
         .catch((caught) => setError(messageFrom(caught)))
         .finally(() => setLoading(false));
@@ -96,13 +97,10 @@ export function InternalTransferPage({
     return [...unique.values()].sort((left, right) => left.name.localeCompare(right.name));
   }, [positions]);
   const sourcePositions = positions.filter((position) => position.productId === productId);
-  const destinationBatches = batches
-    .filter((batch) => batch.productId === productId)
-    .sort((left, right) => left.manufacturingDate.localeCompare(right.manufacturingDate));
   const selectedPosition = positions.find(
     (position) => position.productId === productId && position.batchId === batchId,
   );
-  const selectedDestinationBatch = batches.find((batch) => batch.id === destinationBatchId);
+  const selectedDestinationBatch = changeLot ? (lotReady ? destinationLot : undefined) : selectedPosition?.batch;
   const selectedProduct = products.find((product) => product.id === productId);
   const locationFor = (id: string) => locations.find((location) => location.id === id);
 
@@ -110,12 +108,12 @@ export function InternalTransferPage({
     setOriginId(value);
     setProductId('');
     setBatchId('');
-    setDestinationBatchId('');
+    setChangeLot(false); setDestinationLot(emptyLot); setLotReady(false); setLotKey((key) => key + 1);
   }
 
   function changeSourceBatch(value: string) {
     setBatchId(value);
-    setDestinationBatchId(value);
+    setChangeLot(false); setDestinationLot(emptyLot); setLotReady(false); setLotKey((key) => key + 1);
   }
 
   function addItem(event: FormEvent) {
@@ -124,6 +122,8 @@ export function InternalTransferPage({
     if (
       !selectedPosition
       || !selectedDestinationBatch
+      || !selectedDestinationBatch.expirationDate
+      || selectedDestinationBatch.expirationDate < selectedDestinationBatch.manufacturingDate
       || !destinationId
       || !Number.isInteger(numericQuantity)
       || numericQuantity <= 0
@@ -135,7 +135,7 @@ export function InternalTransferPage({
       setError(`Saldo insuficiente. Disponivel: ${selectedPosition.quantity}.`);
       return;
     }
-    if (originId === destinationId && batchId === destinationBatchId) {
+    if (originId === destinationId && selectedPosition.batch.code === selectedDestinationBatch.code) {
       setError('A transferencia deve alterar o lote ou o local.');
       return;
     }
@@ -149,40 +149,23 @@ export function InternalTransferPage({
       key: crypto.randomUUID(),
       position: selectedPosition,
       destinationBatch: selectedDestinationBatch,
+      destinationBatchId: changeLot ? undefined : selectedPosition.batchId,
       quantity: numericQuantity,
     }]);
     setBatchId('');
-    setDestinationBatchId('');
+    setChangeLot(false); setDestinationLot(emptyLot); setLotReady(false); setLotKey((key) => key + 1);
     setQuantity('');
     setError('');
   }
 
   async function submit() {
-    setBusy(true);
-    setError('');
-    try {
-      const movement = await api.post<Movement>('/movements/internal-transfers', {
-        requestKey,
-        originLocationId: originId,
-        destinationLocationId: destinationId,
-        observation: observation || undefined,
-        items: items.map((item) => ({
-          productId: item.position.productId,
-          batchId: item.position.batchId,
-          destinationBatchId: item.destinationBatch.id,
-          quantity: item.quantity,
-        })),
-      });
-      setRequestKey(crypto.randomUUID());
-      setConfirming(false);
-      onCreated(movement.id);
-    } catch (caught) {
-      setError(messageFrom(caught));
-      setConfirming(false);
-      await loadPositions();
-    } finally {
-      setBusy(false);
-    }
+    await submission.submit({
+      originLocationId: originId, destinationLocationId: destinationId, observation: observation || undefined,
+      items: items.map((item) => ({
+        productId: item.position.productId, batchId: item.position.batchId, quantity: item.quantity,
+        ...(item.destinationBatchId ? { destinationBatchId: item.destinationBatchId } : { destinationLot: item.destinationBatch }),
+      })),
+    });
   }
 
   if (loading) return <LoadingState label="Preparando nova transferencia" />;
@@ -222,7 +205,7 @@ export function InternalTransferPage({
       <h2><span className="step-number">2</span> Adicionar item</h2>
       {!originId ? <p className="muted">Escolha a origem para consultar o saldo.</p> : loadingStock ? <LoadingState label="Consultando saldo da origem" /> : positions.length === 0 ? <EmptyState title="Origem sem saldo disponivel" description="Escolha outro local ou registre uma entrada antes da transferencia." /> : <form className="form-grid" onSubmit={addItem}>
         <label><span>Produto <span className="required">*</span></span>
-          <select value={productId} onChange={(event) => { setProductId(event.target.value); setBatchId(''); setDestinationBatchId(''); }} required>
+          <select value={productId} onChange={(event) => { setProductId(event.target.value); changeSourceBatch(''); }} required>
             <option value="">Selecione</option>
             {products.map((product) => <option key={product.id} value={product.id}>{product.code} - {product.name}</option>)}
           </select>
@@ -230,7 +213,7 @@ export function InternalTransferPage({
         <label><span>Lote de origem <span className="required">*</span></span>
           <select value={batchId} onChange={(event) => changeSourceBatch(event.target.value)} disabled={!productId} required>
             <option value="">Selecione</option>
-            {sourcePositions.map((position) => <option key={position.id} value={position.batchId}>{position.batch.code} - saldo {position.quantity}</option>)}
+            {sourcePositions.map((position) => <option key={position.id} value={position.batchId}>{position.batch.code} - validade {formatDate(position.batch.expirationDate)} - saldo {position.quantity}</option>)}
           </select>
         </label>
         {selectedPosition && <div className="available-balance" role="status"><span>Disponivel em {locationFor(originId)?.name}</span><strong>{selectedPosition.quantity} {selectedPosition.product.defaultUnit}</strong><small>Validade {formatDate(selectedPosition.batch.expirationDate)}</small></div>}
@@ -238,21 +221,22 @@ export function InternalTransferPage({
           <input inputMode="numeric" type="number" min="1" max={selectedPosition?.quantity} step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} required />
         </label>
         <label><span>Lote de destino <span className="required">*</span></span>
-          <select value={destinationBatchId} onChange={(event) => setDestinationBatchId(event.target.value)} disabled={!productId} required>
-            <option value="">Selecione</option>
-            {destinationBatches.map((batch) => <option key={batch.id} value={batch.id}>{batch.id === batchId ? 'Manter lote atual - ' : ''}{batch.code} - validade {formatDate(batch.expirationDate)}</option>)}
+          <select value={changeLot ? 'other' : 'keep'} onChange={(event) => { setChangeLot(event.target.value === 'other'); setDestinationLot(emptyLot); setLotReady(false); setLotKey((key) => key + 1); }} disabled={!selectedPosition}>
+            <option value="keep">Manter lote e validade da origem</option>
+            <option value="other">Informar lote / fabricação e validade de destino</option>
           </select>
-          {canCreateBatch && selectedProduct && <button type="button" className="text-button" onClick={() => setQuickBatch(true)}>+ Criar novo lote de destino</button>}
+          <small>Informe os dados do destino; se já existirem, o saldo será somado automaticamente.</small>
+
         </label>
-        <div className="form-actions"><button>+ Adicionar</button></div>
+        {changeLot && selectedProduct && <OperationalLotFields key={productId + ':' + lotKey} product={selectedProduct} value={destinationLot} onChange={setDestinationLot} onReady={setLotReady} />}
+        <div className="form-actions"><button disabled={changeLot && !lotReady}>+ Adicionar</button></div>
       </form>}
     </section>
     <section className="surface list-panel">
       <h2><span className="step-number">3</span> Itens da transferencia ({items.length})</h2>
-      {items.length === 0 ? <EmptyState title="Nenhum item adicionado" description="Adicione ao menos uma posicao de origem e seu lote de destino." /> : <div className="entry-items">{items.map((item) => <article key={item.key} className="entry-item"><div><strong>{item.position.product.name}</strong><span>{locationFor(originId)?.name} / lote {item.position.batch.code}</span><span>→ {locationFor(destinationId)?.name} / lote {item.destinationBatch.code}</span><b>{item.quantity} {item.position.product.defaultUnit}</b></div><button className="secondary" onClick={() => setItems((current) => current.filter((candidate) => candidate.key !== item.key))}>Remover</button></article>)}</div>}
-      {(!originId || !destinationId || items.length === 0) && <p className="action-hint">Selecione origem, destino e adicione ao menos um item para continuar.</p>}<button className="button-wide" disabled={!originId || !destinationId || items.length === 0 || busy} onClick={() => setConfirming(true)}>Revisar transferencia</button>
+      {items.length === 0 ? <EmptyState title="Nenhum item adicionado" description="Adicione ao menos uma posicao de origem e seu lote de destino." /> : <div className="entry-items">{items.map((item) => <article key={item.key} className="entry-item"><div><strong>{item.position.product.name}</strong><span>{locationFor(originId)?.name} / lote {item.position.batch.code} / validade {formatDate(item.position.batch.expirationDate)}</span><span>→ {locationFor(destinationId)?.name} / lote {item.destinationBatch.code} / validade {formatDate(item.destinationBatch.expirationDate)}</span><b>{item.quantity} {item.position.product.defaultUnit}</b></div><button className="secondary" onClick={() => setItems((current) => current.filter((candidate) => candidate.key !== item.key))}>Remover</button></article>)}</div>}
+      {(!originId || !destinationId || items.length === 0) && <p className="action-hint">Selecione origem, destino e adicione ao menos um item para continuar.</p>}<button className="button-wide" disabled={!originId || !destinationId || items.length === 0 || busy} onClick={() => { submission.resetConfirmation(); setConfirming(true); }}>Revisar transferencia</button>
     </section>
-    {quickBatch && selectedProduct && <QuickBatchDialog product={selectedProduct} onCancel={() => setQuickBatch(false)} onCreated={(created) => { setBatches((current) => [...current, created]); setDestinationBatchId(created.id); setQuickBatch(false); }} />}
-    {confirming && <Modal labelledBy="transfer-confirm-title" busy={busy} onClose={() => setConfirming(false)}><p className="eyebrow">Confirmacao</p><h2 id="transfer-confirm-title">Confirmar transferencia?</h2><ul>{items.map((item) => <li key={item.key}><strong>{item.position.product.name}</strong><br />{locationFor(originId)?.name} / lote {item.position.batch.code} → {locationFor(destinationId)?.name} / lote {item.destinationBatch.code}<br /><strong>{item.quantity} {item.position.product.defaultUnit}</strong></li>)}</ul><p>Total: {items.length} item(ns). O produto e a quantidade total serao preservados.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={() => setConfirming(false)}>Voltar e corrigir</button><button disabled={busy} onClick={() => void submit()}>{busy ? 'Transferindo...' : 'Confirmar transferencia'}</button></div></Modal>}
+    {confirming && <Modal labelledBy="transfer-confirm-title" busy={busy} onClose={() => setConfirming(false)}><p className="eyebrow">Confirmacao</p><h2 id="transfer-confirm-title">{submission.conflict ? 'Mesmo lote com outra validade' : 'Confirmar transferência?'}</h2>{submission.conflict && <Notice kind="info">{submission.conflict.message}</Notice>}{submission.error && <Notice kind="error">{submission.error}</Notice>}<ul>{items.map((item) => <li key={item.key}><strong>{item.position.product.name}</strong><br />{locationFor(originId)?.name} / lote {item.position.batch.code} / validade {formatDate(item.position.batch.expirationDate)} → {locationFor(destinationId)?.name} / lote {item.destinationBatch.code} / validade {formatDate(item.destinationBatch.expirationDate)}<br /><strong>{item.quantity} {item.position.product.defaultUnit}</strong></li>)}</ul><p>Total: {items.length} item(ns). O produto e a quantidade total serao preservados.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={() => setConfirming(false)}>Voltar e corrigir</button><button disabled={busy} onClick={() => void submit()}>{busy ? 'Transferindo...' : submission.conflict ? 'Confirmar com validades separadas' : 'Confirmar transferência'}</button></div></Modal>}
   </>;
 }

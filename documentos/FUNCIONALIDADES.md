@@ -18,7 +18,7 @@ O frontend possui login, restauração da sessão pelo cookie HttpOnly e navega�
 
 ## Produtos e conversões
 
-Produtos possuem listagem, busca, filtros, detalhe, criação, edição e ativação/inativação. O detalhe permite listar, criar, editar e ativar/inativar conversões de unidade.
+Produtos possuem listagem, busca, filtros, detalhe, criação, edição e ativação/inativação. O formulário identifica código, descrição, tipo de unidade e prazo padrão em anos; o prazo apenas sugere a validade de novas operações. O detalhe permite listar, criar, editar e ativar/inativar conversões de unidade.
 
 Rotas principais:
 
@@ -31,17 +31,19 @@ PATCH           /api/v1/product-conversions/:id
 PATCH           /api/v1/product-conversions/:id/status
 ```
 
-## Lotes
+## Lotes operacionais
 
-Lotes possuem listagem, filtros, detalhe, criação e edição. O formulário vincula o lote ao produto, calcula código `CONSERVADI` pela fabricação ou resolve a fabricação pelo código e exige validade manual.
+Não existe mais tela/menu de cadastro de lotes, modal de criação antecipada nem endpoints de criação/edição separados. O componente `OperationalLotFields` é compartilhado por entrada e transferência: preencha lote **ou** fabricação, saia do campo para completar o correspondente e revise a validade sugerida/editável.
 
 ```text
-GET/POST        /api/v1/batches
-GET/PATCH       /api/v1/batches/:id
-POST            /api/v1/batches/resolve-code
+POST            /api/v1/movements/resolve-lot
+GET             /api/v1/batches
+GET             /api/v1/batches/:id
 ```
 
-O componente de criação rápida de lote é compartilhado pela entrada e pela transferência, sem duplicar a regra de codificação.
+`resolve-lot` exige `movements.create` e apenas valida/calcula, sem gravar. As consultas de lotes são somente leitura das variantes existentes, com `batches.read`. O cadastro operacional acontece somente ao efetivar a movimentação.
+
+Quando o produto/lote já possui outra validade, a confirmação mostra as datas e a ação **Confirmar com validades separadas**. Sem essa confirmação, nada é gravado. Validades diferentes ficam em posições distintas, mesmo no mesmo local. A confirmação e a proteção contra duplo envio são compartilhadas pelas duas telas.
 
 ## Estoques, locais e saldo atual
 
@@ -55,13 +57,13 @@ GET             /api/v1/stock-positions
 GET             /api/v1/stock-positions/:id
 ```
 
-A tela Estoque atual filtra por produto, lote e local e mostra somente posições positivas. Oferece atalhos para transferir uma posição e, quando ela pertence à origem de revisão, realizar revisão.
+A tela Estoque atual filtra por produto, variante de lote/validade e local e mostra somente posições positivas, com fabricação e validade. Cada validade mantém seu próprio saldo; os totais da Home e dos relatórios continuam usando essas posições reais. Oferece atalhos para transferir uma posição e, quando ela pertence à origem de revisão, realizar revisão.
 
 ## Entrada externa
 
 `POST /api/v1/movements/external-entries`
 
-O fluxo seleciona origem externa, destino controlado e um ou mais itens. Permite criar lote pelo componente central, mostra resumo antes da confirmação e protege reenvio por chave idempotente. Ao confirmar, incrementa o destino e abre o documento no histórico.
+O fluxo seleciona origem externa, destino controlado e um ou mais itens. Recebe `items[].lot` com código e/ou fabricação e validade, sem cadastro prévio, mostra produto/lote/datas/quantidade no resumo antes da confirmação e protege reenvio por chave idempotente. Ao confirmar, incrementa o destino e abre o documento no histórico.
 
 ## Saída externa
 
@@ -79,13 +81,13 @@ O mesmo fluxo atende:
 - outro lote para outro local;
 - outro lote no mesmo local.
 
-Após escolher origem e quantidade, o usuário seleciona local e lote de destino. Pode manter o lote, selecionar outro lote do produto ou criar um novo pelo modal compartilhado. A tela mostra a rota completa antes de confirmar e bloqueia a combinação sem mudança real.
+Após escolher a posição de origem e a quantidade, o usuário seleciona o local de destino e mantém lote/validade ou informa os dados de destino inline (`items[].destinationLot`). Combinações existentes são reutilizadas automaticamente. A API continua aceitando `destinationBatchId` para uma variante existente do mesmo produto; não se enviam os dois formatos juntos. A tela mostra a rota completa antes de confirmar e bloqueia a combinação sem mudança real.
 
 No histórico, cada item conserva:
 
 ```text
-produto / lote de origem / local de origem
-→ produto / lote de destino / local de destino
+produto / lote, fabricação e validade de origem / local de origem
+→ produto / lote, fabricação e validade de destino / local de destino
 quantidade
 ```
 
@@ -95,7 +97,7 @@ quantidade
 
 A tela mostra apenas produto/lote com saldo em Revisar. O usuário pode incluir vários itens e distribuir cada quantidade entre um ou mais destinos permitidos. O formulário informa quanto falta, quanto excede ou se a distribuição está completa e bloqueia a confirmação inválida.
 
-A revisão preserva obrigatoriamente produto, lote, fabricação e validade. Não oferece seleção nem criação de lote. O histórico apresenta todas as distribuições dentro do mesmo documento.
+A revisão preserva obrigatoriamente produto, lote, fabricação e validade. Não oferece seleção nem criação de lote. O histórico apresenta todas as distribuições dentro do mesmo documento. Duas validades do mesmo código de lote são selecionadas e distribuídas separadamente.
 
 ## Histórico de movimentações
 
@@ -104,7 +106,7 @@ GET             /api/v1/movements
 GET             /api/v1/movements/:id
 ```
 
-A listagem filtra por período, tipo, origem, destino e produto. O detalhe apresenta identificador, tipo, estado, data/hora, responsável, rota, observação, itens, lotes, quantidades e distribuições. Registros efetivados e cancelados permanecem no mesmo histórico.
+A listagem filtra por período, tipo, origem, destino e produto. O detalhe apresenta identificador, tipo, estado, data/hora, responsável, rota, observação, itens, lotes, fabricação, validade, quantidades e distribuições. Os dados do produto confirmados em novos itens são preservados por snapshot; datas são preservadas nas variantes imutáveis. Relatórios históricos e CSVs existentes também mostram as datas de origem/destino. Registros efetivados e cancelados permanecem no mesmo histórico.
 
 ## Cancelamento e estorno
 
@@ -113,7 +115,7 @@ A listagem filtra por período, tipo, origem, destino e produto. O detalhe apres
 Movimentações efetivadas elegíveis mostram a ação `Cancelar movimentação` para usuários com `movements.cancel`. O fluxo possui três momentos:
 
 1. informar motivo obrigatório;
-2. visualizar o impacto por produto, lote, local e quantidade;
+2. visualizar o impacto por produto, lote, validade, local e quantidade;
 3. confirmar o estorno integral.
 
 O backend revalida o saldo sob transação e bloqueios. Se uma parcela necessária já tiver sido consumida, nada é alterado. Em sucesso, a listagem e o detalhe passam a mostrar `CANCELADA`, usuário, data/hora e motivo, sem apagar os dados originais.

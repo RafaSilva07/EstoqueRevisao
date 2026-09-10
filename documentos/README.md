@@ -21,8 +21,9 @@ Artefatos PDF/DOCX eventualmente mantidos para entrega formal constituem apenas 
 O EstoqueRevisao é um sistema web para controle de produtos por lote e local lógico. Atualmente oferece:
 
 - autenticação, autorização, auditoria e logs estruturados;
-- produtos, conversões de unidade, lotes e locais de estoque;
-- saldo atual por produto, lote e local;
+- produtos com prazo padrão, conversões de unidade e locais de estoque;
+- lotes e datas informados nas operações, sem cadastro prévio;
+- saldo atual por produto, lote, validade e local, com confirmação de validades divergentes;
 - entrada e saída externas;
 - transferência interna, inclusive com troca ou criação de lote;
 - revisão com distribuição de cada item entre múltiplos destinos;

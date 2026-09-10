@@ -29,12 +29,16 @@ Este documento registra a evolução relevante sem repetir as regras vigentes. P
 
 Os relatórios completos dessas etapas foram preservados em [`arquivo/relatorios/`](./arquivo/relatorios/).
 
+## Etapa 22 — Lotes operacionais e validades
+
+Cadastro de produto com prazo padrão; lotes informados na operação, confirmação de validades divergentes e posições separadas. Interfaces e histórico adaptados sem alterar revisão/estorno. Resumo em [relatorios/RELATORIO_ETAPA_22_LOTES_OPERACIONAIS_VALIDADES.md](./relatorios/RELATORIO_ETAPA_22_LOTES_OPERACIONAIS_VALIDADES.md).
+
 ## Decisões consolidadas
 
 | Registro histórico | Situação atual |
 | --- | --- |
 | ADR 016 | PostgreSQL 17 via Docker Compose é o ambiente local suportado; dados ficam em volume persistente. |
-| ADR 017 | Código de lote usa `CONSERVADI`; saldo é materializado por produto/lote/local e só muda por serviço interno. |
+| ADR 017 | Código de lote usa `CONSERVADI`; saldo é materializado por produto/lote/validade/local e só muda por serviço interno. |
 | ADR 018 | Movimentações usam cabeçalho e itens, request key idempotente, histórico próprio e transação com auditoria. |
 | ADR 019 | Saída usa baixa condicional e nunca cria saldo em local externo. |
 | ADR 020 | Transferência preserva quantidade e usa locks ordenados. A exigência antiga de manter lote e mudar local foi substituída. |
@@ -55,10 +59,13 @@ Os ADRs completos estão em [`arquivo/adrs/`](./arquivo/adrs/). As decisões vig
 | `1788480000000-review-movements.ts` | Configuração da revisão e distribuições por item. |
 | `1788566400000-transfer-destination-batches.ts` | Lote de destino e transferência com troca de lote. |
 | `1788652800000-movement-cancellations.ts` | Estado/metadados de cancelamento e permissão `movements.cancel`. |
+| `1789084800000-operational-lot-expiration.ts` | Prazo do produto, variantes por validade, identidade imutável e snapshots dos novos itens. Não regrava dados antigos. O rollback recusa descartar variantes ou snapshots já utilizados. |
 
 `synchronize` permanece desativado. Migrations são a única forma autorizada de alterar o schema.
 
 ## Decisões substituídas ou obsoletas
+
+- Lote deixou de ser cadastro independente. Produto/código deixou de ser único isoladamente: a validade também faz parte da identidade operacional e do saldo.
 
 - A transferência não exige mais locais diferentes: o mesmo local é válido quando o lote muda.
 - A transferência não preserva mais obrigatoriamente o lote: o produto continua imutável, mas o lote de destino é escolhido.
@@ -70,6 +77,7 @@ Os ADRs completos estão em [`arquivo/adrs/`](./arquivo/adrs/). As decisões vig
 
 ## Dívidas e próximos limites conhecidos
 
+- Produtos legados precisam ter o prazo padrão configurado pelo operador; até lá, a validade é manual. Itens antigos não tinham snapshot do produto: continuam com a referência existente, sem inferir dados passados a partir do cadastro atual.
 - O bundle principal do frontend está acima de 500 kB minificado; divisão por rotas é uma melhoria futura.
 - `App.tsx` ainda concentra telas legadas e deve continuar sendo extraído incrementalmente.
 - A exportação CSV é processada em memória; para volumes muito grandes deverá evoluir para streaming.

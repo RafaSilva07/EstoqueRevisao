@@ -21,6 +21,8 @@ import { ReviewMovements1788480000000 } from './migrations/1788480000000-review-
 import { TransferDestinationBatches1788566400000 } from './migrations/1788566400000-transfer-destination-batches';
 import { MovementCancellations1788652800000 } from './migrations/1788652800000-movement-cancellations';
 
+import { OperationalLotExpiration1789084800000 } from './migrations/1789084800000-operational-lot-expiration';
+
 export const databaseEntities = [
   UserEntity,
   RoleEntity,
@@ -45,6 +47,7 @@ export const databaseMigrations = [
   ReviewMovements1788480000000,
   TransferDestinationBatches1788566400000,
   MovementCancellations1788652800000,
+  OperationalLotExpiration1789084800000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {

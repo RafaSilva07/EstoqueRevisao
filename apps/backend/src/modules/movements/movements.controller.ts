@@ -5,6 +5,9 @@ import { getAuditRequestMetadata } from '../audit/audit-request-metadata';
 import { AuthenticatedUser } from '../auth/authenticated-user.interface';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { CancelMovementDto } from './dto/cancel-movement.dto';
+import { OperationalLotsService } from '../batches/operational-lots.service';
+import { ResolveOperationalLotDto } from '../batches/dto/operational-lot.dto';
+import { CreateExternalEntryDto } from './dto/create-external-entry.dto';
 import { CreateEffectiveMovementDto } from './dto/create-effective-movement.dto';
 import { CreateInternalTransferDto } from './dto/create-internal-transfer.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
@@ -14,11 +17,15 @@ import { MovementsService } from './movements.service';
 
 @Controller('movements')
 export class MovementsController {
-  constructor(private readonly service: MovementsService) {}
+  constructor(private readonly service: MovementsService, private readonly lots: OperationalLotsService) {}
+
+  @Post('resolve-lot')
+  @RequirePermissions('movements.create')
+  resolveLot(@Body() dto: ResolveOperationalLotDto): ReturnType<OperationalLotsService['preview']> { return this.lots.preview(dto); }
 
   @Post('external-entries')
   @RequirePermissions('movements.create')
-  createExternalEntry(@Body() dto: CreateEffectiveMovementDto, @Req() request: Request): Promise<MovementEntity> {
+  createExternalEntry(@Body() dto: CreateExternalEntryDto, @Req() request: Request): Promise<MovementEntity> {
     const user = request.user as AuthenticatedUser;
     return this.service.createExternalEntry(dto, user.id, getAuditRequestMetadata(request));
   }

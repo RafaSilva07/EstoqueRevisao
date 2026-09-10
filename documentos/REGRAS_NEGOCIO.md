@@ -4,7 +4,7 @@ Este documento consolida o comportamento funcional vigente. Regras históricas s
 
 ## Princípios gerais
 
-- O estoque é controlado por `produto + lote + local lógico`.
+- O estoque é controlado por `produto + lote + validade + local lógico`.
 - Saldos nunca podem ser negativos.
 - Movimentações confirmadas não são editadas nem excluídas fisicamente.
 - Correções operacionais são registradas por novas movimentações. O cancelamento apenas marca a original e estorna integralmente seus efeitos.
@@ -15,16 +15,20 @@ Este documento consolida o comportamento funcional vigente. Regras históricas s
 
 ## Produtos e conversões
 
-- Produto possui código, nome, unidade padrão e estado ativo/inativo.
+- Produto é o cadastro mestre: código único, descrição (`name`), tipo de unidade (`defaultUnit`), prazo padrão de validade em anos inteiros positivos e estado ativo/inativo. Novos cadastros exigem o prazo; produtos antigos sem essa informação permanecem sem sugestão até serem configurados, sem inventar um padrão.
 - O código do produto é único sem diferenciação entre maiúsculas e minúsculas.
 - Cadastros referenciados são inativados em vez de excluídos.
 - Conversões pertencem a um produto, possuem fator positivo e não podem repetir o mesmo par de unidades.
 - Unidade de origem e destino de uma conversão devem ser diferentes.
 
-## Lotes
+## Lote, fabricação e validade nas operações
 
-- Todo lote pertence a exatamente um produto; essa associação não pode ser trocada por edição.
-- O código é único dentro do produto, sem diferenciação entre maiúsculas e minúsculas.
+- Lote é informação operacional, não um cadastro mestre nem uma etapa prévia. Entrada e transferência recebem os dados diretamente; o sistema resolve ou cria a referência interna na mesma transação da movimentação.
+- Cada combinação de produto, código e validade identifica uma variante imutável. O mesmo código pode existir para o produto com validades diferentes, mas nunca com fabricação incompatível.
+- A validade sugerida é fabricação + prazo padrão do produto em anos civis. Em 29 de fevereiro, limita-se ao último dia de fevereiro do ano de destino. A sugestão é editável; sempre se preserva a validade confirmada, não um cálculo futuro.
+- Havendo outra validade registrada para o mesmo produto/lote, a confirmação informa produto, lote, validades existentes e validade informada. Só após confirmação explícita a operação prossegue, com saldos separados. Referências históricas sem saldo também são consideradas.
+- A confirmação fica vinculada às divergências apresentadas. Uma validade concorrente ainda não apresentada exige nova confirmação. Recusar/fechar não grava saldo, lote nem movimentação.
+- Entradas com o mesmo produto, lote, validade e local acumulam o saldo, mantendo cada movimentação individual no histórico.
 - Fabricação e validade são obrigatórias, e a validade não pode anteceder a fabricação.
 - A fabricação deve estar entre 2000 e 2099.
 - O código possui seis letras e representa `DDMMYY` pela tabela `CONSERVADI`:
@@ -34,7 +38,7 @@ Este documento consolida o comportamento funcional vigente. Regras históricas s
 | Letra | C | O | N | S | E | R | V | A | D | I |
 
 - Código e fabricação, quando informados juntos, devem representar a mesma data.
-- A geração e validação dessa relação pertencem ao módulo de lotes e devem ser reutilizadas por qualquer fluxo que crie lote.
+- A geração e validação dessa relação usam exclusivamente o codec central do módulo de lotes. Informar fabricação completa o código, e informar código completa a fabricação. A API revalida ambos ao confirmar.
 
 ## Locais e posições de estoque
 
@@ -48,7 +52,7 @@ Regras:
 
 - Subestoque exige pai ativo do tipo `STOCK`.
 - Estoque com subestoques ativos não pode ser inativado nem convertido para outro tipo.
-- Uma posição é única por produto, lote e local interno.
+- Uma posição é única por produto, lote, validade e local interno. As seleções operacionais mostram a validade e identificam a posição exata, sem misturar parcelas.
 - O lote da posição deve pertencer ao mesmo produto.
 - Posições com saldo zero permanecem persistidas, mas são omitidas da listagem operacional.
 - Não existe endpoint público para alterar saldo diretamente; toda mudança deve ser consequência de uma operação de negócio.
@@ -61,7 +65,7 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 - Estados atuais: `EFETIVADA` e `CANCELADA`.
 - Uma movimentação aceita um ou mais itens e é confirmada sempre como uma unidade.
 - A `request_key` UUID é única. Reenvio pelo mesmo usuário e tipo retorna o documento existente; reutilização incompatível gera conflito.
-- Uma combinação de produto/lote não pode se repetir em saída, transferência ou revisão.
+- Uma combinação de produto/lote/validade não pode se repetir em saída, transferência ou revisão; variantes de validade distintas são itens distintos.
 - Documento, itens, distribuições, saldos e auditoria usam a mesma transação.
 - Falha em qualquer item reverte toda a operação.
 - Itens e posições são processados em ordem determinística para reduzir deadlocks.
@@ -88,13 +92,13 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 - Destino também deve ser `STOCK` ou `SUBSTOCK`.
 - O produto permanece obrigatoriamente o mesmo.
 - O usuário escolhe o local e o lote de destino.
-- O lote de destino pode ser o lote atual, outro lote existente do mesmo produto ou um novo lote criado pelo fluxo central de lotes.
+- O destino pode manter lote e validade da origem ou receber lote/fabricação/validade dentro do próprio fluxo. Se a combinação do produto já existir, é reutilizada; caso contrário, é criada atomicamente, com confirmação para divergência de validade.
 - É permitido alterar somente o local, somente o lote ou ambos.
-- Mesmo local com mesmo lote é rejeitado por não produzir alteração real.
+- Mesmo local com mesmo código de lote é rejeitado; mudar apenas a validade não autoriza transferência no mesmo local.
 - Mesmo local é permitido exclusivamente quando o lote muda.
 - O lote de destino deve pertencer ao produto transferido.
 - A quantidade retirada da origem é exatamente a quantidade adicionada ao destino; o total do produto é preservado.
-- O histórico mantém separadamente lote e local de origem e destino.
+- O histórico mantém separadamente lote, fabricação, validade e local de origem e destino.
 
 ## Revisar produtos
 
@@ -136,7 +140,7 @@ Reversões:
 
 ## Histórico e auditoria
 
-- O histórico mostra tipo, estado, responsável e data originais, rota, itens, lotes, quantidades e distribuições.
+- O histórico mostra tipo, estado, responsável e data originais, rota, itens, lotes, fabricação, validade, quantidades e distribuições. Referências de lote/validade não podem ser editadas. Novos itens também guardam uma cópia de código, descrição e unidade do produto; alterações posteriores no cadastro não reescrevem essa cópia. Dados antigos sem essa cópia continuam consultáveis, sem fabricar um histórico que não foi registrado.
 - Movimentações canceladas continuam consultáveis e mostram responsável, data e motivo do cancelamento.
 - Não existem rotas para editar ou excluir movimentações.
 - A auditoria registra usuário, ação, entidade, identificador, resultado, data/hora, request ID, IP, user-agent e dados anteriores/novos quando aplicável.
