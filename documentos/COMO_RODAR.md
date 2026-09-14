@@ -75,6 +75,10 @@ Abra no navegador:
 
 Entre na aplicação com os valores configurados em `BOOTSTRAP_USERNAME` e `BOOTSTRAP_PASSWORD`.
 
+## Usuários de Produção e Expedição
+
+No `.env` da raiz, configure um novo `BOOTSTRAP_USERNAME`, uma senha forte em `BOOTSTRAP_PASSWORD` e `BOOTSTRAP_ROLE_CODE=PRODUCAO` ou `EXPEDICAO`. Execute `npm run db:user:create` para cada usuário. O script usa Argon2id e vincula o setor ao perfil; `ADMIN` continua na Revisão. Não recrie usuários existentes nem compartilhe a conta administrativa com setores externos.
+
 ## Parar ou reiniciar o PostgreSQL
 
 Para remover o container e a rede, preservando os dados no volume:

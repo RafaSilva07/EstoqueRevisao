@@ -22,7 +22,7 @@ export class MovementsRepository {
     const byId = new Map(products.map((product) => [product.id, product]));
     for (const item of items) {
       const product = byId.get(item.productId)!;
-      item.productSnapshot = { code: product.code, name: product.name, defaultUnit: product.defaultUnit };
+      item.productSnapshot ??= { code: product.code, name: product.name, defaultUnit: product.defaultUnit };
     }
     return manager.getRepository(MovementItemEntity).save(items);
   }

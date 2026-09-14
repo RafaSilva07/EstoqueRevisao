@@ -23,7 +23,12 @@ import { MovementCancellations1788652800000 } from './migrations/1788652800000-m
 
 import { OperationalLotExpiration1789084800000 } from './migrations/1789084800000-operational-lot-expiration';
 
+import { ShipmentEntity, ShipmentItemEntity } from '../modules/shipments/shipment.entity';
+import { SectorShipments1789344000000 } from './migrations/1789344000000-sector-shipments';
+
 export const databaseEntities = [
+  ShipmentEntity,
+  ShipmentItemEntity,
   UserEntity,
   RoleEntity,
   PermissionEntity,
@@ -48,6 +53,7 @@ export const databaseMigrations = [
   TransferDestinationBatches1788566400000,
   MovementCancellations1788652800000,
   OperationalLotExpiration1789084800000,
+  SectorShipments1789344000000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {

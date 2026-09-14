@@ -77,7 +77,7 @@ export function ExternalExitPage({
   }, [loadPositions]);
 
   const origins = locations.filter((location) => location.kind !== 'EXTERNAL');
-  const destinations = locations.filter((location) => location.kind === 'EXTERNAL');
+  const destinations = locations.filter((location) => location.kind === 'EXTERNAL' && !location.sector);
   const products = useMemo(() => {
     const unique = new Map<string, Product>();
     positions.forEach((position) => unique.set(position.productId, position.product));

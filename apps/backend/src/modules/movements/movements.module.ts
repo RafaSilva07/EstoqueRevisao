@@ -21,5 +21,6 @@ import { MovementsService } from './movements.service';
   ],
   controllers: [MovementsController],
   providers: [MovementsRepository, MovementsService],
+  exports: [MovementsRepository],
 })
 export class MovementsModule {}

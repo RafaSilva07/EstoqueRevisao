@@ -60,8 +60,13 @@ Os ADRs completos estão em [`arquivo/adrs/`](./arquivo/adrs/). As decisões vig
 | `1788566400000-transfer-destination-batches.ts` | Lote de destino e transferência com troca de lote. |
 | `1788652800000-movement-cancellations.ts` | Estado/metadados de cancelamento e permissão `movements.cancel`. |
 | `1789084800000-operational-lot-expiration.ts` | Prazo do produto, variantes por validade, identidade imutável e snapshots dos novos itens. Não regrava dados antigos. O rollback recusa descartar variantes ou snapshots já utilizados. |
+| `1789344000000-sector-shipments.ts` | Setores/perfis, envios/itens, constraints, proteção de histórico e vínculo das movimentações. Rollback impede perda de envios ou usuários externos. |
 
 `synchronize` permanece desativado. Migrations são a única forma autorizada de alterar o schema.
+
+## Envios entre setores — etapa 23
+
+Adicionados setor do usuário e perfis externos, envios imutáveis com confirmação/recusa, reserva do disponível, retorno após recusa e movimentações vinculadas. Produção/Expedição deixam de usar entrada/saída direta. Detalhes atuais em [FUNCIONALIDADES.md](./FUNCIONALIDADES.md#envios-entre-setores).
 
 ## Decisões substituídas ou obsoletas
 
@@ -84,8 +89,8 @@ Os ADRs completos estão em [`arquivo/adrs/`](./arquivo/adrs/). As decisões vig
 - Algumas telas operacionais ainda não possuem testes completos de interação em DOM ou regressão visual automatizada.
 - Listagens que carregam até 100 registros precisarão de busca remota progressiva em bases maiores.
 - Renovação transparente do access token durante uma requisição expirada ainda pode ser aprimorada.
-- A matriz de perfis além de `ADMIN`, a administração de usuários e a política de retenção/consulta da auditoria ainda dependem de definição.
-- Reversão automática encadeada, trânsito, fotos, conferência e relatórios analíticos avançados permanecem fora do escopo atual.
+- Administração visual de usuários/perfis e política de retenção/consulta da auditoria continuam pendentes; perfis setoriais já estão definidos.
+- Reversão automática encadeada, fotos e relatórios analíticos avançados permanecem fora do escopo atual.
 
 ## Política para próximas etapas
 

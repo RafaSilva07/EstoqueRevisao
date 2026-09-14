@@ -46,7 +46,8 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     await dataSource.query(`INSERT INTO products (id, code, name, default_unit, created_by, updated_by) VALUES ($1, 'MOV-A', 'Produto A', 'UN', $3, $3), ($2, 'MOV-B', 'Produto B', 'KG', $3, $3)`, [productAId, productBId, userId]);
     await dataSource.query(`INSERT INTO batches (id, product_id, code, manufacturing_date, expiration_date, created_by, updated_by) VALUES ($1, $2, 'SOCDNV', '2026-08-31', '2027-08-31', $5, $5), ($3, $4, 'SOCDNV', '2026-08-31', '2027-08-31', $5, $5)`, [batchAId, productAId, batchBId, productBId, userId]);
     await dataSource.query(`INSERT INTO batches (id, product_id, code, manufacturing_date, expiration_date, created_by, updated_by) VALUES ($1, $2, 'COCINV', '2026-09-01', '2027-09-01', $3, $3)`, [batchAEmptyId, productAId, userId]);
-    originId = (await dataSource.getRepository(StockLocationEntity).findOneByOrFail({ code: 'PRODUCAO' })).id;
+    originId = randomUUID();
+    await dataSource.query(`INSERT INTO stock_locations (id, code, name, kind, created_by, updated_by) VALUES ($1, 'TEST_EXTERNAL', 'Outra origem externa', 'EXTERNAL', $2, $2)`, [originId, userId]);
     destinationId = (await dataSource.getRepository(StockLocationEntity).findOneByOrFail({ code: 'REVISAR' })).id;
     transferDestinationId = (await dataSource.getRepository(StockLocationEntity).findOneByOrFail({ code: 'TUF' })).id;
     lataBoaId = (await dataSource.getRepository(StockLocationEntity).findOneByOrFail({ code: 'LATA_BOA' })).id;

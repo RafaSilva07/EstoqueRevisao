@@ -19,6 +19,9 @@ export class UserEntity {
   @Column({ type: 'varchar', length: 100 })
   username!: string;
 
+  @Column({ type: 'varchar', length: 20, default: 'REVISAO' })
+  sector: string = 'REVISAO';
+
   @Column({ name: 'password_hash', type: 'varchar', length: 255, select: false })
   passwordHash!: string;
 

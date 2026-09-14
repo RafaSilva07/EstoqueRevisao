@@ -50,10 +50,11 @@ export function ExternalEntryPage({ onCreated }: { onCreated: (id: string) => vo
   if (loading) return <LoadingState label="Preparando entrada" />;
   return <>
     <PageHeader eyebrow="Movimentação" title="Entrada externa" description="Selecione o produto e informe lote ou fabricação, validade e quantidade." />
+    <Notice kind="info">Produção e Expedição utilizam Envios com confirmação do destinatário. Esta entrada é somente para outras origens.</Notice>
     <OperationGuide />
     {error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
     <section className="surface form-panel"><h2>1. Origem e destino</h2><div className="form-grid">
-      <label>Origem externa *<select value={originId} onChange={(event) => setOriginId(event.target.value)} required><option value="">Selecione</option>{locations.filter((item) => item.kind === 'EXTERNAL').map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+      <label>Origem externa *<select value={originId} onChange={(event) => setOriginId(event.target.value)} required><option value="">Selecione</option>{locations.filter((item) => item.kind === 'EXTERNAL' && !item.sector).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       <label>Destino controlado *<select value={destinationId} onChange={(event) => setDestinationId(event.target.value)} required><option value="">Selecione</option>{locations.filter((item) => item.kind !== 'EXTERNAL').map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       <label className="wide">Observação (opcional)<textarea value={observation} onChange={(event) => setObservation(event.target.value)} maxLength={1000} rows={2} /></label>
     </div></section>

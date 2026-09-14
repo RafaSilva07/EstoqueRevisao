@@ -1,6 +1,7 @@
 export interface UserSession {
   id: string;
   username: string;
+  sector?: 'REVISAO' | 'PRODUCAO' | 'EXPEDICAO';
   roles: string[];
   permissions: string[];
 }
@@ -55,6 +56,7 @@ export interface UnitConversion {
 export type StockLocationKind = 'STOCK' | 'SUBSTOCK' | 'EXTERNAL';
 
 export interface StockLocation {
+  sector?: string | null;
   id: string;
   code: string;
   name: string;
@@ -99,6 +101,7 @@ export interface MovementItemDistribution {
 }
 
 export interface Movement {
+  shipmentId?: string | null;
   id: string;
   requestKey: string;
   type: 'ENTRADA_EXTERNA' | 'SAIDA_EXTERNA' | 'TRANSFERENCIA_INTERNA' | 'REVISAO';

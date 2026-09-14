@@ -70,7 +70,7 @@ export function StockReportsPage({
   }
 
   return <>
-    <PageHeader eyebrow="Relatorios" title="Estoque e validades" description="Consulte saldos atuais e acompanhe a situacao dos lotes." />
+    <PageHeader eyebrow="Relatorios" title="Estoque e validades" description="Consulte saldos disponíveis e validades. Quantidades em trânsito ficam em Envios." />
     <ReportNavigation current="stock" onMovements={onMovements} onReviews={onReviews} onStock={() => undefined} />
     {error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
     <FilterPanel count={activeFilters}>
@@ -89,7 +89,7 @@ export function StockReportsPage({
     {loading ? <LoadingState label="Carregando relatorio" /> : report && <>
       <section className="report-summary" aria-label="Totais do relatorio">
         <article><span>Posicoes</span><strong>{report.totals.positions}</strong></article>
-        <article><span>Saldo filtrado</span><strong>{formatQuantities(report.totals.quantityByUnit)}</strong></article>
+        <article><span>Saldo disponível filtrado</span><strong>{formatQuantities(report.totals.quantityByUnit)}</strong></article>
       </section>
       <StockResults items={report.items} />
       {report.meta.totalPages > 1 && <div className="report-pagination">

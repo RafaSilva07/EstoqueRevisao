@@ -95,6 +95,7 @@ export class MovementsService {
           message: 'Movimentacao nao encontrada.',
         });
       }
+      if (movement.shipmentId) throw new ConflictException({ code: 'SHIPMENT_MOVEMENT_IMMUTABLE', message: 'Movimentação vinculada a envio confirmado. Para devolver, crie um novo envio no sentido inverso.' });
       if (movement.status === MovementStatus.Canceled) {
         throw new ConflictException({
           code: 'MOVEMENT_ALREADY_CANCELED',
@@ -372,6 +373,8 @@ export class MovementsService {
         if (!destination?.active || !rules.destinationIsValid(destination.kind)) {
           throw new BadRequestException(rules.invalidDestination);
         }
+
+        if (origin.sector || destination.sector) throw new BadRequestException({ code: 'SECTOR_SHIPMENT_REQUIRED', message: 'Para Produção ou Expedição, utilize Envios e aguarde a confirmação do destinatário.' });
 
         // Resolve all inline lots within the movement transaction. Lock products before stock
         // rows, in a stable order, so competing entries cannot create duplicate variants.

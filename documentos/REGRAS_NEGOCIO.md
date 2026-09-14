@@ -71,9 +71,26 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 - Itens e posições são processados em ordem determinística para reduzir deadlocks.
 - Histórico operacional, auditoria e logs técnicos são conceitos separados.
 
+## Envios entre setores
+
+- Usuários possuem setor `REVISAO`, `PRODUCAO` ou `EXPEDICAO`. O setor vem da sessão validada no banco, nunca do formulário. Usuários existentes permanecem na Revisão.
+- Produção/Expedição enviam somente para Revisão e decidem somente recebimentos destinados ao próprio setor. Não acessam operações, saldos ou relatórios internos da Revisão.
+- Revisão envia para Produção/Expedição e decide os envios desses setores. Permissões `shipments.read/create/decide` complementam a validação do setor.
+- Um envio tem vários itens e nasce `AGUARDANDO_RECEBIMENTO`. Os itens não são editáveis depois do envio. Somente o destinatário pode decidir uma única vez: `CONFIRMADO` ou `RECUSADO`; recusa exige motivo de até 1000 caracteres.
+- Produção/Expedição → Revisão: criar não altera saldo; confirmar adiciona os itens à origem configurada da revisão (`review_role = SOURCE`, “A Revisar”); recusar não altera saldo.
+- Revisão → Produção/Expedição: criar retira atomicamente a quantidade disponível das posições selecionadas. Os itens pendentes representam **em trânsito**, sem criar um local consumível por outras operações. Confirmar encerra o trânsito e registra a saída sem descontar novamente; recusar devolve exatamente às posições originais, inclusive se o produto tiver sido inativado.
+- O tipo de um local com quantidade em trânsito não pode mudar até a decisão, garantindo a restauração em caso de recusa.
+- Lote/fabricação/validade de envio externo reutilizam integralmente as regras operacionais. Divergências de validade exigem aceite na criação e nova conferência no recebimento pela Revisão. Envios da Revisão preservam a variante selecionada no saldo.
+- Criação usa chave idempotente; decisões bloqueiam o envio. Repetir a mesma decisão retorna o estado já registrado, sem novo efeito; tentar a decisão oposta gera conflito.
+- Decisão, movimentações, saldo e auditoria são uma transação única. Quantidade reservada não pode ser consumida por revisão, transferência, saída, outro envio ou estorno de entrada.
+- Confirmação gera movimentação externa vinculada ao envio. Como o cabeçalho atual possui uma origem, um envio com várias origens internas gera uma movimentação por local de origem, sob a mesma transação e vínculo.
+- Envios e itens não são excluídos. Remetente, destinatário, datas, responsável pela decisão, motivo e snapshot dos produtos permanecem no histórico. Correções exigem novo envio independente.
+- Movimentações vinculadas a envio confirmado não aceitam cancelamento isolado: devolução exige novo envio no sentido inverso e confirmação do outro setor. Cancelamentos de movimentações anteriores ou não vinculadas continuam disponíveis.
+- Indicações internas mostram pendências e decisões recentes dos próprios envios, com motivo de recusa. Não há e-mail, push, fotos ou controle de “lido”.
+
 ## Entrada externa
 
-- Origem deve ser local ativo `EXTERNAL`.
+- Para Produção/Expedição, o fluxo obrigatório é **Envios**. Entrada direta atende somente outros locais externos ativos, sem setor associado.
 - Destino deve ser local ativo `STOCK` ou `SUBSTOCK`.
 - A origem externa não possui saldo controlado a reduzir.
 - Cada item soma sua quantidade à posição de destino; posição inexistente é criada e posição existente é acumulada.
@@ -81,7 +98,7 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 ## Saída externa
 
 - Origem deve ser local ativo `STOCK` ou `SUBSTOCK`.
-- Destino deve ser local ativo `EXTERNAL`.
+- Para Produção/Expedição, o fluxo obrigatório é **Envios**. Saída direta atende somente outros locais externos ativos, sem setor associado.
 - Cada item deve possuir saldo suficiente na origem.
 - A operação reduz somente a origem e não cria saldo no destino externo.
 - A baixa é condicional no banco para impedir saldo negativo sob concorrência.
@@ -149,7 +166,7 @@ Reversões:
 ## Consultas e relatórios
 
 - Relatórios são somente leitura e não criam estado paralelo nem alteram estoque.
-- Dados históricos usam movimentações, itens e distribuições como fonte; a posição atual usa `stock_positions`.
+- Dados históricos usam movimentações confirmadas, itens e distribuições como fonte; a posição atual usa o saldo **disponível** de `stock_positions`. Pendências/recusas não entram nos totais de entrada/saída; itens de envios pendentes da Revisão representam separadamente o trânsito, consultável em Envios.
 - Movimentações canceladas permanecem consultáveis, mas suas quantidades não integram totais válidos.
 - Totais de quantidade são separados por unidade de medida; unidades incompatíveis nunca são somadas entre si.
 - Consultas extensas são paginadas e os filtros podem ser combinados.
@@ -159,9 +176,9 @@ Reversões:
 
 ## Fora do escopo atual
 
-- solicitação, trânsito, fotos e conferência posterior de movimentações;
+- fotos/evidências de envios e notificações externas;
 - transformação ou criação de produto/lote específica do Varejo;
 - mapa físico detalhado de armazenagem;
 - reversão automática de uma cadeia de operações dependentes;
 - administração completa de usuários e perfis;
-- notificações, dashboard e relatórios analíticos avançados além das consultas operacionais implementadas.
+- dashboard e relatórios analíticos avançados além das consultas operacionais implementadas.

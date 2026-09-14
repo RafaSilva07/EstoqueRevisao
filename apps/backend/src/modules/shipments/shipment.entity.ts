@@ -1,0 +1,41 @@
+import { randomUUID } from 'node:crypto';
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from 'typeorm';
+import { UserEntity } from '../users/entities/user.entity';
+import { BatchEntity } from '../batches/entities/batch.entity';
+import { StockLocationEntity } from '../stocks/entities/stock-location.entity';
+
+export type Sector = 'REVISAO' | 'PRODUCAO' | 'EXPEDICAO';
+export type ShipmentStatus = 'AGUARDANDO_RECEBIMENTO' | 'CONFIRMADO' | 'RECUSADO';
+
+@Entity('shipments')
+export class ShipmentEntity {
+  @PrimaryColumn('uuid') id: string = randomUUID();
+  @Column({ name: 'request_key', type: 'uuid' }) requestKey!: string;
+  @Column({ name: 'origin_sector', type: 'varchar' }) originSector!: Sector;
+  @Column({ name: 'destination_sector', type: 'varchar' }) destinationSector!: Sector;
+  @Column({ name: 'created_by_id', type: 'uuid' }) createdById!: string;
+  @ManyToOne(() => UserEntity) @JoinColumn({ name: 'created_by_id' }) createdBy!: UserEntity;
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;
+  @Column({ name: 'origin_location_id', type: 'uuid', nullable: true }) originLocationId!: string | null;
+  @Column({ name: 'destination_location_id', type: 'uuid' }) destinationLocationId!: string;
+  @Column({ type: 'varchar' }) status: ShipmentStatus = 'AGUARDANDO_RECEBIMENTO';
+  @Column({ name: 'decided_by_id', type: 'uuid', nullable: true }) decidedById!: string | null;
+  @ManyToOne(() => UserEntity) @JoinColumn({ name: 'decided_by_id' }) decidedBy!: UserEntity | null;
+  @Column({ name: 'decided_at', type: 'timestamptz', nullable: true }) decidedAt!: Date | null;
+  @Column({ name: 'refusal_reason', type: 'varchar', nullable: true }) refusalReason!: string | null;
+  @OneToMany(() => ShipmentItemEntity, (item) => item.shipment) items!: ShipmentItemEntity[];
+}
+
+@Entity('shipment_items')
+export class ShipmentItemEntity {
+  @PrimaryColumn('uuid') id: string = randomUUID();
+  @Column({ name: 'shipment_id', type: 'uuid' }) shipmentId!: string;
+  @ManyToOne(() => ShipmentEntity, (shipment) => shipment.items) @JoinColumn({ name: 'shipment_id' }) shipment!: ShipmentEntity;
+  @Column({ name: 'product_id', type: 'uuid' }) productId!: string;
+  @Column({ name: 'batch_id', type: 'uuid' }) batchId!: string;
+  @ManyToOne(() => BatchEntity) @JoinColumn({ name: 'batch_id' }) batch!: BatchEntity;
+  @Column({ name: 'stock_location_id', type: 'uuid', nullable: true }) stockLocationId!: string | null;
+  @ManyToOne(() => StockLocationEntity) @JoinColumn({ name: 'stock_location_id' }) stockLocation!: StockLocationEntity | null;
+  @Column({ type: 'numeric', precision: 18, scale: 6, transformer: { to: (value: number) => value, from: (value: string) => Number(value) } }) quantity!: number;
+  @Column({ name: 'product_snapshot', type: 'jsonb' }) productSnapshot!: { code: string; name: string; defaultUnit: string };
+}

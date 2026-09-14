@@ -161,6 +161,7 @@ export class AuthService {
       id: authenticatedUser.id,
       username: authenticatedUser.username,
       roles: authenticatedUser.roles,
+      sector: authenticatedUser.sector,
       permissions: authenticatedUser.permissions,
     };
 
@@ -172,6 +173,7 @@ export class AuthService {
       id: user.id,
       username: user.username,
       sessionId,
+      sector: user.sector,
       roles: (user.roles ?? []).map((role) => role.code),
       permissions: [
         ...new Set((user.roles ?? []).flatMap((role) =>

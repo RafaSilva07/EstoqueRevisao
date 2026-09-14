@@ -58,6 +58,7 @@ async function createUser(): Promise<void> {
     user.username = username;
     user.passwordHash = await passwordHasher.hash(password);
     user.status = UserStatus.Active;
+    user.sector = ['PRODUCAO', 'EXPEDICAO'].includes(roleCode.toUpperCase()) ? roleCode.toUpperCase() : 'REVISAO';
 
     await dataSource.transaction(async (manager) => {
       const role = await manager
@@ -84,7 +85,7 @@ async function createUser(): Promise<void> {
       audit.entityId = user.id;
       audit.result = 'SUCCESS';
       audit.oldValues = null;
-      audit.newValues = { username: user.username, status: user.status, role: role.code };
+      audit.newValues = { username: user.username, status: user.status, role: role.code, sector: user.sector };
       audit.ipAddress = null;
       audit.userAgent = 'database-script';
       audit.requestId = randomUUID();

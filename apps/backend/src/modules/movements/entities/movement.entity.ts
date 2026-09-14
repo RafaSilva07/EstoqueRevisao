@@ -8,6 +8,9 @@ import { MovementItemEntity } from './movement-item.entity';
 
 @Entity({ name: 'movements' })
 export class MovementEntity {
+  @Column({ name: 'shipment_id', type: 'uuid', nullable: true })
+  shipmentId!: string | null;
+
   @PrimaryColumn('uuid')
   id: string = randomUUID();
 

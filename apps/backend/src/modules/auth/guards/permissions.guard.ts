@@ -20,6 +20,7 @@ export class PermissionsGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<Request>();
     const user = request.user as AuthenticatedUser | undefined;
+    if (user?.sector && user.sector !== 'REVISAO' && required.some((permission) => !permission.startsWith('shipments.') && permission !== 'products.read')) return false;
     return Boolean(user && required.every((permission) => user.permissions.includes(permission)));
   }
 }

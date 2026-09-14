@@ -16,6 +16,24 @@ Todas as entradas, saídas, transferências e distribuições de revisão aceita
 
 O frontend possui login, restauração da sessão pelo cookie HttpOnly e navegação condicionada às permissões.
 
+## Envios entre setores
+
+A Revisão acessa **Envios entre setores** pelo início, operações ou menu; Produção/Expedição recebem uma interface restrita ao próprio setor. As três consultas são **Aguardando minha ação**, **Enviados por mim** e **Histórico**, com paginação, cards e detalhes. O início destaca pendências e decisões recentes dos próprios envios; a indicação é atualizada a cada 30 segundos, sem interromper formulários/decisões abertos.
+
+Novo envio aceita vários itens e exige conferência do resumo. Usuários externos reutilizam produto e campos CONSERVADI/fabricação/validade; a Revisão seleciona posições disponíveis, inclusive de locais diferentes. Não há edição posterior: destinatário confirma ou recusa com motivo e responsável/data registrados. Recusas oferecem **Criar novo envio**, sem alterar o documento recusado. Loading, erros, sucesso e bloqueio de duplo envio seguem os componentes existentes.
+
+```text
+GET/POST        /api/v1/shipments
+GET             /api/v1/shipments/:id
+POST            /api/v1/shipments/resolve-lot
+POST            /api/v1/shipments/:id/confirmation
+POST            /api/v1/shipments/:id/refusal
+```
+
+Listagem: `view=pending|sent|history|updates`, `page` e `limit`; `updates` retorna decisões recentes dos próprios envios para a indicação da Home. Consultas respeitam o setor. Criação recebe `requestKey`, `destinationSector` e `items`; origem é inferida do usuário. Itens externos recebem `productId/lot/quantity` (ou variante existente via `batchId`); itens da Revisão recebem `productId/batchId/stockLocationId/quantity`. Confirmação aceita `confirmedExpirationKeys` quando houver divergência apresentada; recusa exige `reason`.
+
+Somente a confirmação gera entradas/saídas nos relatórios existentes. Nas saídas da Revisão, o saldo já fica indisponível desde a criação e aparece como **em trânsito** nos envios pendentes; recusa restaura o disponível. Estoque/Home/relatório de validades mostram saldo disponível. Movimentos vinculados exibem o identificador do envio na observação e não oferecem cancelamento isolado; devoluções são novos envios. Regras completas em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#envios-entre-setores).
+
 ## Produtos e conversões
 
 Produtos possuem listagem, busca, filtros, detalhe, criação, edição e ativação/inativação. O formulário identifica código, descrição, tipo de unidade e prazo padrão em anos; o prazo apenas sugere a validade de novas operações. O detalhe permite listar, criar, editar e ativar/inativar conversões de unidade.
@@ -33,7 +51,7 @@ PATCH           /api/v1/product-conversions/:id/status
 
 ## Lotes operacionais
 
-Não existe mais tela/menu de cadastro de lotes, modal de criação antecipada nem endpoints de criação/edição separados. O componente `OperationalLotFields` é compartilhado por entrada e transferência: preencha lote **ou** fabricação, saia do campo para completar o correspondente e revise a validade sugerida/editável.
+Não existe mais tela/menu de cadastro de lotes, modal de criação antecipada nem endpoints de criação/edição separados. O componente `OperationalLotFields` é compartilhado por entrada, transferência e envios externos: preencha lote **ou** fabricação, saia do campo para completar o correspondente e revise a validade sugerida/editável.
 
 ```text
 POST            /api/v1/movements/resolve-lot
@@ -41,7 +59,7 @@ GET             /api/v1/batches
 GET             /api/v1/batches/:id
 ```
 
-`resolve-lot` exige `movements.create` e apenas valida/calcula, sem gravar. As consultas de lotes são somente leitura das variantes existentes, com `batches.read`. O cadastro operacional acontece somente ao efetivar a movimentação.
+`resolve-lot` exige `movements.create` e apenas valida/calcula, sem gravar. As consultas de lotes são somente leitura das variantes existentes, com `batches.read`. O cadastro operacional acontece na transação de criação da operação (incluindo envios externos pendentes, ainda sem saldo).
 
 Quando o produto/lote já possui outra validade, a confirmação mostra as datas e a ação **Confirmar com validades separadas**. Sem essa confirmação, nada é gravado. Validades diferentes ficam em posições distintas, mesmo no mesmo local. A confirmação e a proteção contra duplo envio são compartilhadas pelas duas telas.
 
@@ -63,13 +81,13 @@ A tela Estoque atual filtra por produto, variante de lote/validade e local e mos
 
 `POST /api/v1/movements/external-entries`
 
-O fluxo seleciona origem externa, destino controlado e um ou mais itens. Recebe `items[].lot` com código e/ou fabricação e validade, sem cadastro prévio, mostra produto/lote/datas/quantidade no resumo antes da confirmação e protege reenvio por chave idempotente. Ao confirmar, incrementa o destino e abre o documento no histórico.
+Para Produção/Expedição, use Envios. A entrada direta rejeita esses locais no backend e os omite na seleção. Para outras origens, o fluxo seleciona origem externa, destino controlado e um ou mais itens. Recebe `items[].lot` com código e/ou fabricação e validade, sem cadastro prévio, mostra produto/lote/datas/quantidade no resumo antes da confirmação e protege reenvio por chave idempotente. Ao confirmar, incrementa o destino e abre o documento no histórico.
 
 ## Saída externa
 
 `POST /api/v1/movements/external-exits`
 
-O fluxo seleciona origem controlada, destino externo e itens derivados das posições positivas da origem. Mostra saldo e validade, rejeita duplicidade, valida quantidade e recarrega saldos após conflito. A confirmação reduz a origem sem criar posição externa.
+Para Produção/Expedição, use Envios. A saída direta rejeita esses locais no backend e os omite na seleção. Para outros destinos, o fluxo seleciona origem controlada, destino externo e itens derivados das posições positivas da origem. Mostra saldo e validade, rejeita duplicidade, valida quantidade e recarrega saldos após conflito. A confirmação reduz a origem sem criar posição externa.
 
 ## Transferência interna com lote de destino
 
@@ -146,7 +164,7 @@ A interface `Relatórios > Estoque e validades` apresenta saldo, lote, fabricaç
 
 A Home apresenta os saldos atuais de Revisar, Lata Boa, Varejo e TUF, a quantidade de posições vencidas e próximas do vencimento e as cinco movimentações mais recentes. Os dados são obtidos dos relatórios de estoque e do histórico de movimentações, respeitando as permissões existentes e sem recalcular regras de validade ou saldo no navegador.
 
-Os atalhos operacionais levam diretamente a Entrada, Saída, Revisão, Transferência e consulta de Estoque. A visualização usa cards no mobile e tabela responsiva para a atividade recente, sem gráficos, exportações ou indicadores de BI.
+Antes dos indicadores, a Home destaca envios aguardando recebimento e decisões recentes. Os atalhos operacionais levam diretamente a Entrada, Saída, Revisão, Transferência e consulta de Estoque. A visualização usa cards no mobile e tabela responsiva para a atividade recente, sem gráficos, exportações ou indicadores de BI.
 
 ## Experiência de uso
 

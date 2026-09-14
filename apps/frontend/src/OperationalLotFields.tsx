@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { api, Product } from './api';
 import { OperationalLot } from './operational-lot';
 
-export function OperationalLotFields({ product, value, onChange, onReady }: {
+export function OperationalLotFields({ product, value, onChange, onReady, resolvePath = '/movements/resolve-lot' }: {
+  resolvePath?: string;
   product: Product;
   value: OperationalLot;
   onChange: (lot: OperationalLot) => void;
@@ -28,7 +29,7 @@ export function OperationalLotFields({ product, value, onChange, onReady }: {
     if (!input) { setPending(false); return; }
     try {
       const result = await api.post<{ code: string; manufacturingDate: string; suggestedExpirationDate: string | null }>(
-        '/movements/resolve-lot', { productId: product.id, [field]: input },
+        resolvePath, { productId: product.id, [field]: input },
       );
       if (requestVersion !== version.current) return;
       const expiry = result.suggestedExpirationDate ?? current.current.expirationDate;

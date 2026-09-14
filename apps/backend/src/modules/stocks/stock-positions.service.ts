@@ -58,6 +58,12 @@ export class StockPositionsService {
     return this.positionsRepository.addAtomic(key, quantity, manager);
   }
 
+  async restoreQuantity(key: StockPositionKey, quantity: number, manager: EntityManager): Promise<StockPositionEntity> {
+    this.validateQuantity(quantity);
+    await this.validateReferences(key, manager, false);
+    return this.positionsRepository.addAtomic(key, quantity, manager);
+  }
+
   async removeQuantity(
     key: StockPositionKey,
     quantity: number,

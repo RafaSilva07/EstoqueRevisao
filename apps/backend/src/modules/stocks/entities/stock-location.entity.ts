@@ -15,6 +15,9 @@ import { ReviewLocationRole } from '../domain/review-location-role.enum';
 
 @Entity({ name: 'stock_locations' })
 export class StockLocationEntity {
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  sector!: string | null;
+
   @PrimaryColumn('uuid')
   id: string = randomUUID();
 

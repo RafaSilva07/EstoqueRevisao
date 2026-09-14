@@ -77,6 +77,7 @@ export class StockLocationsService {
       throw new BadRequestException({ code: 'EMPTY_UPDATE', message: 'Informe ao menos um campo.' });
     }
     return this.dataSource.transaction(async (manager) => {
+      if (dto.kind) await manager.query('SELECT id FROM stock_locations WHERE id = $1 FOR NO KEY UPDATE', [id]);
       const location = await this.repository.findById(id, manager);
       if (!location) {
         throw this.notFound();
@@ -84,6 +85,11 @@ export class StockLocationsService {
       const before = this.snapshot(location);
       const code = dto.code ?? location.code;
       const kind = dto.kind ?? location.kind;
+      if (kind !== location.kind) {
+        const pending = await manager.query<unknown[]>(`SELECT 1 FROM shipment_items item JOIN shipments shipment ON shipment.id = item.shipment_id
+          WHERE item.stock_location_id = $1 AND shipment.status = 'AGUARDANDO_RECEBIMENTO' LIMIT 1`, [id]);
+        if (pending.length) throw new ConflictException({ code: 'LOCATION_HAS_TRANSIT', message: 'Este local possui quantidade em trânsito. Conclua os envios antes de alterar o tipo.' });
+      }
       const parentId = dto.parentId !== undefined ? dto.parentId : location.parentId;
       if (await this.repository.existsByCode(code, id, manager)) {
         throw this.duplicate();

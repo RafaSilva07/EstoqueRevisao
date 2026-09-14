@@ -123,7 +123,7 @@ export function OperationalHomePage({
             <div className="dashboard-section-heading">
               <div>
                 <span className="eyebrow">Estoque atual</span>
-                <h2 id="stock-balances-title">Saldo por classificação</h2>
+                <h2 id="stock-balances-title">Saldo disponível por classificação</h2>
               </div>
               <button className="text-button" onClick={onInventory}>Ver estoque</button>
             </div>

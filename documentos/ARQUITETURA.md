@@ -29,6 +29,7 @@ apps/
       batches/       variantes operacionais imutáveis e codec CONSERVADI
       stocks/        locais e posições de estoque
       movements/     operações e histórico
+      shipments/     envios setoriais, reserva e decisão de recebimento
       reports/       consultas operacionais e exportação CSV
       health/        saúde da aplicação e do banco
     shared/          logs, erros, validação e paginação
@@ -60,7 +61,8 @@ Evite abstrações prematuras. Uma regra compartilhada deve ser extraída quando
 - `batches`: referências internas imutáveis de produto/código/fabricação/validade; unicidade por produto + código normalizado + validade, sem cadastro mestre público.
 - `stock_locations`: locais lógicos hierárquicos e configuração da revisão.
 - `stock_positions`: saldo materializado por produto, variante de lote/validade e local. O `batch_id` identifica a validade; as chaves de saldo e os serviços atômicos existentes permanecem.
-- `movements`: cabeçalho, estado e metadados de cancelamento.
+- `shipments`, `shipment_items`: workflow imutável com itens e origens congelados; itens pendentes originados na Revisão são o registro do trânsito. O saldo disponível permanece em `stock_positions`, sem novo local artificial.
+- `movements`: cabeçalho, estado, metadados de cancelamento e `shipment_id` opcional; índice único por envio/origem impede duplicar a efetivação.
 - `movement_items`: produto, referências imutáveis de lote/datas de origem e destino, quantidade e `product_snapshot` de código/descrição/unidade nas novas operações. Legados não recebem snapshots inventados.
 - `movement_item_distributions`: destinos e parcelas de itens revisados.
 
@@ -75,6 +77,7 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 - Adição de saldo usa UPSERT atômico.
 - Remoção usa `UPDATE` condicionado a `quantity >= requested`.
 - Transferências e distribuições bloqueiam posições com `pessimistic_write` em ordem determinística.
+- `ShipmentsService` reutiliza lotes, saldo, repositório de movimentações e auditoria com o mesmo manager. Criação serializa retries via advisory lock transacional da chave; decisão bloqueia a linha do envio. Triggers impedem edição/exclusão de envios e itens. Retorno da reserva usa a mesma operação de crédito atômico, sem exigir produto ainda ativo.
 - Cancelamento bloqueia primeiro a movimentação original e depois as posições necessárias.
 - Uma falha deve ser propagada para o limite transacional; não se deve capturar erro para confirmar estado parcial.
 - Quantidade permanece armazenada como `numeric(18,6)` por compatibilidade com o histórico, mas novas operações aceitam somente números inteiros positivos. Data/hora de evento é `timestamptz`.
@@ -98,7 +101,8 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 - O banco armazena somente SHA-256 do refresh token.
 - Sessões são consultadas e podem ser revogadas; logout invalida a sessão.
 - Guards globais exigem autenticação e permissões; rotas públicas usam declaração explícita.
-- O perfil inicial `ADMIN` recebe as permissões criadas pelas migrations. Perfis adicionais não devem ser presumidos.
+- `users.sector` é consultado junto da sessão: REVISAO (incluindo usuários anteriores), PRODUCAO ou EXPEDICAO. `ADMIN` permanece interno; perfis PRODUCAO/EXPEDICAO recebem somente leitura de produtos e permissões de envios. O guard também bloqueia permissões internas para setores externos mesmo se algum perfil for configurado indevidamente.
+- Locais externos dos setores possuem `stock_locations.sector` único. A migration associa os registros iniciais uma única vez pelo código; os serviços usam o vínculo persistido, não nomes exibidos.
 
 Permissões usadas pelas rotas atuais (as antigas `batches.create`/`batches.update` permanecem apenas nos registros de perfis existentes, sem endpoints associados):
 
@@ -109,6 +113,7 @@ batches.read
 stocks.read / stocks.create / stocks.update
 stock-positions.read
 movements.read / movements.create / movements.cancel
+shipments.read / shipments.create / shipments.decide
 ```
 
 ## Logs, auditoria e dados sensíveis

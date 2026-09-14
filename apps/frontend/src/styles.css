@@ -373,6 +373,16 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
   .content-grid, .inventory-grid:has(.detail-panel) { grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr); }
 }
 
+.shipment-tabs, .shipment-pagination { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin: 1rem 0; }
+.shipment-tabs > button { flex: 1 1 10rem; }
+.shipment-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1rem; }
+.shipment-card { padding: 1rem; min-width: 0; overflow-wrap: anywhere; margin-bottom: 1rem; }
+.shipment-card h2 { font-size: 1.2rem; }
+.shipment-id { overflow-wrap: anywhere; }
+.sector-workspace { max-width: 75rem; margin: 0 auto; padding: 5.5rem 1rem 2rem; }
+.sector-portal .topbar { gap: .5rem; }
+.sector-portal .topbar strong { min-width: 0; overflow-wrap: anywhere; }
+
 @media (max-width: 759px) {
   .list-panel:has(.responsive-table), .dashboard-recent { border: 0; background: transparent; padding: 0; box-shadow: none; }
 }

@@ -2,6 +2,7 @@ export interface AuthenticatedUser {
   id: string;
   username: string;
   sessionId: string;
+  sector?: string;
   roles: string[];
   permissions: string[];
 }

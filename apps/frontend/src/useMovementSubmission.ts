@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
-import { api, ApiError, Movement } from './api';
+import { api, ApiError } from './api';
 
-export function useMovementSubmission(path: string, onCreated: (id: string) => void) {
+export function useMovementSubmission(path: string, onCreated: (id: string) => void, withRequestKey = true) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [conflict, setConflict] = useState<ApiError | null>(null);
@@ -19,8 +19,8 @@ export function useMovementSubmission(path: string, onCreated: (id: string) => v
     // This runs only on an explicit second click after showing the conflict.
     if (conflict) accepted.current = [...new Set([...accepted.current, ...(conflict.details?.expirationKeys ?? [])])];
     try {
-      const movement = await api.post<Movement>(path, {
-        ...payload, requestKey: requestKey.current, confirmedExpirationKeys: accepted.current,
+      const movement = await api.post<{ id: string }>(path, {
+        ...payload, ...(withRequestKey ? { requestKey: requestKey.current } : {}), confirmedExpirationKeys: accepted.current,
       });
       requestKey.current = crypto.randomUUID();
       onCreated(movement.id);
