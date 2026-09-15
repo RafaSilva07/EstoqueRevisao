@@ -64,7 +64,7 @@ export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModule
   return {
     type: 'postgres',
     url: configService.getOrThrow<string>('DATABASE_URL'),
-    ssl: useSsl ? { rejectUnauthorized: true } : false,
+    ssl: useSsl ? { rejectUnauthorized: false } : false,
     entities: databaseEntities,
     migrations: databaseMigrations,
     synchronize: false,
