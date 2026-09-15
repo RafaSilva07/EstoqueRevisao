@@ -17,11 +17,13 @@ if (!databaseUrl) {
 const options: DataSourceOptions = {
   type: 'postgres',
   url: databaseUrl,
-  ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: true } : false,
+  ssl:
+    process.env.DATABASE_SSL === 'true'
+      ? { rejectUnauthorized: false }
+      : false,
   entities: databaseEntities,
   migrations: databaseMigrations,
   synchronize: false,
   migrationsTableName: 'schema_migrations',
 };
-
 export default new DataSource(options);

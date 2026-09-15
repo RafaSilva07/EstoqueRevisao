@@ -116,3 +116,12 @@ npm run docker:logs
 - **Falha de autenticação do PostgreSQL após trocar a senha:** volumes existentes mantêm a senha usada na primeira criação. Restaure a senha anterior ou, somente se puder descartar os dados locais, execute `docker compose down -v` e refaça `npm run db:setup`.
 - **Frontend abre, mas não carrega dados:** confirme que PostgreSQL e backend também estão ativos, abra o health check e confira `VITE_API_URL` e `FRONTEND_URL` no `.env`.
 - **Migration não conecta:** confira `docker compose ps`, `DATABASE_URL` e se a porta configurada coincide com `POSTGRES_PORT`.
+
+
+
+
+| Setor | Usuário | Senha |
+|---|---|---|
+| Revisão/Admin | `teste.revisao` | `Revisao#Teste2026!` |
+| Produção | `teste.producao` | `Producao#Teste2026!` |
+| Expedição | `teste.expedicao` | `Expedicao#Teste2026!` |
