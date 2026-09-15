@@ -277,6 +277,10 @@ export class ApiClient {
     return this.request<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
   }
 
+  delete<T>(path: string): Promise<T> {
+    return this.request<T>(path, { method: 'DELETE' });
+  }
+
   private async request<T>(path: string, options: RequestInit = {}, authenticated = true): Promise<T> {
     const headers = new Headers(options.headers);
     if (options.body) headers.set('Content-Type', 'application/json');

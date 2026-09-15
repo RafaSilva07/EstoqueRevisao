@@ -18,6 +18,20 @@ O frontend possui login, restauração da sessão pelo cookie HttpOnly e navega�
 
 Usuários `ADMIN` possuem no cabeçalho da aplicação o seletor **Modo operacional**, que alterna entre Revisão, Produção e Expedição sem exigir outro login. Ao escolher um setor externo, a interface passa para o portal restrito de envios daquele setor; ao retornar para Revisão, recupera o painel e as rotinas internas. O backend valida a função administrativa e aplica as restrições do setor escolhido em cada requisição, mantendo o administrador real como responsável e autor na auditoria.
 
+## Gerenciar usuários (ADMIN)
+
+O menu **Administração > Gerenciar usuários** no desktop e **Menu > Gerenciar usuários** no celular permite buscar/listar com paginação, ver detalhes, criar, editar e excluir por inativação. Nos modos Produção/Expedição, o administrador também dispõe do botão **Gerenciar usuários** acima dos envios.
+
+O formulário reutiliza login, senha, setor e perfis existentes. Edição permite trocar a senha e reativar contas. Exclusão exige confirmação, bloqueia o acesso e preserva o histórico. Alterações encerram as sessões da conta; editar a própria conta retorna ao login. A API protege o acesso administrativo, a própria conta e o último administrador ativo. Regras em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#administração-de-usuários).
+
+```text
+GET/POST        /api/v1/users
+GET             /api/v1/users/roles
+GET/PATCH/DELETE /api/v1/users/:id
+```
+
+Listagem aceita `search`, `page` e `limit`. `DELETE` inativa, sem excluir fisicamente. Respostas e auditoria não expõem credenciais. Os formulários mantêm campos de data limitados à largura disponível, inclusive dentro dos campos operacionais de lote no mobile.
+
 ## Envios entre setores
 
 A Revisão acessa **Envios entre setores** pelo início, operações ou menu; Produção/Expedição recebem uma interface restrita ao próprio setor. As três consultas são **Aguardando minha ação**, **Enviados por mim** e **Histórico**, com paginação, cards e detalhes. O início destaca pendências e decisões recentes dos próprios envios; a indicação é atualizada a cada 30 segundos, sem interromper formulários/decisões abertos.

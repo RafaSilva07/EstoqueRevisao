@@ -13,6 +13,17 @@ Este documento consolida o comportamento funcional vigente. Regras históricas s
 - Quantidades de estoque e movimentações devem ser números inteiros positivos; valores fracionários não são permitidos.
 - Datas e horários de eventos usam instante com fuso (`timestamptz`) e trafegam em ISO 8601. Fabricação e validade de lote usam somente data civil (`date`).
 
+## Administração de usuários
+
+- Somente contas com perfil `ADMIN` podem consultar, criar, editar e excluir usuários, independentemente do modo operacional selecionado.
+- Login é único sem diferenciar maiúsculas/minúsculas. O cadastro usa setor e perfis já existentes; esta tela não cria perfis ou permissões.
+- Senhas têm entre 8 e 128 caracteres e são persistidas exclusivamente como Argon2id. Na edição, omitir a senha mantém a atual.
+- Excluir significa inativar a conta, encerrar suas sessões e preservar os vínculos com histórico/auditoria. Contas inativas permanecem consultáveis e podem ser reativadas.
+- Alterar uma conta encerra suas sessões anteriores. Ao editar a própria conta, o administrador precisa entrar novamente.
+- Não é permitido inativar a própria conta nem remover seu acesso administrativo. O último administrador ativo é preservado, inclusive sob alterações concorrentes.
+- Administradores pertencem ao setor Revisão e utilizam o modo operacional para atuar nos outros setores.
+- Alterações e auditoria são atômicas e nunca registram senhas ou hashes.
+
 ## Produtos e conversões
 
 - Produto é o cadastro mestre: código único, descrição (`name`), tipo de unidade (`defaultUnit`), prazo padrão de validade em anos inteiros positivos e estado ativo/inativo. Novos cadastros exigem o prazo; produtos antigos sem essa informação permanecem sem sugestão até serem configurados, sem inventar um padrão.
@@ -182,5 +193,5 @@ Reversões:
 - transformação ou criação de produto/lote específica do Varejo;
 - mapa físico detalhado de armazenagem;
 - reversão automática de uma cadeia de operações dependentes;
-- administração completa de usuários e perfis;
+- criação/edição de perfis e permissões personalizados;
 - dashboard e relatórios analíticos avançados além das consultas operacionais implementadas.

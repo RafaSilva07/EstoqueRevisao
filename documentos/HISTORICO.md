@@ -80,6 +80,10 @@ Os ADRs completos estão em [`arquivo/adrs/`](./arquivo/adrs/). As decisões vig
 
 Adicionados setor do usuário e perfis externos, envios imutáveis com confirmação/recusa, reserva do disponível, retorno após recusa e movimentações vinculadas. Produção/Expedição deixam de usar entrada/saída direta. Detalhes atuais em [FUNCIONALIDADES.md](./FUNCIONALIDADES.md#envios-entre-setores).
 
+## Etapa 27 — Administração de usuários e responsividade
+
+Adicionado gerenciamento exclusivo de ADMIN com consulta, criação, edição e exclusão lógica de usuários. Reutiliza perfis/setores e schema existentes, sem migration. Alterações revogam sessões e registram auditoria atômica; própria conta e último administrador são protegidos. Ajustados limites de largura dos campos de data em formulários mobile. Resumo em [relatórios da etapa 27](./relatorios/RELATORIO_ETAPA_27_GESTAO_USUARIOS_RESPONSIVIDADE.md).
+
 ## Decisões substituídas ou obsoletas
 
 - Lote deixou de ser cadastro independente. Produto/código deixou de ser único isoladamente: a validade também faz parte da identidade operacional e do saldo.
@@ -101,7 +105,7 @@ Adicionados setor do usuário e perfis externos, envios imutáveis com confirma�
 - Algumas telas operacionais ainda não possuem testes completos de interação em DOM ou regressão visual automatizada.
 - Listagens que carregam até 100 registros precisarão de busca remota progressiva em bases maiores.
 - Renovação transparente do access token durante uma requisição expirada ainda pode ser aprimorada.
-- Administração visual de usuários/perfis e política de retenção/consulta da auditoria continuam pendentes; perfis setoriais já estão definidos.
+- Edição de perfis/permissões personalizados e política de retenção/consulta da auditoria continuam pendentes; administração visual de usuários já está disponível.
 - Reversão automática encadeada, fotos e relatórios analíticos avançados permanecem fora do escopo atual.
 
 ## Política para próximas etapas
