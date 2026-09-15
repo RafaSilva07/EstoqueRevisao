@@ -229,6 +229,11 @@ const apiUrl = typeof configuredUrl === 'string'
 
 export class ApiClient {
   private accessToken: string | null = null;
+  private operationalSector: UserSession['sector'] | null = null;
+
+  setOperationalSector(sector: UserSession['sector'] | null): void {
+    this.operationalSector = sector;
+  }
 
   async login(username: string, password: string): Promise<AuthenticationResult> {
     const result = await this.request<AuthenticationResult>('/auth/login', {
@@ -252,8 +257,12 @@ export class ApiClient {
   }
 
   async logout(): Promise<void> {
-    await this.request<void>('/auth/logout', { method: 'POST' }, false);
-    this.accessToken = null;
+    try {
+      await this.request<void>('/auth/logout', { method: 'POST' }, false);
+    } finally {
+      this.accessToken = null;
+      this.operationalSector = null;
+    }
   }
 
   get<T>(path: string): Promise<T> {
@@ -272,6 +281,7 @@ export class ApiClient {
     const headers = new Headers(options.headers);
     if (options.body) headers.set('Content-Type', 'application/json');
     if (authenticated && this.accessToken) headers.set('Authorization', `Bearer ${this.accessToken}`);
+    if (authenticated && this.operationalSector) headers.set('X-Operational-Sector', this.operationalSector);
     const response = await fetch(`${apiUrl}${path}`, {
       ...options,
       headers,

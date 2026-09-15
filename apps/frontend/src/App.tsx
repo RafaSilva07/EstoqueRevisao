@@ -13,6 +13,7 @@ import { StockReportsPage } from './StockReportsPage';
 import { Login } from './Login';
 import { ShipmentsPage, ShipmentHomeNotice } from './ShipmentsPage';
 import { OperationalHomePage } from './OperationalHomePage';
+import { Sector, sectorLabel } from './shipments';
 
 type Page = 'shipments' | 'home' | 'operations' | 'new-entry' | 'new-exit' | 'new-transfer' | 'new-review' | 'movements' | 'inventory' | 'reports' | 'reports-reviews' | 'reports-stock' | 'products' | 'stocks' | 'more';
 type Navigate = (page: Page) => void;
@@ -135,9 +136,15 @@ function FormActions({ busy, saveLabel, onCancel }: { busy: boolean; saveLabel: 
 function Status({ active }: { active: boolean }) { return <span className={`badge ${active ? 'active' : ''}`}>{active ? 'Ativo' : 'Inativo'}</span>; }
 function MorePage({ navigate, username, logout, busy, reportsPage, onHistory }: { onHistory?: () => void; navigate: Navigate; username: string; logout: () => void; busy: boolean; reportsPage?: Page }) { return <><PageHeader eyebrow="Menu" title="Consultas e cadastros" description="Acesse os registros, cadastros e sua conta." /><section className="more-grid">{onHistory && <button className="menu-card" onClick={onHistory}><span>Movimentações</span><small>Consultar operações e cancelamentos</small></button>}{reportsPage && <button className="menu-card" onClick={() => navigate(reportsPage)}><span>Relatórios</span><small>Movimentacoes, revisoes e validades</small></button>}<button className="menu-card" onClick={() => navigate('products')}><span>Produtos</span><small>Cadastro e conversoes de unidade</small></button><button className="menu-card" onClick={() => navigate('stocks')}><span>Estoques e locais</span><small>Estrutura logica da operacao</small></button><article className="surface account-card"><p className="eyebrow">Sessao atual</p><h2>{username}</h2><p className="muted">Seu acesso segue as permissoes do perfil.</p><button className="secondary button-wide" onClick={logout} disabled={busy}>{busy ? 'Saindo...' : 'Sair do sistema'}</button></article></section></>; }
 function NavButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) { return <button className={active ? 'current' : ''} onClick={onClick} aria-current={active ? 'page' : undefined}>{children}</button>; }
+export function OperationalSectorSwitcher({ value, onChange }: { value: Sector; onChange: (sector: Sector) => void }) {
+  return <label className="sector-switcher"><span>Modo operacional</span><select aria-label="Modo operacional" value={value} onChange={(event) => onChange(event.target.value as Sector)}>
+    <option value="REVISAO">Revisão</option><option value="PRODUCAO">Produção</option><option value="EXPEDICAO">Expedição</option>
+  </select></label>;
+}
 
 export function App() {
   const [user, setUser] = useState<UserSession | null>(null);
+  const [operationalSector, setOperationalSector] = useState<Sector>('REVISAO');
   const [checking, setChecking] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
   const [page, setPage] = useState<Page>('home');
@@ -145,9 +152,21 @@ export function App() {
   const [movementSuccess, setMovementSuccess] = useState<string>();
   const [transferPrefill, setTransferPrefill] = useState<TransferPrefill>();
   const [reviewPrefill, setReviewPrefill] = useState<ReviewPrefill>();
-  useEffect(() => { void api.refresh().then((result) => setUser(result?.user ?? null)).finally(() => setChecking(false)); }, []);
+  useEffect(() => { void api.refresh().then((result) => {
+    const authenticated = result?.user ?? null;
+    const sector = authenticated?.sector ?? 'REVISAO';
+    setUser(authenticated); setOperationalSector(sector);
+    api.setOperationalSector(authenticated?.roles.includes('ADMIN') ? sector : null);
+  }).finally(() => setChecking(false)); }, []);
   if (checking) return <main className="splash"><span className="spinner" /><p>Preparando seu ambiente...</p></main>;
-  if (!user) return <Login onAuthenticated={(authenticated) => { setUser(authenticated); setPage('home'); }} />;
+  if (!user) return <Login onAuthenticated={(authenticated) => {
+    const sector = authenticated.sector ?? 'REVISAO';
+    setUser(authenticated); setOperationalSector(sector); setPage('home');
+    api.setOperationalSector(authenticated.roles.includes('ADMIN') ? sector : null);
+  }} />;
+  const isAdmin = user.roles.includes('ADMIN');
+  const activeSector = isAdmin ? operationalSector : user.sector ?? 'REVISAO';
+  const activeUser: UserSession = activeSector === user.sector ? user : { ...user, sector: activeSector };
   const can = (permission: string) => user.permissions.includes(permission);
   const reportsStart: Page | undefined = can('movements.read')
     ? 'reports'
@@ -181,13 +200,19 @@ export function App() {
     setLoggingOut(true);
     void api.logout().finally(() => { setUser(null); setLoggingOut(false); });
   };
-  if (user.sector && user.sector !== 'REVISAO') return <div className="sector-portal"><header className="topbar"><strong>Estoque Revisão · {user.username}</strong><button className="secondary" onClick={logout} disabled={loggingOut}>Sair</button></header><main className="sector-workspace">{can('shipments.read') && <ShipmentsPage user={user} />}</main></div>;
+  const switchSector = (sector: Sector) => {
+    api.setOperationalSector(sector); setOperationalSector(sector); setPage('home');
+    setSelectedMovementId(undefined); setMovementSuccess(undefined); setTransferPrefill(undefined); setReviewPrefill(undefined);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
+  const switcher = isAdmin && <OperationalSectorSwitcher value={activeSector} onChange={switchSector} />;
+  if (activeSector !== 'REVISAO') return <div className="sector-portal"><header className="topbar"><strong>ER · {user.username} · {sectorLabel[activeSector]}</strong><div className="user-area">{switcher}<button className="secondary" onClick={logout} disabled={loggingOut}>Sair</button></div></header><main className="sector-workspace">{can('shipments.read') && <ShipmentsPage key={activeSector} user={activeUser} />}</main></div>;
   return <div className="app-shell"><a className="skip-link" href="#main-content">Ir para o conteúdo</a>
-    <header className="topbar"><button className="brand" onClick={() => navigate('home')} aria-label="Ir para o inicio"><span>ER</span><strong>Estoque Revisao</strong></button><div className="user-area"><span className="user-name">{user.username}</span><button className="secondary desktop-logout" onClick={logout}>Sair</button></div></header>
+    <header className="topbar"><button className="brand" onClick={() => navigate('home')} aria-label="Ir para o inicio"><span>ER</span><strong>Estoque Revisao</strong></button><div className="user-area">{switcher}<span className="user-name">{user.username}</span><button className="secondary desktop-logout" onClick={logout}>Sair</button></div></header>
     <aside className="sidebar"><nav aria-label="Navegacao principal">{can('shipments.read') && <NavButton active={page === 'shipments'} onClick={() => navigate('shipments')}>Envios entre setores</NavButton>}<NavButton active={page === 'home'} onClick={() => navigate('home')}>Início</NavButton>{can('movements.create') && <><NavButton active={page === 'new-review'} onClick={() => openReview()}>Revisar</NavButton><NavButton active={page === 'new-entry'} onClick={() => navigate('new-entry')}>Entrada</NavButton><NavButton active={page === 'new-exit'} onClick={() => navigate('new-exit')}>Saída</NavButton><NavButton active={page === 'new-transfer'} onClick={() => openTransfer()}>Transferir</NavButton></>}{can('movements.read') && <NavButton active={page === 'movements'} onClick={openHistory}>Movimentações</NavButton>}{can('stock-positions.read') && <NavButton active={page === 'inventory'} onClick={() => navigate('inventory')}>Estoque</NavButton>}{reportsStart && <NavButton active={page === 'reports' || page === 'reports-reviews' || page === 'reports-stock'} onClick={() => navigate(reportsStart)}>Relatórios</NavButton>}<p className="nav-group-label">Cadastros</p><NavButton active={page === 'products'} onClick={() => navigate('products')}>Produtos</NavButton><NavButton active={page === 'stocks'} onClick={() => navigate('stocks')}>Estoques e locais</NavButton></nav><p className="sidebar-note">Operacao segura e rastreavel</p></aside>
     <main className="workspace" id="main-content" tabIndex={-1}>
       {page === 'home' && can('shipments.read') && <ShipmentHomeNotice onOpen={() => navigate('shipments')} />}
-      {page === 'shipments' && can('shipments.read') && <ShipmentsPage user={user} />}
+      {page === 'shipments' && can('shipments.read') && <ShipmentsPage key={activeSector} user={activeUser} />}
       {page === 'home' && <HomePage navigate={navigate} onTransfer={() => openTransfer()} onReview={() => openReview()} inventory={can('stock-positions.read')} movementsCreate={can('movements.create')} movementsRead={can('movements.read')} />}
       {page === 'operations' && can('shipments.read') && <button className="button-wide" onClick={() => navigate('shipments')}>Envios · Produção e Expedição</button>}
       {page === 'operations' && can('movements.create') && <OperationsPage navigate={navigate} onTransfer={() => openTransfer()} onReview={() => openReview()} />}

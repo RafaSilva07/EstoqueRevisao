@@ -18,6 +18,7 @@ export class ShipmentEntity {
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;
   @Column({ name: 'origin_location_id', type: 'uuid', nullable: true }) originLocationId!: string | null;
   @Column({ name: 'destination_location_id', type: 'uuid' }) destinationLocationId!: string;
+  @Column({ type: 'varchar', length: 1000, nullable: true }) observation!: string | null;
   @Column({ type: 'varchar' }) status: ShipmentStatus = 'AGUARDANDO_RECEBIMENTO';
   @Column({ name: 'decided_by_id', type: 'uuid', nullable: true }) decidedById!: string | null;
   @ManyToOne(() => UserEntity) @JoinColumn({ name: 'decided_by_id' }) decidedBy!: UserEntity | null;
@@ -37,5 +38,6 @@ export class ShipmentItemEntity {
   @Column({ name: 'stock_location_id', type: 'uuid', nullable: true }) stockLocationId!: string | null;
   @ManyToOne(() => StockLocationEntity) @JoinColumn({ name: 'stock_location_id' }) stockLocation!: StockLocationEntity | null;
   @Column({ type: 'numeric', precision: 18, scale: 6, transformer: { to: (value: number) => value, from: (value: string) => Number(value) } }) quantity!: number;
+  @Column({ type: 'varchar', length: 1000, nullable: true }) observation!: string | null;
   @Column({ name: 'product_snapshot', type: 'jsonb' }) productSnapshot!: { code: string; name: string; defaultUnit: string };
 }

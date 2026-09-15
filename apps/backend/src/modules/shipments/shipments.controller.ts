@@ -5,7 +5,7 @@ import { RequirePermissions } from '../auth/decorators/require-permissions.decor
 import { getAuditRequestMetadata } from '../audit/audit-request-metadata';
 import { OperationalLotsService } from '../batches/operational-lots.service';
 import { ResolveOperationalLotDto } from '../batches/dto/operational-lot.dto';
-import { CreateShipmentDto, ExpirationConfirmationDto, RefuseShipmentDto, ShipmentQueryDto } from './shipment.dto';
+import { AvailableShipmentPositionsQueryDto, CreateShipmentDto, ExpirationConfirmationDto, RefuseShipmentDto, ShipmentQueryDto } from './shipment.dto';
 import { ShipmentsService } from './shipments.service';
 
 @Controller('shipments')
@@ -19,6 +19,10 @@ export class ShipmentsController {
   }
   @Get() @RequirePermissions('shipments.read')
   list(@Query() query: ShipmentQueryDto, @Req() req: Request): ReturnType<ShipmentsService['list']> { return this.service.list(query, req.user as AuthenticatedUser); }
+  @Get('available-positions') @RequirePermissions('shipments.create')
+  availablePositions(@Query() query: AvailableShipmentPositionsQueryDto, @Req() req: Request): ReturnType<ShipmentsService['availablePositions']> {
+    return this.service.availablePositions(query, req.user as AuthenticatedUser);
+  }
   @Get(':id') @RequirePermissions('shipments.read')
   get(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request): ReturnType<ShipmentsService['get']> { return this.service.get(id, req.user as AuthenticatedUser); }
   @Post(':id/confirmation') @RequirePermissions('shipments.decide')

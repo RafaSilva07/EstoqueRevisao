@@ -7,6 +7,7 @@ import { OperationalLotsService } from '../batches/operational-lots.service';
 import { BatchEntity } from '../batches/entities/batch.entity';
 import { ProductEntity } from '../products/entities/product.entity';
 import { StockLocationEntity } from '../stocks/entities/stock-location.entity';
+import { StockPositionEntity } from '../stocks/entities/stock-position.entity';
 import { StockLocationKind } from '../stocks/domain/stock-location-kind.enum';
 import { StockPositionKey } from '../stocks/stock-positions.repository';
 import { StockPositionsService } from '../stocks/stock-positions.service';
@@ -16,7 +17,7 @@ import { MovementItemEntity } from '../movements/entities/movement-item.entity';
 import { MovementType } from '../movements/domain/movement-type.enum';
 import { MovementStatus } from '../movements/domain/movement-status.enum';
 import { PaginatedResult, paginate } from '../../shared/pagination/paginated-result.interface';
-import { CreateShipmentDto, ExpirationConfirmationDto, ShipmentQueryDto } from './shipment.dto';
+import { AvailableShipmentPositionsQueryDto, CreateShipmentDto, ExpirationConfirmationDto, ShipmentQueryDto } from './shipment.dto';
 import { Sector, ShipmentEntity, ShipmentItemEntity, ShipmentStatus } from './shipment.entity';
 
 @Injectable()
@@ -58,6 +59,47 @@ export class ShipmentsService {
     return paginate(items, total, query.page, query.limit);
   }
 
+  async availablePositions(
+    query: AvailableShipmentPositionsQueryDto,
+    user: AuthenticatedUser,
+  ): Promise<PaginatedResult<StockPositionEntity>> {
+    if (this.sector(user) !== 'REVISAO') {
+      throw new ForbiddenException('Somente a Revisão consulta posições para envio externo.');
+    }
+    if (!query.batchCode && !query.manufacturingDate) {
+      throw new BadRequestException('Informe o lote ou a data de fabricação.');
+    }
+    const builder = this.dataSource.getRepository(StockPositionEntity)
+      .createQueryBuilder('position')
+      .innerJoinAndSelect('position.product', 'product')
+      .innerJoinAndSelect('position.batch', 'batch')
+      .innerJoinAndSelect('position.stockLocation', 'stockLocation')
+      .where('position.quantity > 0')
+      .andWhere('position.productId = :productId', { productId: query.productId })
+      .andWhere('product.active = true')
+      .andWhere('stockLocation.active = true')
+      .andWhere("stockLocation.kind <> 'EXTERNAL'");
+    if (query.batchCode) {
+      builder.andWhere('batch.code ILIKE :batchCode', { batchCode: `%${query.batchCode}%` });
+    }
+    if (query.manufacturingDate) {
+      builder.andWhere('batch.manufacturingDate = :manufacturingDate', {
+        manufacturingDate: query.manufacturingDate,
+      });
+    }
+    const [items, total] = await builder
+      .addSelect("CASE WHEN stockLocation.code = 'LATA_BOA' THEN 0 ELSE 1 END", 'location_priority')
+      .orderBy('location_priority', 'ASC')
+      .addOrderBy('stockLocation.name', 'ASC')
+      .addOrderBy('batch.code', 'ASC')
+      .addOrderBy('batch.expirationDate', 'ASC')
+      .addOrderBy('position.id', 'ASC')
+      .skip((query.page - 1) * query.limit)
+      .take(query.limit)
+      .getManyAndCount();
+    return paginate(items, total, query.page, query.limit);
+  }
+
   async create(dto: CreateShipmentDto, user: AuthenticatedUser, metadata: AuditRequestMetadata): Promise<ShipmentEntity> {
     const sector = this.sector(user);
     if ((sector === 'REVISAO') === (dto.destinationSector === 'REVISAO')) throw new BadRequestException('O envio deve ocorrer entre Revisão e Produção ou Expedição.');
@@ -78,6 +120,7 @@ export class ShipmentsService {
         requestKey: dto.requestKey, originSector: sector, destinationSector: dto.destinationSector,
         createdById: user.id, originLocationId: sector === 'REVISAO' ? null : external.id,
         destinationLocationId: sector === 'REVISAO' ? external.id : source.id,
+        observation: dto.observation?.trim() || null,
       });
       // Same product lock order as inline entries. Outgoing reservations lock locations before stock.
       const products = new Map<string, ProductEntity>();
@@ -112,6 +155,7 @@ export class ShipmentsService {
         items.push(Object.assign(new ShipmentItemEntity(), {
           shipmentId: shipment.id, productId: product.id, batchId: batch.id,
           stockLocationId: input.stockLocationId ?? null, quantity: input.quantity,
+          observation: input.observation?.trim() || null,
           productSnapshot: { code: product.code, name: product.name, defaultUnit: product.defaultUnit },
         }));
       }
@@ -191,7 +235,8 @@ export class ShipmentsService {
         type: shipment.destinationSector === 'REVISAO' ? MovementType.ExternalEntry : MovementType.ExternalExit,
         originLocationId, destinationLocationId: shipment.destinationLocationId,
         responsibleUserId: shipment.decidedById, occurredAt: shipment.decidedAt,
-        status: MovementStatus.Effective, observation: `Envio ${shipment.id} confirmado pelo destinatário.`,
+        status: MovementStatus.Effective,
+        observation: shipment.observation ?? `Envio ${shipment.id} confirmado pelo destinatário.`,
       });
       await this.movements.save(movement, manager);
       await this.movements.saveItems(items.map((item) => Object.assign(new MovementItemEntity(), {
@@ -204,7 +249,7 @@ export class ShipmentsService {
   }
   private record(shipment: ShipmentEntity, userId: string, action: string, manager: EntityManager, metadata: AuditRequestMetadata, extra: Record<string, unknown>): ReturnType<AuditService['record']> {
     return this.audit.record({ ...metadata, manager, userId, action, entityType: 'SHIPMENT', entityId: shipment.id, result: 'SUCCESS',
-      newValues: { originSector: shipment.originSector, destinationSector: shipment.destinationSector, status: shipment.status,
+      newValues: { originSector: shipment.originSector, destinationSector: shipment.destinationSector, observation: shipment.observation, status: shipment.status,
         decidedAt: shipment.decidedAt, refusalReason: shipment.refusalReason, ...extra } });
   }
 }

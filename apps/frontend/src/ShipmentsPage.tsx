@@ -13,6 +13,7 @@ function ShipmentItems({ shipment }: { shipment: Shipment }) {
     <span>Validade {formatDate(item.batch.expirationDate)}</span>
     {item.stockLocation && <span>Origem: {item.stockLocation.name}</span>}
     <b>{item.quantity} {item.productSnapshot.defaultUnit}</b>
+    {item.observation && <span><strong>Observação do produto:</strong> {item.observation}</span>}
   </li>)}</ul>;
 }
 
@@ -21,6 +22,7 @@ function ShipmentDecision({ shipment, refuse, onClose, onDone }: { shipment: Shi
   const submission = useMovementSubmission(`/shipments/${shipment.id}/${refuse ? 'refusal' : 'confirmation'}`, onDone, false);
   return <Modal labelledBy="shipment-decision-title" busy={submission.busy} onClose={onClose}>
     <h2 id="shipment-decision-title">{refuse ? 'Recusar envio' : 'Confirmar recebimento'}</h2>
+    {shipment.observation && <p><strong>Observação geral:</strong> {shipment.observation}</p>}
     <ShipmentItems shipment={shipment} />
     <p>{refuse ? shipment.originSector === 'REVISAO' ? 'O saldo em trânsito voltará às posições originais da Revisão.' : 'Nenhum saldo será adicionado à Revisão.' : shipment.destinationSector === 'REVISAO' ? 'Os itens serão adicionados a A Revisar.' : 'A saída será concluída. O saldo reservado não será descontado novamente.'}</p>
     <form onSubmit={(event) => { event.preventDefault(); void submission.submit(refuse ? { reason } : {}); }}>
@@ -83,7 +85,9 @@ export function ShipmentsPage({ user }: { user: UserSession }) {
     {selected && !decision && <Modal labelledBy="shipment-detail-title" onClose={() => setSelected(null)}>
       <h2 id="shipment-detail-title">{sectorLabel[selected.originSector]} → {sectorLabel[selected.destinationSector]}</h2>
       <p><strong>{shipmentStatusLabel[selected.status]}</strong></p><p>Enviado por {selected.createdBy.username} em {formatDateTime(selected.createdAt)}</p>
-      <small className="shipment-id">Envio {selected.id}</small><ShipmentItems shipment={selected} />
+      <small className="shipment-id">Envio {selected.id}</small>
+      {selected.observation && <p><strong>Observação geral:</strong> {selected.observation}</p>}
+      <ShipmentItems shipment={selected} />
       {selected.decidedAt && <p>{shipmentStatusLabel[selected.status]} por {selected.decidedBy?.username} em {formatDateTime(selected.decidedAt)}</p>}
       {selected.refusalReason && <Notice kind="info">Motivo da recusa: {selected.refusalReason}</Notice>}
       {canDecide && selected.status === 'AGUARDANDO_RECEBIMENTO' && selected.destinationSector === user.sector && <div className="dialog-actions"><button className="secondary" onClick={() => setDecision('refuse')}>Recusar envio</button><button onClick={() => setDecision('confirm')}>Confirmar recebimento</button></div>}

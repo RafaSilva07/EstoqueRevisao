@@ -1,55 +1,135 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { api, Paginated, Product, StockPosition } from './api';
-import { LoadingState, Modal, Notice, PageHeader } from './components';
+import { Modal, Notice, PageHeader } from './components';
 import { OperationalLotFields } from './OperationalLotFields';
+import { ProductAutocomplete } from './ProductAutocomplete';
 import { emptyLot, OperationalLot } from './operational-lot';
 import { formatDate } from './format';
 import { useMovementSubmission } from './useMovementSubmission';
 import { Sector, sectorLabel } from './shipments';
 
-interface DraftItem { key: string; product: Product; lot: OperationalLot; quantity: number; position?: StockPosition }
+interface DraftItem { key: string; product: Product; lot: OperationalLot; quantity: number; observation: string | null; position?: StockPosition }
 
 export function NewShipment({ sector, onCreated, onClose }: { sector: Sector; onCreated: (id: string) => void; onClose: () => void }) {
   const outgoing = sector === 'REVISAO';
   const [destination, setDestination] = useState<Sector>(outgoing ? 'PRODUCAO' : 'REVISAO');
-  const [products, setProducts] = useState<Product[]>([]);
+  const [product, setProduct] = useState<Product | null>(null);
+  const [productResetKey, setProductResetKey] = useState(0);
   const [positions, setPositions] = useState<StockPosition[]>([]);
-  const [search, setSearch] = useState('');
-  const [productId, setProductId] = useState('');
   const [positionId, setPositionId] = useState('');
   const [positionPage, setPositionPage] = useState(1);
   const [positionPages, setPositionPages] = useState(1);
+  const [positionLoading, setPositionLoading] = useState(false);
+  const [batchCode, setBatchCode] = useState('');
+  const [manufacturingDate, setManufacturingDate] = useState('');
+  const [lotResolving, setLotResolving] = useState(false);
+  const lotResolutionVersion = useRef(0);
   const [quantity, setQuantity] = useState('');
+  const [itemObservation, setItemObservation] = useState('');
+  const [observation, setObservation] = useState('');
   const [lot, setLot] = useState(emptyLot);
   const [ready, setReady] = useState(false);
   const [lotKey, setLotKey] = useState(0);
   const [items, setItems] = useState<DraftItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [confirming, setConfirming] = useState(false);
   const submission = useMovementSubmission('/shipments', onCreated);
+  const canQueryPositions = outgoing && Boolean(product) && Boolean(batchCode.trim() || manufacturingDate);
+
   useEffect(() => {
+    if (!canQueryPositions || !product) return;
     let active = true;
     const timer = window.setTimeout(() => {
-      setLoading(true);
-      void api.get<Paginated<Product>>(`/products?limit=100&active=true&search=${encodeURIComponent(search)}`)
-        .then((result) => { if (active) { setProducts(result.items); setError(''); } })
-        .catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'Erro ao consultar produtos.'); })
-        .finally(() => { if (active) setLoading(false); });
+      setPositionLoading(true);
+      const query = new URLSearchParams({ productId: product.id, page: String(positionPage), limit: '20' });
+      if (batchCode.trim()) query.set('batchCode', batchCode.trim());
+      if (manufacturingDate) query.set('manufacturingDate', manufacturingDate);
+      void api.get<Paginated<StockPosition>>(`/shipments/available-positions?${query}`)
+        .then((result) => {
+          if (!active) return;
+          setPositions(result.items);
+          setPositionPages(result.meta.totalPages);
+          setError('');
+        })
+        .catch((caught: unknown) => {
+          if (active) {
+            setPositions([]);
+            setPositionPages(1);
+            setError(caught instanceof Error ? caught.message : 'Erro ao consultar saldo disponível.');
+          }
+        })
+        .finally(() => { if (active) setPositionLoading(false); });
     }, 250);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [search]);
-  useEffect(() => {
-    if (!outgoing || !productId) return;
-    let active = true;
-    void api.get<Paginated<StockPosition>>(`/stock-positions?productId=${productId}&page=${positionPage}&limit=20`)
-      .then((result) => { if (active) { setPositions(result.items); setPositionPages(result.meta.totalPages); } })
-      .catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'Erro ao consultar saldo.'); });
-    return () => { active = false; };
-  }, [outgoing, productId, positionPage]);
-  const product = products.find((item) => item.id === productId);
-  const position = positions.find((item) => item.id === positionId);
+  }, [batchCode, canQueryPositions, manufacturingDate, positionPage, product]);
+
+  const visiblePositions = canQueryPositions ? positions : [];
+  const isPositionLoading = canQueryPositions && positionLoading;
+  const position = visiblePositions.find((item) => item.id === positionId);
   function resetLot() { setLot(emptyLot); setReady(false); setLotKey((value) => value + 1); }
+  function changeProduct(selected: Product | null) {
+    lotResolutionVersion.current += 1;
+    setLotResolving(false);
+    setProduct(selected);
+    setBatchCode('');
+    setManufacturingDate('');
+    setPositionId('');
+    setPositionPage(1);
+    setPositions([]);
+    resetLot();
+  }
+  function selectPosition(id: string) {
+    lotResolutionVersion.current += 1;
+    setLotResolving(false);
+    setPositionId(id);
+    const selected = visiblePositions.find((item) => item.id === id);
+    if (selected) {
+      setBatchCode(selected.batch.code);
+      setManufacturingDate(selected.batch.manufacturingDate);
+    }
+  }
+  async function resolveLot(field: 'code' | 'manufacturingDate', input: string) {
+    if (!product || (field === 'code' && !/^[CONSERVADI]{6}$/.test(input)) || !input) return;
+    const version = ++lotResolutionVersion.current;
+    setLotResolving(true);
+    try {
+      const resolved = await api.post<{ code: string; manufacturingDate: string }>('/shipments/resolve-lot', {
+        productId: product.id,
+        [field]: input,
+      });
+      if (version !== lotResolutionVersion.current) return;
+      setBatchCode(resolved.code);
+      setManufacturingDate(resolved.manufacturingDate);
+      setPositionId('');
+      setPositionPage(1);
+      setError('');
+    } catch (caught: unknown) {
+      if (version === lotResolutionVersion.current) {
+        setError(caught instanceof Error ? caught.message : 'Não foi possível completar lote e fabricação.');
+      }
+    } finally {
+      if (version === lotResolutionVersion.current) setLotResolving(false);
+    }
+  }
+  function changeBatchCode(input: string) {
+    const code = input.toLocaleUpperCase('pt-BR');
+    lotResolutionVersion.current += 1;
+    setLotResolving(false);
+    setBatchCode(code);
+    setManufacturingDate('');
+    setPositionId('');
+    setPositionPage(1);
+    void resolveLot('code', code);
+  }
+  function changeManufacturingDate(date: string) {
+    lotResolutionVersion.current += 1;
+    setLotResolving(false);
+    setManufacturingDate(date);
+    setBatchCode('');
+    setPositionId('');
+    setPositionPage(1);
+    void resolveLot('manufacturingDate', date);
+  }
   function add(event: FormEvent) {
     event.preventDefault();
     const amount = Number(quantity);
@@ -58,40 +138,66 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: Sector; on
       setError('Selecione uma posição não repetida e respeite o saldo disponível.'); return;
     }
     if (!outgoing && (!ready || !lot.expirationDate || lot.expirationDate < lot.manufacturingDate)) { setError('Confira lote, fabricação e validade.'); return; }
-    setItems((current) => [...current, { key: crypto.randomUUID(), product, lot: outgoing ? position!.batch : { ...lot }, quantity: amount, position: outgoing ? position : undefined }]);
-    setQuantity(''); setPositionId(''); resetLot(); setError('');
+    setItems((current) => [...current, { key: crypto.randomUUID(), product, lot: outgoing ? position!.batch : { ...lot }, quantity: amount,
+      observation: itemObservation.trim() || null, position: outgoing ? position : undefined }]);
+    setQuantity(''); setItemObservation(''); setPositionId(''); resetLot(); setError('');
+  }
+  function clearProduct() {
+    lotResolutionVersion.current += 1;
+    setLotResolving(false);
+    setProduct(null);
+    setProductResetKey((value) => value + 1);
+    setBatchCode('');
+    setManufacturingDate('');
+    setPositionId('');
+    setPositions([]);
   }
   const summary = <ul className="movement-detail-items">{items.map((item) => <li key={item.key}>
     <strong>{item.product.code} — {item.product.name}</strong><span>Lote {item.lot.code} · fabricação {formatDate(item.lot.manufacturingDate)}</span>
     <span>Validade {formatDate(item.lot.expirationDate)}{item.position ? ` · ${item.position.stockLocation.name}` : ''}</span>
     <b>{item.quantity} {item.product.defaultUnit}</b>
-    {!confirming && <button className="secondary" onClick={() => setItems((current) => current.filter((draft) => draft.key !== item.key))}>Remover item</button>}
+    {item.observation && <span><strong>Observação do produto:</strong> {item.observation}</span>}
+    {!confirming && <button type="button" className="secondary" onClick={() => setItems((current) => current.filter((draft) => draft.key !== item.key))}>Remover item</button>}
   </li>)}</ul>;
   return <>
     <PageHeader eyebrow="Envios entre setores" title={outgoing ? 'Novo envio' : 'Novo envio para Revisão'} action={<button className="secondary" onClick={onClose}>Voltar</button>} />
-    {error && <Notice kind="error">{error}</Notice>}
+    {error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
     <section className="surface form-panel"><h2>1. Destino</h2>{outgoing ? <label>Enviar para<select value={destination} onChange={(event) => setDestination(event.target.value as Sector)}><option value="PRODUCAO">Produção</option><option value="EXPEDICAO">Expedição</option></select></label> : <p>Revisão · entrada em A Revisar somente após confirmação.</p>}
       {outgoing && <p className="muted">Ao enviar, a quantidade sai do disponível e fica em trânsito. Uma recusa devolve o saldo à posição original.</p>}</section>
     <section className="surface form-panel"><h2>2. Adicionar produtos</h2>
-      <label>Buscar produto<input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setProductId(''); setPositions([]); setPositionId(''); }} placeholder="Código ou descrição" /></label>
-      {loading ? <LoadingState label="Carregando produtos" /> : <form className="form-grid" onSubmit={add}>
-        <label className="wide">Produto *<select required value={productId} onChange={(event) => { setProductId(event.target.value); setPositionId(''); setPositions([]); setPositionPage(1); resetLot(); }}><option value="">Selecione</option>{products.map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</select></label>
-        {outgoing && product && <div className="wide"><label>Posição disponível *<select required value={positionId} onChange={(event) => setPositionId(event.target.value)}><option value="">Selecione lote, validade e local</option>{positions.map((item) => <option key={item.id} value={item.id}>{item.batch.code} · validade {formatDate(item.batch.expirationDate)} · {item.stockLocation.name} · saldo {item.quantity}</option>)}</select></label>
-          {positionPages > 1 && <div className="row-actions"><button type="button" className="secondary" disabled={positionPage === 1} onClick={() => { setPositionPage((value) => value - 1); setPositionId(''); setPositions([]); }}>Posições anteriores</button><span>{positionPage}/{positionPages}</span><button type="button" className="secondary" disabled={positionPage >= positionPages} onClick={() => { setPositionPage((value) => value + 1); setPositionId(''); setPositions([]); }}>Próximas posições</button></div>}
-          {position && <p>Fabricação {formatDate(position.batch.manufacturingDate)} · disponível: {position.quantity} {product.defaultUnit}</p>}</div>}
+      <form className="form-grid" onSubmit={add}>
+        <ProductAutocomplete key={productResetKey} onChange={changeProduct} />
+        {product && <div className="selected-product wide"><strong>Produto selecionado: {product.code}</strong><span>{product.name} · {product.defaultUnit}</span><button type="button" className="secondary" onClick={clearProduct}>Trocar produto</button></div>}
+        {outgoing && product && <fieldset className="shipment-position-filter wide"><legend>Lote e posição disponível</legend>
+          <p className="muted">Informe o lote ou a fabricação. Depois escolha a posição; Lata Boa aparece primeiro por ser a origem prioritária dos envios externos.</p>
+          <div className="form-grid">
+            <label>Lote<input value={batchCode} maxLength={6} autoCapitalize="characters" spellCheck={false} onChange={(event) => changeBatchCode(event.target.value)} placeholder="Digite o lote" /></label>
+            <label>Fabricação<input type="date" min="2000-01-01" max="2099-12-31" value={manufacturingDate} onChange={(event) => changeManufacturingDate(event.target.value)} /></label>
+            {lotResolving && <p className="wide" role="status">Completando lote e fabricação…</p>}
+            <label className="wide">Posição disponível *<select required disabled={isPositionLoading || !canQueryPositions} value={positionId} onChange={(event) => selectPosition(event.target.value)}>
+              <option value="">{isPositionLoading ? 'Consultando posições…' : !canQueryPositions ? 'Informe o lote ou a fabricação primeiro' : visiblePositions.length === 0 ? 'Nenhuma posição disponível encontrada' : 'Selecione a posição'}</option>
+              {visiblePositions.map((item) => <option key={item.id} value={item.id}>{item.stockLocation.code === 'LATA_BOA' ? '★ ' : ''}{item.stockLocation.name} · lote {item.batch.code} · fabricação {formatDate(item.batch.manufacturingDate)} · validade {formatDate(item.batch.expirationDate)} · saldo {item.quantity}</option>)}
+            </select></label>
+          </div>
+          {canQueryPositions && positionPages > 1 && <div className="row-actions shipment-position-pagination"><button type="button" className="secondary" disabled={positionPage === 1 || isPositionLoading} onClick={() => { setPositionPage((value) => value - 1); setPositionId(''); }}>Posições anteriores</button><span>{positionPage}/{positionPages}</span><button type="button" className="secondary" disabled={positionPage >= positionPages || isPositionLoading} onClick={() => { setPositionPage((value) => value + 1); setPositionId(''); }}>Próximas posições</button></div>}
+          {position && <p className="available-balance"><span>Posição escolhida: {position.stockLocation.name}</span><strong>{position.quantity} {product.defaultUnit} disponíveis</strong></p>}
+        </fieldset>}
         {!outgoing && product && <OperationalLotFields key={`${product.id}:${lotKey}`} product={product} value={lot} onChange={setLot} onReady={setReady} resolvePath="/shipments/resolve-lot" />}
         <label>Quantidade *<input required type="number" inputMode="numeric" min="1" step="1" max={position?.quantity} value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label>
+        <label className="wide">Observação deste produto (opcional)<textarea value={itemObservation} onChange={(event) => setItemObservation(event.target.value)} maxLength={1000} rows={2} /></label>
         <div className="form-actions"><button disabled={!product || items.length >= 100 || (outgoing ? !position : !ready)}>Adicionar item</button></div>
-      </form>}
+      </form>
     </section>
     <section className="surface form-panel"><h2>3. Conferir envio ({items.length} itens)</h2>{summary}
+      <label>Observação geral do envio (opcional)<textarea value={observation} onChange={(event) => setObservation(event.target.value)} maxLength={1000} rows={3} /></label>
       <button disabled={!items.length} onClick={() => { submission.resetConfirmation(); setConfirming(true); }}>Conferir e enviar</button></section>
     {confirming && <Modal labelledBy="shipment-summary-title" busy={submission.busy} onClose={() => setConfirming(false)}>
       <h2 id="shipment-summary-title">{sectorLabel[sector]} → {sectorLabel[destination]}</h2>{summary}
       <p>Após enviar, os itens não poderão ser editados. O destinatário confirmará ou recusará o recebimento.</p>
       {submission.conflict && <Notice kind="info">{submission.conflict.message}</Notice>}
       {submission.error && <Notice kind="error">{submission.error}</Notice>}
-      <div className="dialog-actions"><button className="secondary" disabled={submission.busy} onClick={() => setConfirming(false)}>Voltar para conferir</button><button disabled={submission.busy} onClick={() => void submission.submit({ destinationSector: destination, items: items.map((item) => ({ productId: item.product.id, quantity: item.quantity, ...(item.position ? { batchId: item.position.batchId, stockLocationId: item.position.stockLocationId } : { lot: item.lot }) })) })}>{submission.busy ? 'Enviando…' : submission.conflict ? 'Confirmar validade diferente e enviar' : 'Enviar ao destinatário'}</button></div>
+      {observation.trim() && <p><strong>Observação geral:</strong> {observation.trim()}</p>}
+      <div className="dialog-actions"><button className="secondary" disabled={submission.busy} onClick={() => setConfirming(false)}>Voltar para conferir</button><button disabled={submission.busy} onClick={() => void submission.submit({ destinationSector: destination, observation: observation.trim() || undefined, items: items.map((item) => ({ productId: item.product.id, quantity: item.quantity, observation: item.observation ?? undefined, ...(item.position ? { batchId: item.position.batchId, stockLocationId: item.position.stockLocationId } : { lot: item.lot }) })) })}>{submission.busy ? 'Enviando…' : submission.conflict ? 'Confirmar validade diferente e enviar' : 'Enviar ao destinatário'}</button></div>
     </Modal>}
   </>;
 }

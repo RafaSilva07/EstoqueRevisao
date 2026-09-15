@@ -102,6 +102,7 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 - Sessões são consultadas e podem ser revogadas; logout invalida a sessão.
 - Guards globais exigem autenticação e permissões; rotas públicas usam declaração explícita.
 - `users.sector` é consultado junto da sessão: REVISAO (incluindo usuários anteriores), PRODUCAO ou EXPEDICAO. `ADMIN` permanece interno; perfis PRODUCAO/EXPEDICAO recebem somente leitura de produtos e permissões de envios. O guard também bloqueia permissões internas para setores externos mesmo se algum perfil for configurado indevidamente.
+- O frontend pode enviar `X-Operational-Sector` para alternância administrativa. O guard aceita apenas `REVISAO`, `PRODUCAO` ou `EXPEDICAO` e somente quando a sessão possui a função `ADMIN`; em seguida aplica as restrições normais do setor efetivo. A identidade autenticada e o setor persistido do usuário não são substituídos.
 - Locais externos dos setores possuem `stock_locations.sector` único. A migration associa os registros iniciais uma única vez pelo código; os serviços usam o vínculo persistido, não nomes exibidos.
 
 Permissões usadas pelas rotas atuais (as antigas `batches.create`/`batches.update` permanecem apenas nos registros de perfis existentes, sem endpoints associados):

@@ -73,10 +73,12 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 
 ## Envios entre setores
 
-- Usuários possuem setor `REVISAO`, `PRODUCAO` ou `EXPEDICAO`. O setor vem da sessão validada no banco, nunca do formulário. Usuários existentes permanecem na Revisão.
+- Usuários possuem setor `REVISAO`, `PRODUCAO` ou `EXPEDICAO`. O setor atribuído vem da sessão validada no banco, nunca de um campo operacional comum. Usuários existentes permanecem na Revisão.
+- Somente usuários com função `ADMIN` podem alternar temporariamente o modo operacional entre Revisão, Produção e Expedição. O modo escolhido vale por requisição, aplica todas as restrições do setor selecionado e não altera o setor cadastrado nem a identidade registrada em histórico e auditoria. Cabeçalhos de alternância enviados por não administradores ou com valor inválido são rejeitados.
 - Produção/Expedição enviam somente para Revisão e decidem somente recebimentos destinados ao próprio setor. Não acessam operações, saldos ou relatórios internos da Revisão.
 - Revisão envia para Produção/Expedição e decide os envios desses setores. Permissões `shipments.read/create/decide` complementam a validação do setor.
 - Um envio tem vários itens e nasce `AGUARDANDO_RECEBIMENTO`. Os itens não são editáveis depois do envio. Somente o destinatário pode decidir uma única vez: `CONFIRMADO` ou `RECUSADO`; recusa exige motivo de até 1000 caracteres.
+- O remetente pode registrar uma observação geral no envio e uma observação específica em cada item/produto. Ambas são opcionais, possuem até 1000 caracteres, são preservadas no histórico e tornam-se imutáveis junto com o envio.
 - Produção/Expedição → Revisão: criar não altera saldo; confirmar adiciona os itens à origem configurada da revisão (`review_role = SOURCE`, “A Revisar”); recusar não altera saldo.
 - Revisão → Produção/Expedição: criar retira atomicamente a quantidade disponível das posições selecionadas. Os itens pendentes representam **em trânsito**, sem criar um local consumível por outras operações. Confirmar encerra o trânsito e registra a saída sem descontar novamente; recusar devolve exatamente às posições originais, inclusive se o produto tiver sido inativado.
 - O tipo de um local com quantidade em trânsito não pode mudar até a decisão, garantindo a restauração em caso de recusa.
@@ -84,7 +86,7 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 - Criação usa chave idempotente; decisões bloqueiam o envio. Repetir a mesma decisão retorna o estado já registrado, sem novo efeito; tentar a decisão oposta gera conflito.
 - Decisão, movimentações, saldo e auditoria são uma transação única. Quantidade reservada não pode ser consumida por revisão, transferência, saída, outro envio ou estorno de entrada.
 - Confirmação gera movimentação externa vinculada ao envio. Como o cabeçalho atual possui uma origem, um envio com várias origens internas gera uma movimentação por local de origem, sob a mesma transação e vínculo.
-- Envios e itens não são excluídos. Remetente, destinatário, datas, responsável pela decisão, motivo e snapshot dos produtos permanecem no histórico. Correções exigem novo envio independente.
+- Envios e itens não são excluídos. Remetente, destinatário, datas, responsável pela decisão, motivo, observações e snapshot dos produtos permanecem no histórico. Correções exigem novo envio independente.
 - Movimentações vinculadas a envio confirmado não aceitam cancelamento isolado: devolução exige novo envio no sentido inverso e confirmação do outro setor. Cancelamentos de movimentações anteriores ou não vinculadas continuam disponíveis.
 - Indicações internas mostram pendências e decisões recentes dos próprios envios, com motivo de recusa. Não há e-mail, push, fotos ou controle de “lido”.
 

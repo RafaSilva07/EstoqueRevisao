@@ -1,12 +1,14 @@
-import { ExecutionContext } from '@nestjs/common';
+import { BadRequestException, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PermissionsGuard } from './permissions.guard';
 
 describe('Permissões por setor', () => {
-  const check = (sector: string, required: string[], permissions: string[]): boolean => {
+  const check = (sector: string, required: string[], permissions: string[], roles: string[] = [], requestedSector?: string): boolean => {
     const reflector = { getAllAndOverride: (): string[] => required } as unknown as Reflector;
     const context = { getHandler: () => null, getClass: () => null,
-      switchToHttp: () => ({ getRequest: (): { user: { sector: string; permissions: string[] } } => ({user:{sector,permissions}}) }),
+      switchToHttp: () => ({ getRequest: (): { headers: Record<string, string>; user: { sector: string; permissions: string[]; roles: string[] } } => ({
+        headers: requestedSector ? { 'x-operational-sector': requestedSector } : {}, user: { sector, permissions, roles },
+      }) }),
     } as unknown as ExecutionContext;
     return new PermissionsGuard(reflector).canActivate(context);
   };
@@ -21,5 +23,14 @@ describe('Permissões por setor', () => {
   it('preserva permissões internas da Revisão', () => {
     expect(check('REVISAO',['movements.create'],['movements.create'])).toBe(true);
     expect(check('REVISAO',['movements.create'],[])).toBe(false);
+  });
+  it('permite que ADMIN assuma as restrições do setor operacional escolhido', () => {
+    expect(check('REVISAO', ['shipments.create'], ['shipments.create'], ['ADMIN'], 'PRODUCAO')).toBe(true);
+    expect(check('REVISAO', ['movements.create'], ['movements.create'], ['ADMIN'], 'PRODUCAO')).toBe(false);
+    expect(check('REVISAO', ['movements.create'], ['movements.create'], ['ADMIN'], 'REVISAO')).toBe(true);
+  });
+  it('rejeita troca por não administrador ou para setor inválido', () => {
+    expect(() => check('PRODUCAO', ['shipments.read'], ['shipments.read'], ['PRODUCAO'], 'REVISAO')).toThrow(ForbiddenException);
+    expect(() => check('REVISAO', ['shipments.read'], ['shipments.read'], ['ADMIN'], 'INVALIDO')).toThrow(BadRequestException);
   });
 });

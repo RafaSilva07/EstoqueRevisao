@@ -28,7 +28,7 @@ import { ShipmentsService } from './shipments.service';
 const databaseUrl = process.env.TEST_DATABASE_URL;
 (databaseUrl ? describe : describe.skip)('Envios entre setores (PostgreSQL)', () => {
   let db: DataSource; let service: ShipmentsService; let stock: StockPositionsService; let movements: MovementsService; let audit: AuditService;
-  let users: Record<Sector, AuthenticatedUser>; let productId: string; let batchId: string; let sourceId: string; let tufId: string;
+  let users: Record<Sector, AuthenticatedUser>; let productId: string; let batchId: string; let sourceId: string; let tufId: string; let lataBoaId: string;
   const metadata = (): { requestId: string; ipAddress: null; userAgent: string } => ({ requestId: randomUUID(), ipAddress: null, userAgent: 'jest-shipments' });
   beforeAll(async () => {
     if (!new URL(databaseUrl!).pathname.endsWith('_test')) throw new Error('Banco descartável _test obrigatório.');
@@ -53,6 +53,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     await db.query(`INSERT INTO batches(id,product_id,code,manufacturing_date,expiration_date,created_by,updated_by) VALUES ($1,$2,'SOCDNV','2026-08-31','2028-08-31',$3,$3)`, [batchId,productId,users.REVISAO.id]);
     sourceId = (await db.getRepository(StockLocationEntity).findOneByOrFail({ code: 'REVISAR' })).id;
     tufId = (await db.getRepository(StockLocationEntity).findOneByOrFail({ code: 'TUF' })).id;
+    lataBoaId = (await db.getRepository(StockLocationEntity).findOneByOrFail({ code: 'LATA_BOA' })).id;
   });
   beforeEach(async () => {
     jest.restoreAllMocks();
@@ -77,6 +78,19 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     const movement = await db.getRepository(MovementEntity).findOneByOrFail({ shipmentId: shipment.id });
     expect(movement.type).toBe('ENTRADA_EXTERNA'); expect(movement.destinationLocationId).toBe(sourceId);
     expect(await db.getRepository(AuditLogEntity).countBy({ entityId: shipment.id })).toBe(2);
+  });
+  it('preserva observações do envio e de cada produto no histórico', async () => {
+    const shipment = await service.create({
+      requestKey: randomUUID(), destinationSector: 'REVISAO', observation: '  Conferir lacre no recebimento  ',
+      items: [{ productId, batchId, quantity: 3, observation: '  Embalagem identificada  ' }],
+    }, users.PRODUCAO, metadata());
+    expect(shipment.observation).toBe('Conferir lacre no recebimento');
+    expect(shipment.items[0].observation).toBe('Embalagem identificada');
+    await decide(shipment.id, 'REVISAO');
+    const movement = await db.getRepository(MovementEntity).findOneByOrFail({ shipmentId: shipment.id });
+    expect(movement.observation).toBe('Conferir lacre no recebimento');
+    await expect(db.getRepository(ShipmentEntity).update(shipment.id, { observation: 'Alterada' })).rejects.toThrow();
+    await expect(db.getRepository(ShipmentItemEntity).update(shipment.items[0].id, { observation: 'Alterada' })).rejects.toThrow();
   });
   it('Expedição → Revisão: recusa com motivo, sem saldo; correção gera novo documento', async () => {
     const shipment = await incoming('EXPEDICAO');
@@ -118,6 +132,19 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1); expect(await balance()).toBe(4);
     await expect(db.transaction((manager) => stock.distributeQuantity({ productId, batchId, stockLocationId: sourceId }, [{ destinationLocationId: tufId, quantity: 5 }], 5, manager))).rejects.toBeInstanceOf(ConflictException);
     expect(await balance()).toBe(4); expect(await balance(tufId)).toBe(0);
+  });
+  it('consulta posições por lote/fabricação com Lata Boa primeiro e somente para Revisão', async () => {
+    await seed(8, sourceId);
+    await seed(12, lataBoaId);
+    await seed(5, tufId);
+    const byLot = await service.availablePositions({ productId, batchCode: 'SOC', page: 1, limit: 10 }, users.REVISAO);
+    expect(byLot.items.map((item) => item.stockLocation.code)).toEqual(['LATA_BOA', 'REVISAR', 'TUF']);
+    expect(byLot.meta.total).toBe(3);
+    const byDate = await service.availablePositions({ productId, manufacturingDate: '2026-08-31', page: 1, limit: 2 }, users.REVISAO);
+    expect(byDate.items[0].stockLocation.code).toBe('LATA_BOA');
+    expect(byDate.meta.totalPages).toBe(2);
+    await expect(service.availablePositions({ productId, page: 1, limit: 10 }, users.REVISAO)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.availablePositions({ productId, batchCode: 'SOC', page: 1, limit: 10 }, users.PRODUCAO)).rejects.toBeInstanceOf(ForbiddenException);
   });
   it('reenvio da criação não reserva novamente', async () => {
     await seed(); const key = randomUUID();

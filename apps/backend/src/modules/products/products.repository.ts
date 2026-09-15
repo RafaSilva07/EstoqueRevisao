@@ -19,8 +19,11 @@ export class ProductsRepository {
     const builder = this.repository.createQueryBuilder('product');
 
     if (query.search) {
+      const field = query.searchField === 'code'
+        ? 'product.code'
+        : query.searchField === 'name' ? 'product.name' : null;
       builder.andWhere(
-        '(product.code ILIKE :search OR product.name ILIKE :search)',
+        field ? `${field} ILIKE :search` : '(product.code ILIKE :search OR product.name ILIKE :search)',
         { search: `%${query.search}%` },
       );
     }
@@ -29,8 +32,8 @@ export class ProductsRepository {
     }
 
     return builder
-      .orderBy('product.name', 'ASC')
-      .addOrderBy('product.code', 'ASC')
+      .orderBy(query.searchField === 'code' ? 'product.code' : 'product.name', 'ASC')
+      .addOrderBy(query.searchField === 'code' ? 'product.name' : 'product.code', 'ASC')
       .skip((query.page - 1) * query.limit)
       .take(query.limit)
       .getManyAndCount();

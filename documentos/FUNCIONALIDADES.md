@@ -16,27 +16,38 @@ Todas as entradas, saídas, transferências e distribuições de revisão aceita
 
 O frontend possui login, restauração da sessão pelo cookie HttpOnly e navegação condicionada às permissões.
 
+Usuários `ADMIN` possuem no cabeçalho da aplicação o seletor **Modo operacional**, que alterna entre Revisão, Produção e Expedição sem exigir outro login. Ao escolher um setor externo, a interface passa para o portal restrito de envios daquele setor; ao retornar para Revisão, recupera o painel e as rotinas internas. O backend valida a função administrativa e aplica as restrições do setor escolhido em cada requisição, mantendo o administrador real como responsável e autor na auditoria.
+
 ## Envios entre setores
 
 A Revisão acessa **Envios entre setores** pelo início, operações ou menu; Produção/Expedição recebem uma interface restrita ao próprio setor. As três consultas são **Aguardando minha ação**, **Enviados por mim** e **Histórico**, com paginação, cards e detalhes. O início destaca pendências e decisões recentes dos próprios envios; a indicação é atualizada a cada 30 segundos, sem interromper formulários/decisões abertos.
 
-Novo envio aceita vários itens e exige conferência do resumo. Usuários externos reutilizam produto e campos CONSERVADI/fabricação/validade; a Revisão seleciona posições disponíveis, inclusive de locais diferentes. Não há edição posterior: destinatário confirma ou recusa com motivo e responsável/data registrados. Recusas oferecem **Criar novo envio**, sem alterar o documento recusado. Loading, erros, sucesso e bloqueio de duplo envio seguem os componentes existentes.
+Novo envio aceita vários itens e exige conferência do resumo. A seleção de produto possui campos independentes de código e descrição com sugestões filtradas durante a digitação; escolher em qualquer campo identifica o produto único e preenche o outro automaticamente, sem uma terceira seleção. A lista também pode ser aberta pelos botões dos campos e refinada por teclado.
+
+Usuários externos reutilizam o produto selecionado e os campos CONSERVADI/fabricação/validade. Na saída da Revisão, após selecionar o produto, o operador informa o lote ou a fabricação; o par é completado imediatamente pelo resolvedor central de lotes e fica visível antes da escolha da posição. A consulta é paginada no backend, aceita os filtros combinados e apresenta primeiro as posições de Lata Boa, seguidas dos demais locais por nome; lote, fabricação, validade, local e saldo continuam visíveis para distinguir a posição exata. A Revisão pode incluir posições de locais diferentes no mesmo envio.
+
+Em todos os sentidos de envio, cada produto pode receber uma observação opcional e o envio pode receber uma observação geral. Os textos são conferidos antes do envio, ficam disponíveis ao destinatário e no histórico e não podem ser editados após a criação. A observação geral também acompanha a movimentação gerada quando o recebimento é confirmado.
+
+Não há edição posterior: destinatário confirma ou recusa com motivo e responsável/data registrados. Recusas oferecem **Criar novo envio**, sem alterar o documento recusado. Loading, erros, sucesso e bloqueio de duplo envio seguem os componentes existentes.
 
 ```text
 GET/POST        /api/v1/shipments
+GET             /api/v1/shipments/available-positions
 GET             /api/v1/shipments/:id
 POST            /api/v1/shipments/resolve-lot
 POST            /api/v1/shipments/:id/confirmation
 POST            /api/v1/shipments/:id/refusal
 ```
 
-Listagem: `view=pending|sent|history|updates`, `page` e `limit`; `updates` retorna decisões recentes dos próprios envios para a indicação da Home. Consultas respeitam o setor. Criação recebe `requestKey`, `destinationSector` e `items`; origem é inferida do usuário. Itens externos recebem `productId/lot/quantity` (ou variante existente via `batchId`); itens da Revisão recebem `productId/batchId/stockLocationId/quantity`. Confirmação aceita `confirmedExpirationKeys` quando houver divergência apresentada; recusa exige `reason`.
+Listagem: `view=pending|sent|history|updates`, `page` e `limit`; `updates` retorna decisões recentes dos próprios envios para a indicação da Home. Consultas respeitam o setor. `available-positions` é exclusivo da Revisão, exige `productId` e ao menos `batchCode` ou `manufacturingDate`, e retorna somente saldo positivo de produto/local ativos. Criação recebe `requestKey`, `destinationSector` e `items`; origem é inferida do usuário. Itens externos recebem `productId/lot/quantity` (ou variante existente via `batchId`); itens da Revisão recebem `productId/batchId/stockLocationId/quantity`. Confirmação aceita `confirmedExpirationKeys` quando houver divergência apresentada; recusa exige `reason`.
 
 Somente a confirmação gera entradas/saídas nos relatórios existentes. Nas saídas da Revisão, o saldo já fica indisponível desde a criação e aparece como **em trânsito** nos envios pendentes; recusa restaura o disponível. Estoque/Home/relatório de validades mostram saldo disponível. Movimentos vinculados exibem o identificador do envio na observação e não oferecem cancelamento isolado; devoluções são novos envios. Regras completas em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#envios-entre-setores).
 
 ## Produtos e conversões
 
 Produtos possuem listagem, busca, filtros, detalhe, criação, edição e ativação/inativação. O formulário identifica código, descrição, tipo de unidade e prazo padrão em anos; o prazo apenas sugere a validade de novas operações. O detalhe permite listar, criar, editar e ativar/inativar conversões de unidade.
+
+A consulta de produtos aceita `searchField=code|name` quando a interface precisa restringir as sugestões a um campo. Sem esse parâmetro, a busca geral continua considerando código e descrição.
 
 Rotas principais:
 

@@ -33,6 +33,18 @@ Os relatórios completos dessas etapas foram preservados em [`arquivo/relatorios
 
 Cadastro de produto com prazo padrão; lotes informados na operação, confirmação de validades divergentes e posições separadas. Interfaces e histórico adaptados sem alterar revisão/estorno. Resumo em [relatorios/RELATORIO_ETAPA_22_LOTES_OPERACIONAIS_VALIDADES.md](./relatorios/RELATORIO_ETAPA_22_LOTES_OPERACIONAIS_VALIDADES.md).
 
+## Etapa 24 — Busca e seleção no envio
+
+O formulário de envios passou a localizar produtos por código ou descrição com sugestões sincronizadas. Na saída da Revisão, lote/fabricação antecedem a posição disponível, são completados entre si pelo codec central e Lata Boa possui prioridade de ordenação. Resumo em [relatorios/RELATORIO_ETAPA_24_BUSCA_POSICAO_ENVIOS.md](./relatorios/RELATORIO_ETAPA_24_BUSCA_POSICAO_ENVIOS.md).
+
+## Etapa 25 — Observações nos envios
+
+Envios entre todos os setores passaram a aceitar uma observação geral e uma observação específica por produto, preservadas na confirmação e no histórico imutável. Resumo em [relatorios/RELATORIO_ETAPA_25_OBSERVACOES_ENVIOS.md](./relatorios/RELATORIO_ETAPA_25_OBSERVACOES_ENVIOS.md).
+
+## Etapa 26 — Alternância operacional do administrador
+
+Administradores passaram a alternar entre as interfaces e regras operacionais de Revisão, Produção e Expedição sem trocar de usuário. O backend valida o modo por requisição e preserva a identidade real na auditoria. Resumo em [relatorios/RELATORIO_ETAPA_26_MODO_OPERACIONAL_ADMIN.md](./relatorios/RELATORIO_ETAPA_26_MODO_OPERACIONAL_ADMIN.md).
+
 ## Decisões consolidadas
 
 | Registro histórico | Situação atual |
