@@ -216,6 +216,40 @@ export class StockPositionsService {
     await this.positionsRepository.addAtomic(source, quantity, manager);
   }
 
+  async convertDistributedQuantity(
+    source: StockPositionKey,
+    output: Pick<StockPositionKey, 'productId' | 'batchId'>,
+    quantity: number,
+    outputQuantity: number,
+    distributions: Array<{ destinationLocationId: string; quantity: number }>,
+    manager: EntityManager,
+    reverse = false,
+  ): Promise<void> {
+    this.validateQuantity(quantity);
+    this.validateQuantity(outputQuantity);
+    if (!distributions.length || distributions.reduce((sum, part) => sum + part.quantity, 0) !== outputQuantity
+      || new Set(distributions.map((part) => part.destinationLocationId)).size !== distributions.length
+      || distributions.some((part) => part.destinationLocationId === source.stockLocationId)) {
+      throw new BadRequestException('A distribuição deve corresponder ao total convertido em unidades.');
+    }
+    const ordered = [...distributions].sort((a, b) => a.destinationLocationId.localeCompare(b.destinationLocationId));
+    const keys = [source, ...ordered.map((part) => ({ ...output, stockLocationId: part.destinationLocationId }))];
+    for (const key of keys) await this.validateReferences(key, manager, !reverse);
+    for (const part of ordered) this.validateQuantity(part.quantity);
+    await this.positionsRepository.lockKeys(keys, manager);
+    if (reverse) {
+      for (const part of ordered) await this.removeQuantity({ ...output, stockLocationId: part.destinationLocationId }, part.quantity, manager);
+      await this.restoreQuantity(source, quantity, manager);
+    } else {
+      await this.removeQuantity(source, quantity, manager);
+      for (const part of ordered) await this.addQuantity({ ...output, stockLocationId: part.destinationLocationId }, part.quantity, manager);
+    }
+  }
+
+  lockPositions(keys: StockPositionKey[], manager: EntityManager): Promise<void> {
+    return this.positionsRepository.lockKeys(keys, manager);
+  }
+
   private async insufficientStockException(
     key: StockPositionKey,
     manager: EntityManager,

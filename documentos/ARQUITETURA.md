@@ -65,6 +65,8 @@ Evite abstrações prematuras. Uma regra compartilhada deve ser extraída quando
 - `movements`: cabeçalho, estado, metadados de cancelamento e `shipment_id` opcional; índice único por envio/origem impede duplicar a efetivação.
 - `movement_items`: produto, referências imutáveis de lote/datas de origem e destino, quantidade e `product_snapshot` de código/descrição/unidade nas novas operações. Legados não recebem snapshots inventados.
 - `movement_item_distributions`: destinos e parcelas de itens revisados.
+- `products.units_per_package` e `product_unit_options`: fator por embalagem e alternativas de produto unitário. Não substituem as conversões legadas do mesmo código.
+- Revisões com desmontagem gravam `output_product_id`, `output_batch_id`, `output_quantity`, `units_per_package` e `output_product_snapshot` em `movement_items`. Campos nulos preservam operações anteriores. FK composta protege a associação produto/lote resultante; check protege a multiplicação, e trigger restringe a conversão à revisão com lote/datas preservados.
 
 UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o histórico deve ser preservado. O banco aplica checks, unicidades e chaves compostas para impedir dados incompatíveis.
 
@@ -79,6 +81,8 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 - Transferências e distribuições bloqueiam posições com `pessimistic_write` em ordem determinística.
 - `ShipmentsService` reutiliza lotes, saldo, repositório de movimentações e auditoria com o mesmo manager. Criação serializa retries via advisory lock transacional da chave; decisão bloqueia a linha do envio. Triggers impedem edição/exclusão de envios e itens. Retorno da reserva usa a mesma operação de crédito atômico, sem exigir produto ainda ativo.
 - Cancelamento bloqueia primeiro a movimentação original e depois as posições necessárias.
+- Revisões e estornos bloqueiam o conjunto completo de posições em ordem de produto/lote/local antes das alterações, inclusive quando várias embalagens convergem no mesmo código unitário. O serviço central de saldos mantém os débitos condicionais e créditos atômicos.
+- Alterações do cadastro de embalagem e leitura da configuração na revisão usam o advisory lock transacional `product-packaging`. A revisão bloqueia produtos em ordem antes de resolver referências de lote. A auditoria registra fator, saída e distribuições na mesma transação; o estorno usa exclusivamente os dados persistidos da operação.
 - Uma falha deve ser propagada para o limite transacional; não se deve capturar erro para confirmar estado parcial.
 - Quantidade permanece armazenada como `numeric(18,6)` por compatibilidade com o histórico, mas novas operações aceitam somente números inteiros positivos. Data/hora de evento é `timestamptz`.
 

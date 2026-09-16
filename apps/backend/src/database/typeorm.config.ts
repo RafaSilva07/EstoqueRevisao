@@ -26,6 +26,7 @@ import { OperationalLotExpiration1789084800000 } from './migrations/178908480000
 import { ShipmentEntity, ShipmentItemEntity } from '../modules/shipments/shipment.entity';
 import { SectorShipments1789344000000 } from './migrations/1789344000000-sector-shipments';
 import { ShipmentObservations1789430400000 } from './migrations/1789430400000-shipment-observations';
+import { ReviewPackageUnpacking1789516800000 } from './migrations/1789516800000-review-package-unpacking';
 
 export const databaseEntities = [
   ShipmentEntity,
@@ -56,6 +57,7 @@ export const databaseMigrations = [
   OperationalLotExpiration1789084800000,
   SectorShipments1789344000000,
   ShipmentObservations1789430400000,
+  ReviewPackageUnpacking1789516800000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {

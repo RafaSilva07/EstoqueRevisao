@@ -15,6 +15,9 @@ export interface ReportResult<T, TTotals> {
 }
 
 export interface MovementReportItem {
+  outputProductCode?: string | null;
+  outputProductName?: string | null;
+  outputQuantity?: number | null;
   itemId: string;
   movementId: string;
   occurredAt: string;

@@ -30,12 +30,14 @@ export class ReportsService {
       'Produto', 'Lote origem', 'Lote destino', 'Quantidade', 'Unidade', 'Destinos revisao',
       'Cancelada em', 'Cancelada por', 'Motivo cancelamento',
       'Fabricacao origem', 'Validade origem', 'Fabricacao destino', 'Validade destino',
+      'Produto unitario resultante', 'Unidades produzidas',
     ], report.items.map((item) => [
       item.movementId, item.occurredAt, item.type, item.status, item.responsible, item.origin,
       item.destination, `${item.productCode} - ${item.productName}`, item.batchCode,
       item.destinationBatchCode, item.quantity, item.unit, item.reviewDestinations,
       item.canceledAt, item.canceledBy, item.cancellationReason,
       item.manufacturingDate, item.expirationDate, item.destinationManufacturingDate, item.destinationExpirationDate,
+      item.outputProductCode ? `${item.outputProductCode} - ${item.outputProductName}` : null, item.outputQuantity ?? null,
     ]));
   }
 

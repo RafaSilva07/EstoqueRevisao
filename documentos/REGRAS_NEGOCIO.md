@@ -31,6 +31,10 @@ Este documento consolida o comportamento funcional vigente. Regras históricas s
 - Cadastros referenciados são inativados em vez de excluídos.
 - Conversões pertencem a um produto, possuem fator positivo e não podem repetir o mesmo par de unidades.
 - Unidade de origem e destino de uma conversão devem ser diferentes.
+- Novos cadastros selecionam Unidade (`UN`), Fardo (`FD`) ou Caixa (`CX`). Fardo/caixa exige quantidade inteira positiva de unidades por embalagem e um ou mais produtos `UN` ativos vinculados como alternativas. Não se trata de uma embalagem com mistura de códigos.
+- Cada item revisado escolhe um único código unitário entre essas alternativas. As conversões antigas de unidade do mesmo produto não definem a desmontagem entre códigos diferentes.
+- Unidade e quantidade por embalagem não podem ser alteradas em produto que já possui lote operacional; uma configuração ausente de embalagem antiga pode ser completada. Um produto vinculado como opção unitária não pode mudar para fardo/caixa. Mudanças posteriores de nome ou opções não reescrevem revisões realizadas.
+- Cadastros antigos mantêm seus dados, sem inventar fatores ou vínculos. Embalagens `FD`/`CX` sem configuração precisam ser completadas antes de revisar.
 
 ## Lote, fabricação e validade nas operações
 
@@ -136,18 +140,20 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 - A origem é obtida do único local configurado como `review_role = SOURCE`.
 - Destinos devem ser locais configurados como `review_role = DESTINATION`.
 - Revisar, locais externos e locais internos sem esse papel não podem ser destinos.
-- Para cada item, a soma das distribuições deve ser exatamente igual à quantidade revisada.
+- Para cada item unitário, a soma das distribuições deve ser exatamente igual à quantidade revisada. Para fardo/caixa, deve corresponder à quantidade revisada multiplicada pelas unidades por embalagem.
 - Destinos do mesmo item não podem se repetir.
 - A revisão pode consumir parte do saldo; o restante permanece em Revisar.
-- Produto, lote, fabricação e validade são obrigatoriamente preservados em todos os destinos.
-- Revisão não permite escolher, trocar nem criar lote. Essa capacidade pertence somente à transferência interna.
+- Produtos unitários preservam o produto. Fardos/caixas são obrigatoriamente desmontados: a origem é debitada em embalagens e os destinos recebem o código `UN` ativo escolhido entre os vinculados, em unidades inteiras.
+- Código de lote, fabricação e validade são obrigatoriamente preservados, inclusive na desmontagem. O backend resolve/cria a referência interna equivalente para o produto unitário, sem permitir datas ou lote diferentes. Eventual outra validade do mesmo produto/lote exige a confirmação já existente.
+- Cada item guarda produto e quantidade originais, produto unitário resultante, referência de lote de saída, fator e quantidade convertida. O fator enviado para conferência deve corresponder ao cadastro atual; nenhum cálculo do cliente autoriza saldo.
 
 Invariantes por item:
 
 ```text
-soma das distribuições = quantidade revisada
-quantidade retirada de Revisar = quantidade somada aos destinos
-produto e lote de origem = produto e lote de todos os destinos
+soma das distribuições = quantidade revisada × fator
+fator = 1 para produto unitário; unidades por embalagem para fardo/caixa
+saldo original diminui em embalagens; saldo resultante aumenta em unidades
+código do lote, fabricação e validade são preservados
 ```
 
 ## Cancelamento e estorno
@@ -166,7 +172,7 @@ Reversões:
 | Entrada externa | Retira do destino tudo o que a entrada adicionou. |
 | Saída externa | Devolve à origem tudo o que a saída retirou. |
 | Transferência interna | Retira da posição de destino e devolve à origem, inclusive quando os lotes são diferentes. |
-| Revisão | Retira cada parcela de seus destinos e devolve o total ao Revisar. |
+| Revisão | Retira cada parcela de seus destinos e devolve o total original ao Revisar. Na desmontagem, retira o produto unitário e devolve as embalagens, usando o fator e os produtos históricos, mesmo após edição/inativação do cadastro. |
 
 ## Histórico e auditoria
 
@@ -186,6 +192,7 @@ Reversões:
 - A exportação CSV usa os mesmos filtros da consulta e exporta todas as linhas correspondentes, sem a paginação da tela.
 - Períodos históricos usam instantes ISO 8601. Validade usa data civil e é classificada em vencida, próxima do vencimento ou válida em relação à data de referência e à janela informada.
 - A distribuição da revisão considera apenas movimentações `REVISAO` efetivadas e totaliza cada classificação de destino.
+- Na desmontagem, o relatório de revisões mostra o produto e as unidades resultantes. O relatório de movimentações mantém a quantidade/unidade de origem e informa separadamente o produto e a quantidade produzidos. Filtros por produto encontram a origem ou o resultado; canceladas continuam excluídas dos totais válidos.
 
 ## Fora do escopo atual
 

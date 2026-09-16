@@ -4,6 +4,8 @@ import {
   CreateDateColumn,
   Entity,
   JoinColumn,
+  JoinTable,
+  ManyToMany,
   ManyToOne,
   OneToMany,
   PrimaryColumn,
@@ -26,6 +28,13 @@ export class ProductEntity {
 
   @Column({ name: 'default_unit', type: 'varchar', length: 20 })
   defaultUnit!: string;
+
+  @Column({ name: 'units_per_package', type: 'integer', nullable: true })
+  unitsPerPackage: number | null = null;
+
+  @ManyToMany(() => ProductEntity)
+  @JoinTable({ name: 'product_unit_options', joinColumn: { name: 'package_product_id', referencedColumnName: 'id' }, inverseJoinColumn: { name: 'unit_product_id', referencedColumnName: 'id' } })
+  unitProducts!: ProductEntity[];
 
   @Column({ name: 'shelf_life_years', type: 'integer', nullable: true })
   shelfLifeYears!: number | null;

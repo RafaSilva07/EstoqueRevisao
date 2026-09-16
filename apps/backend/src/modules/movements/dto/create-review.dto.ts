@@ -2,6 +2,7 @@ import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
+  ArrayUnique,
   IsArray,
   IsISO8601,
   IsInt,
@@ -25,6 +26,15 @@ export class CreateReviewDistributionDto {
 }
 
 export class CreateReviewItemDto {
+  @IsOptional()
+  @IsUUID()
+  outputProductId?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  expectedUnitsPerPackage?: number;
+
   @IsUUID()
   productId!: string;
 
@@ -45,6 +55,14 @@ export class CreateReviewItemDto {
 }
 
 export class CreateReviewDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(120, { each: true })
+  confirmedExpirationKeys?: string[];
+
   @IsUUID()
   requestKey!: string;
 

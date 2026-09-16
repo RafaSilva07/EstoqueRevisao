@@ -21,6 +21,7 @@ export class StockPositionsRepository {
     const builder = this.repository
       .createQueryBuilder('position')
       .innerJoinAndSelect('position.product', 'product')
+      .leftJoinAndSelect('product.unitProducts', 'unitProduct')
       .innerJoinAndSelect('position.batch', 'batch')
       .innerJoinAndSelect('position.stockLocation', 'stockLocation')
       .where('position.quantity > 0');
@@ -164,5 +165,14 @@ export class StockPositionsRepository {
       throw new Error('A posicao de estoque nao foi encontrada apos a atualizacao atomica.');
     }
     return position;
+  }
+
+  async lockKeys(keys: StockPositionKey[], manager: EntityManager): Promise<void> {
+    const query = manager.getRepository(StockPositionEntity).createQueryBuilder('position');
+    keys.forEach((key, index) => query.orWhere(`(position.productId = :product${index} AND position.batchId = :batch${index} AND position.stockLocationId = :location${index})`, {
+      [`product${index}`]: key.productId, [`batch${index}`]: key.batchId, [`location${index}`]: key.stockLocationId,
+    }));
+    await query.orderBy('position.productId', 'ASC').addOrderBy('position.batchId', 'ASC')
+      .addOrderBy('position.stockLocationId', 'ASC').setLock('pessimistic_write').getMany();
   }
 }

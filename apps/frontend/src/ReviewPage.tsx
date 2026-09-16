@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, Movement, Paginated, Product, StockLocation, StockPosition } from './api';
+import { api, Paginated, Product, StockLocation, StockPosition } from './api';
 import { EmptyState, LoadingState, Modal, Notice, OperationGuide, PageHeader } from './components';
 import { formatDate } from './format';
 import { calculateDistribution, isIntegerQuantity, quantityUnits } from './review';
+import { useMovementSubmission } from './useMovementSubmission';
 
 export interface ReviewPrefill {
   productId: string;
@@ -13,6 +14,7 @@ interface ReviewDraftItem {
   key: string;
   position: StockPosition;
   quantity: string;
+  outputProductId: string;
   distributions: Record<string, string>;
 }
 
@@ -33,9 +35,9 @@ export function ReviewPage({
   const [batchId, setBatchId] = useState(prefill?.batchId ?? '');
   const [items, setItems] = useState<ReviewDraftItem[]>([]);
   const [observation, setObservation] = useState('');
-  const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const submission = useMovementSubmission('/movements/reviews', onCreated);
+  const busy = submission.busy;
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState('');
   const prefillApplied = useRef(false);
@@ -91,6 +93,7 @@ export function ReviewPage({
         key: crypto.randomUUID(),
         position,
         quantity: '',
+        outputProductId: '',
         distributions: {},
       }];
     });
@@ -131,30 +134,32 @@ export function ReviewPage({
   }
 
   const itemState = (item: ReviewDraftItem) => {
-    return calculateDistribution(item.quantity, Object.values(item.distributions));
+    const factor = ['FD', 'CX'].includes(item.position.product.defaultUnit) ? item.position.product.unitsPerPackage ?? 0 : 1;
+    return calculateDistribution(Number(item.quantity || 0) * factor, Object.values(item.distributions));
   };
   const ready = items.length > 0 && items.every((item) => {
     const state = itemState(item);
     return isIntegerQuantity(item.quantity)
       && Object.values(item.distributions).every(isIntegerQuantity)
       && state.reviewed > 0
-      && state.reviewed <= quantityUnits(item.position.quantity)
+      && Number(item.quantity) <= quantityUnits(item.position.quantity)
+      && (!['FD', 'CX'].includes(item.position.product.defaultUnit) || Boolean(item.position.product.unitProducts?.some((product) => product.id === item.outputProductId && product.active && product.defaultUnit === 'UN')))
       && state.difference === 0;
   });
-  const totalReviewed = items.reduce((total, item) => total + Number(item.quantity || 0), 0);
+  const totals = new Map<string, number>();
+  items.forEach((item) => { const unit = ['FD', 'CX'].includes(item.position.product.defaultUnit) ? 'UN' : item.position.product.defaultUnit; totals.set(unit, (totals.get(unit) ?? 0) + itemState(item).reviewed); });
+  const totalReviewed = [...totals].map(([unit, quantity]) => `${quantity} ${unit}`).join(' + ') || '0 UN';
 
   async function submit() {
     if (!ready || busy) return;
-    setBusy(true);
     setError('');
-    try {
-      const movement = await api.post<Movement>('/movements/reviews', {
-        requestKey,
+    await submission.submit({
         observation: observation || undefined,
         items: items.map((item) => ({
           productId: item.position.productId,
           batchId: item.position.batchId,
           quantity: Number(item.quantity),
+          ...(item.outputProductId ? { outputProductId: item.outputProductId, expectedUnitsPerPackage: item.position.product.unitsPerPackage } : {}),
           distributions: destinations
             .map((destination) => ({
               destinationLocationId: destination.id,
@@ -162,17 +167,7 @@ export function ReviewPage({
             }))
             .filter((distribution) => distribution.quantity > 0),
         })),
-      });
-      setRequestKey(crypto.randomUUID());
-      setConfirming(false);
-      onCreated(movement.id);
-    } catch (caught) {
-      setError(messageFrom(caught));
-      setConfirming(false);
-      await load(true);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   if (loading) return <LoadingState label="Preparando revisao de produtos" />;
@@ -217,24 +212,29 @@ export function ReviewPage({
           ? 'Use apenas quantidades inteiras.'
           : state.reviewed <= 0
           ? 'Informe a quantidade que sera revisada.'
-          : state.reviewed > available
+          : Number(item.quantity) > available
             ? `Saldo insuficiente em Revisar. Disponivel: ${item.position.quantity}.`
             : state.difference > 0
               ? `Faltam distribuir: ${state.difference}`
               : state.difference < 0
                 ? `A distribuicao excede a quantidade revisada em ${Math.abs(state.difference)}`
                 : 'Distribuicao completa.';
-        const complete = integerValues && state.reviewed > 0 && state.reviewed <= available && state.difference === 0;
+        const complete = integerValues && state.reviewed > 0 && Number(item.quantity) <= available && state.difference === 0;
         return <article className="surface review-card" key={item.key}>
           <header><div><p className="eyebrow">Produto/lote</p><h2>{item.position.product.code} - {item.position.product.name}</h2><p>Lote {item.position.batch.code} · validade {formatDate(item.position.batch.expirationDate)}</p></div><button className="secondary" onClick={() => setItems((current) => current.filter((candidate) => candidate.key !== item.key))}>Remover</button></header>
           <div className="review-balance"><span>Disponivel em Revisar</span><strong>{item.position.quantity} {item.position.product.defaultUnit}</strong></div>
           <label><span>Quantidade a revisar <span className="required">*</span></span><input inputMode="numeric" type="number" min="1" max={item.position.quantity} step="1" value={item.quantity} onChange={(event) => updateItem(item.key, (current) => ({ ...current, quantity: event.target.value }))} /></label>
-          <fieldset><legend>Distribuicao</legend><div className="review-destinations">{destinations.map((destination) => <label key={destination.id}>{destination.name}<input inputMode="numeric" type="number" min="0" step="1" value={item.distributions[destination.id] ?? ''} placeholder="0" onChange={(event) => updateItem(item.key, (current) => ({ ...current, distributions: { ...current.distributions, [destination.id]: event.target.value } }))} /></label>)}</div></fieldset>
+          {['FD', 'CX'].includes(item.position.product.defaultUnit) && <div className="available-balance"><p>{item.quantity || 0} {item.position.product.defaultUnit} × {item.position.product.unitsPerPackage ?? '?'} = <strong>{state.reviewed} UN</strong></p>
+            {!item.position.product.unitsPerPackage && <p>Configure a quantidade por embalagem no cadastro antes de revisar.</p>}
+            <label>Produto unitário resultante *<select value={item.outputProductId} onChange={(event) => updateItem(item.key, (current) => ({ ...current, outputProductId: event.target.value }))}><option value="">Selecione o código unitário</option>{item.position.product.unitProducts?.filter((product) => product.active && product.defaultUnit === 'UN').map((product) => <option key={product.id} value={product.id}>{product.code} — {product.name}</option>)}</select></label>
+            <small>Lote, fabricação e validade serão preservados. Distribua as quantidades abaixo em UN.</small>
+          </div>}
+          <fieldset><legend>Distribuição ({['FD', 'CX'].includes(item.position.product.defaultUnit) ? 'UN' : item.position.product.defaultUnit})</legend><div className="review-destinations">{destinations.map((destination) => <label key={destination.id}>{destination.name}<input inputMode="numeric" type="number" min="0" step="1" value={item.distributions[destination.id] ?? ''} placeholder="0" onChange={(event) => updateItem(item.key, (current) => ({ ...current, distributions: { ...current.distributions, [destination.id]: event.target.value } }))} /></label>)}</div></fieldset>
           <p className={`distribution-feedback ${complete ? 'complete' : 'incomplete'}`} role="status">{feedback}<span>Distribuido: {state.distributed} / {state.reviewed}</span></p>
         </article>;
       })}
     </section>
-    {!ready && <p className="action-hint">Adicione um item e complete a distribuição para conferir a revisão.</p>}<section className="surface review-submit"><div><span>Total revisado</span><strong>{totalReviewed} unidade(s) em {items.length} produto(s)/lote(s)</strong></div><button disabled={!ready || busy} onClick={() => setConfirming(true)}>Revisar operacao</button></section>
-    {confirming && <Modal labelledBy="review-confirm-title" busy={busy} onClose={() => setConfirming(false)}><p className="eyebrow">Resumo</p><h2 id="review-confirm-title">Confirmar revisao?</h2><p>{items.length} produto(s)/lote(s), total revisado de <strong>{totalReviewed}</strong>.</p><ul className="review-summary">{items.map((item) => <li key={item.key}><strong>{item.position.product.name} / lote {item.position.batch.code} / validade {formatDate(item.position.batch.expirationDate)}: {item.quantity}</strong><ul>{destinations.map((destination) => ({ destination, quantity: Number(item.distributions[destination.id] || 0) })).filter(({ quantity }) => quantity > 0).map(({ destination, quantity }) => <li key={destination.id}>{quantity} → {destination.name}</li>)}</ul></li>)}</ul><p>A quantidade sera retirada de Revisar e distribuida integralmente em uma unica operacao.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={() => setConfirming(false)}>Voltar e corrigir</button><button disabled={busy} onClick={() => void submit()}>{busy ? 'Processando revisao...' : 'Confirmar revisao'}</button></div></Modal>}
+    {!ready && <p className="action-hint">Adicione um item e complete a distribuição para conferir a revisão.</p>}<section className="surface review-submit"><div><span>Total revisado</span><strong>{totalReviewed} em {items.length} produto(s)/lote(s)</strong></div><button disabled={!ready || busy} onClick={() => { submission.resetConfirmation(); setConfirming(true); }}>Revisar operacao</button></section>
+    {confirming && <Modal labelledBy="review-confirm-title" busy={busy} onClose={() => setConfirming(false)}><p className="eyebrow">Resumo</p><h2 id="review-confirm-title">{submission.conflict ? 'Mesmo lote com outra validade' : 'Confirmar revisão?'}</h2>{submission.conflict && <Notice kind="info">{submission.conflict.message}</Notice>}{submission.error && <Notice kind="error">{submission.error}</Notice>}<p>{items.length} produto(s)/lote(s), total revisado de <strong>{totalReviewed}</strong>.</p><ul className="review-summary">{items.map((item) => <li key={item.key}><strong>{item.position.product.name} / lote {item.position.batch.code} / validade {formatDate(item.position.batch.expirationDate)}: {item.quantity} {item.position.product.defaultUnit}</strong>{item.outputProductId && <p>→ {itemState(item).reviewed} UN de {item.position.product.unitProducts?.find((product) => product.id === item.outputProductId)?.code} — {item.position.product.unitProducts?.find((product) => product.id === item.outputProductId)?.name}</p>}<ul>{destinations.map((destination) => ({ destination, quantity: Number(item.distributions[destination.id] || 0) })).filter(({ quantity }) => quantity > 0).map(({ destination, quantity }) => <li key={destination.id}>{quantity} → {destination.name}</li>)}</ul></li>)}</ul><p>A quantidade sera retirada de Revisar e distribuida integralmente em uma unica operacao.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={() => setConfirming(false)}>Voltar e corrigir</button><button disabled={busy} onClick={() => void submit()}>{busy ? 'Processando revisao...' : submission.conflict ? 'Confirmar com validades separadas' : 'Confirmar revisao'}</button></div></Modal>}
   </>;
 }

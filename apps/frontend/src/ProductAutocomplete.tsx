@@ -5,8 +5,10 @@ type SearchField = 'code' | 'name';
 
 export function ProductAutocomplete({
   onChange,
+  defaultUnit,
 }: {
   onChange: (product: Product | null) => void;
+  defaultUnit?: 'UN';
 }) {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
@@ -34,6 +36,7 @@ export function ProductAutocomplete({
     const timer = window.setTimeout(() => {
       setLoading(true);
       const params = new URLSearchParams({ limit: '20', active: 'true', searchField: field });
+      if (defaultUnit) params.set('defaultUnit', defaultUnit);
       if (query.trim()) params.set('search', query.trim());
       void api.get<Paginated<Product>>(`/products?${params}`)
         .then((result) => {
@@ -58,7 +61,7 @@ export function ProductAutocomplete({
         .finally(() => { if (version === requestVersion.current) setLoading(false); });
     }, 220);
     return () => { window.clearTimeout(timer); requestVersion.current += 1; };
-  }, [field, query, select]);
+  }, [field, query, select, defaultUnit]);
 
   function edit(nextField: SearchField, value: string) {
     if (nextField === 'code') {

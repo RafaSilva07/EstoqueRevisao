@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager, In } from 'typeorm';
 import { AuditRequestMetadata } from '../audit/audit.types';
 import { AuditService } from '../audit/audit.service';
 import { PaginatedResult, paginate } from '../../shared/pagination/paginated-result.interface';
@@ -37,6 +37,7 @@ export class ProductsService {
     metadata: AuditRequestMetadata,
   ): Promise<ProductEntity> {
     return this.dataSource.transaction(async (manager) => {
+      await manager.query("SELECT pg_advisory_xact_lock(hashtext('product-packaging'))");
       if (await this.productsRepository.existsByCode(dto.code, undefined, manager)) {
         throw this.duplicateCode();
       }
@@ -49,6 +50,7 @@ export class ProductsService {
       product.active = true;
       product.createdById = userId;
       product.updatedById = userId;
+      await this.configurePackaging(product, dto, manager);
 
       try {
         await this.productsRepository.save(product, manager);
@@ -87,11 +89,20 @@ export class ProductsService {
     }
 
     return this.dataSource.transaction(async (manager) => {
+      await manager.query("SELECT pg_advisory_xact_lock(hashtext('product-packaging'))");
       const product = await this.productsRepository.findById(id, manager);
       if (!product) {
         throw this.notFound();
       }
       const before = this.snapshot(product);
+
+      if ((dto.defaultUnit && dto.defaultUnit !== product.defaultUnit)
+        || (dto.unitsPerPackage !== undefined && product.unitsPerPackage !== null && dto.unitsPerPackage !== product.unitsPerPackage)) {
+        const used = await manager.query<unknown[]>('SELECT 1 FROM batches WHERE product_id=$1 LIMIT 1', [id]);
+        if (used.length) throw new ConflictException('Produto já utilizado: não é possível alterar a unidade ou a quantidade por embalagem. Cadastre outro código.');
+        const referenced = await manager.query<unknown[]>('SELECT 1 FROM product_unit_options WHERE unit_product_id=$1 LIMIT 1', [id]);
+        if (referenced.length && dto.defaultUnit && dto.defaultUnit !== 'UN') throw new ConflictException('Este produto unitário está vinculado a uma embalagem.');
+      }
 
       if (dto.code && await this.productsRepository.existsByCode(dto.code, id, manager)) {
         throw this.duplicateCode();
@@ -102,6 +113,7 @@ export class ProductsService {
       product.defaultUnit = dto.defaultUnit ?? product.defaultUnit;
       product.shelfLifeYears = dto.shelfLifeYears ?? product.shelfLifeYears;
       product.updatedById = userId;
+      await this.configurePackaging(product, dto, manager);
 
       try {
         await this.productsRepository.save(product, manager);
@@ -164,7 +176,30 @@ export class ProductsService {
       defaultUnit: product.defaultUnit,
       shelfLifeYears: product.shelfLifeYears,
       active: product.active,
+      unitsPerPackage: product.unitsPerPackage,
+      unitProductIds: product.unitProducts?.map((unit) => unit.id) ?? [],
     };
+  }
+
+  private async configurePackaging(product: ProductEntity, dto: UpdateProductDto, manager: EntityManager): Promise<void> {
+    const packageUnit = ['FD', 'CX'].includes(product.defaultUnit);
+    if (!packageUnit) {
+      if (dto.unitsPerPackage != null || dto.unitProductIds?.length) throw new BadRequestException('Somente fardo/caixa pode possuir unidades e códigos vinculados.');
+      product.unitsPerPackage = null;
+      product.unitProducts = [];
+      return;
+    }
+    const units = dto.unitsPerPackage === undefined ? product.unitsPerPackage : dto.unitsPerPackage;
+    const ids = dto.unitProductIds ?? product.unitProducts?.map((unit) => unit.id) ?? [];
+    if (!Number.isSafeInteger(units) || !units || units < 1 || !ids.length || new Set(ids).size !== ids.length) {
+      throw new BadRequestException('Informe a quantidade inteira de unidades por embalagem e ao menos um código unitário.');
+    }
+    const products = await manager.getRepository(ProductEntity).findBy({ id: In(ids) });
+    if (products.length !== ids.length || products.some((unit) => unit.id === product.id || unit.defaultUnit !== 'UN' || !unit.active)) {
+      throw new BadRequestException('Vincule somente produtos unitários (UN) ativos, diferentes da embalagem.');
+    }
+    product.unitsPerPackage = units;
+    product.unitProducts = products;
   }
 
   private notFound(): NotFoundException {

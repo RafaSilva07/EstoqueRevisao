@@ -63,6 +63,8 @@ export class MovementsRepository {
       .leftJoinAndSelect('item.product', 'product')
       .leftJoinAndSelect('item.batch', 'batch')
       .leftJoinAndSelect('item.destinationBatch', 'destinationBatch')
+      .leftJoinAndSelect('item.outputProduct', 'outputProduct')
+      .leftJoinAndSelect('item.outputBatch', 'outputBatch')
       .leftJoinAndSelect('item.distributions', 'distribution')
       .leftJoinAndSelect('distribution.destinationLocation', 'distributionDestination')
       .distinct(true);
@@ -93,7 +95,7 @@ export class MovementsRepository {
           SELECT 1
           FROM movement_items filtered_product_item
           WHERE filtered_product_item.movement_id = movement.id
-            AND filtered_product_item.product_id = :productId
+            AND (filtered_product_item.product_id = :productId OR filtered_product_item.output_product_id = :productId)
         )`,
         { productId: query.productId },
       );
@@ -116,6 +118,8 @@ export class MovementsRepository {
       .leftJoinAndSelect('item.product', 'product')
       .leftJoinAndSelect('item.batch', 'batch')
       .leftJoinAndSelect('item.destinationBatch', 'destinationBatch')
+      .leftJoinAndSelect('item.outputProduct', 'outputProduct')
+      .leftJoinAndSelect('item.outputBatch', 'outputBatch')
       .leftJoinAndSelect('item.distributions', 'distribution')
       .leftJoinAndSelect('distribution.destinationLocation', 'distributionDestination')
       .orderBy('item.id', 'ASC')

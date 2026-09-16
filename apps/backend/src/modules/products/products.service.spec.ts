@@ -6,7 +6,7 @@ import { ProductsRepository } from './products.repository';
 import { ProductsService } from './products.service';
 
 describe('ProductsService', () => {
-  const manager = {} as EntityManager;
+  const manager = { query: jest.fn().mockResolvedValue([]) } as unknown as EntityManager;
   const repository = {
     existsByCode: jest.fn(),
     save: jest.fn(),

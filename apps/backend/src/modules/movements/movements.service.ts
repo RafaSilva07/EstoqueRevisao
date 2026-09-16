@@ -107,6 +107,11 @@ export class MovementsService {
         `${left.productId}:${left.batchId}:${left.destinationBatchId ?? ''}`
           .localeCompare(`${right.productId}:${right.batchId}:${right.destinationBatchId ?? ''}`)
       ));
+      await this.stockPositions.lockPositions(items.flatMap((item) => [
+        { productId: item.productId, batchId: item.batchId, stockLocationId: movement.originLocationId },
+        ...(movement.destinationLocationId ? [{ productId: item.productId, batchId: item.destinationBatchId ?? item.batchId, stockLocationId: movement.destinationLocationId }] : []),
+        ...(item.distributions ?? []).map((part) => ({ productId: item.outputProductId ?? item.productId, batchId: item.outputBatchId ?? item.batchId, stockLocationId: part.destinationLocationId })),
+      ]), manager);
       for (const item of items) {
         await this.reverseStock(movement, item, manager);
       }
@@ -255,6 +260,15 @@ export class MovementsService {
 
     try {
       const id = await this.dataSource.transaction(async (manager) => {
+        await manager.query("SELECT pg_advisory_xact_lock(hashtext('product-packaging'))");
+        const productIds = [...new Set(dto.items.flatMap((item) => [item.productId, ...(item.outputProductId ? [item.outputProductId] : [])]))].sort();
+        const products = new Map<string, ProductEntity>();
+        for (const productId of productIds) {
+          const product = await manager.getRepository(ProductEntity).createQueryBuilder('product')
+            .where('product.id = :productId', { productId }).setLock('for_no_key_update').getOne();
+          if (!product) throw new BadRequestException('Produto da revisão não encontrado.');
+          products.set(productId, product);
+        }
         const sources = await this.locations.findByReviewRole(ReviewLocationRole.Source, manager);
         const destinations = await this.locations.findByReviewRole(
           ReviewLocationRole.Destination,
@@ -297,11 +311,6 @@ export class MovementsService {
         const items: MovementItemEntity[] = [];
         const distributions: MovementItemDistributionEntity[] = [];
         for (const dtoItem of effectiveItems) {
-          await this.stockPositions.distributeQuantity({
-            productId: dtoItem.productId,
-            batchId: dtoItem.batchId,
-            stockLocationId: source.id,
-          }, dtoItem.distributions, dtoItem.quantity, manager);
           const item = Object.assign(new MovementItemEntity(), {
             movementId: movement.id,
             productId: dtoItem.productId,
@@ -309,6 +318,29 @@ export class MovementsService {
             destinationBatchId: null,
             quantity: dtoItem.quantity,
           });
+          const product = products.get(dtoItem.productId)!;
+          if (['FD', 'CX'].includes(product.defaultUnit)) {
+            const output = dtoItem.outputProductId ? products.get(dtoItem.outputProductId) : undefined;
+            const linked = output ? await manager.query<unknown[]>('SELECT 1 FROM product_unit_options WHERE package_product_id=$1 AND unit_product_id=$2', [product.id, output.id]) : [];
+            if (!product.active || !output?.active || output.defaultUnit !== 'UN' || !linked.length || !product.unitsPerPackage) {
+              throw new BadRequestException('Configure as unidades da embalagem e escolha um código unitário ativo vinculado ao produto.');
+            }
+            if (dtoItem.expectedUnitsPerPackage !== product.unitsPerPackage) {
+              throw new ConflictException('A quantidade por embalagem deve corresponder ao cadastro atual. Recarregue e confira a revisão.');
+            }
+            const quantity = dtoItem.quantity * product.unitsPerPackage;
+            if (!Number.isSafeInteger(quantity) || quantity <= 0 || quantity > 999999999999
+              || dtoItem.distributions.reduce((sum, part) => sum + part.quantity, 0) !== quantity) {
+              throw new BadRequestException('A soma dos destinos deve ser igual à quantidade de embalagens multiplicada pelas unidades por embalagem.');
+            }
+            const originBatch = await manager.getRepository(BatchEntity).findOneBy({ id: dtoItem.batchId, productId: product.id });
+            if (!originBatch) throw new BadRequestException('Lote de origem incompatível com o produto.');
+            const outputBatch = await this.operationalLots.resolveInTransaction(output.id, originBatch, userId, dto.confirmedExpirationKeys ?? [], manager);
+            Object.assign(item, { outputProductId: output.id, outputBatchId: outputBatch.id, outputQuantity: quantity, unitsPerPackage: product.unitsPerPackage,
+              outputProductSnapshot: { code: output.code, name: output.name, defaultUnit: output.defaultUnit } });
+          } else {
+            if (dtoItem.outputProductId || dtoItem.expectedUnitsPerPackage !== undefined) throw new BadRequestException('Somente fardo/caixa permite transformação em outro produto na revisão.');
+          }
           items.push(item);
           for (const distribution of dtoItem.distributions) {
             distributions.push(Object.assign(new MovementItemDistributionEntity(), {
@@ -316,6 +348,19 @@ export class MovementsService {
               destinationLocationId: distribution.destinationLocationId,
               quantity: distribution.quantity,
             }));
+          }
+        }
+        await this.stockPositions.lockPositions(items.flatMap((item, index) => [
+          { productId: item.productId, batchId: item.batchId, stockLocationId: source.id },
+          ...effectiveItems[index].distributions.map((part) => ({ productId: item.outputProductId ?? item.productId, batchId: item.outputBatchId ?? item.batchId, stockLocationId: part.destinationLocationId })),
+        ]), manager);
+        for (let index = 0; index < items.length; index++) {
+          const item = items[index];
+          const sourceKey = { productId: item.productId, batchId: item.batchId, stockLocationId: source.id };
+          if (item.outputProductId && item.outputBatchId && item.outputQuantity) {
+            await this.stockPositions.convertDistributedQuantity(sourceKey, { productId: item.outputProductId, batchId: item.outputBatchId }, item.quantity, item.outputQuantity, effectiveItems[index].distributions, manager);
+          } else {
+            await this.stockPositions.distributeQuantity(sourceKey, effectiveItems[index].distributions, item.quantity, manager);
           }
         }
         await this.repository.saveItems(items, manager);
@@ -334,7 +379,9 @@ export class MovementsService {
             originLocationId: movement.originLocationId,
             occurredAt: movement.occurredAt.toISOString(),
             observation: movement.observation,
-            items: effectiveItems,
+            items: items.map((item, index) => ({ productId: item.productId, batchId: item.batchId, quantity: item.quantity, distributions: effectiveItems[index].distributions,
+              outputProductId: item.outputProductId, outputBatchId: item.outputBatchId, outputQuantity: item.outputQuantity, unitsPerPackage: item.unitsPerPackage })),
+            confirmedExpirationKeys: dto.confirmedExpirationKeys ?? [],
           },
         });
         return movement.id;
@@ -530,6 +577,10 @@ export class MovementsService {
         }, original, item.quantity, manager);
         return;
       case MovementType.Review:
+        if (item.outputProductId && item.outputBatchId && item.outputQuantity) {
+          await this.stockPositions.convertDistributedQuantity(original, { productId: item.outputProductId, batchId: item.outputBatchId }, item.quantity, item.outputQuantity, item.distributions, manager, true);
+          return;
+        }
         await this.stockPositions.restoreDistributedQuantity(
           original,
           item.distributions.map((distribution) => ({
@@ -575,7 +626,7 @@ export class MovementsService {
         destinationIds.add(distribution.destinationLocationId);
         distributedUnits += this.toQuantityUnits(distribution.quantity);
       }
-      if (distributedUnits !== this.toQuantityUnits(item.quantity)) {
+      if (!item.outputProductId && distributedUnits !== this.toQuantityUnits(item.quantity)) {
         throw new BadRequestException({
           code: 'INVALID_REVIEW_DISTRIBUTION_TOTAL',
           message: 'A soma dos destinos deve ser exatamente igual a quantidade revisada.',

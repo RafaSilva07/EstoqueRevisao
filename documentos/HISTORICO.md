@@ -86,12 +86,14 @@ Adicionado gerenciamento exclusivo de ADMIN com consulta, criação, edição e 
 
 ## Decisões substituídas ou obsoletas
 
+- Etapa 28: revisão passa a permitir transformação de fardo/caixa em um único código unitário por item, escolhido entre alternativas cadastradas. A preservação de produto continua para revisões sem desmontagem; lote/datas permanecem preservados em todas. Migration `1789516800000-review-package-unpacking`; resumo em [relatório 28](./relatorios/RELATORIO_ETAPA_28_DESMONTAGEM_EMBALAGENS.md).
+
 - Lote deixou de ser cadastro independente. Produto/código deixou de ser único isoladamente: a validade também faz parte da identidade operacional e do saldo.
 
 - A transferência não exige mais locais diferentes: o mesmo local é válido quando o lote muda.
 - A transferência não preserva mais obrigatoriamente o lote: o produto continua imutável, mas o lote de destino é escolhido.
 - Cancelamento e estorno deixaram de ser pendência na etapa 10.
-- Revisão deixou de ser pendência na etapa 08, mas continua proibida de trocar lote.
+- Revisão deixou de ser pendência na etapa 08 e continua sem permitir escolha de outro código de lote ou datas. Na desmontagem, cria/reutiliza a referência equivalente do produto resultante.
 - PostgreSQL instalado diretamente não é o fluxo local oficial; usa-se Docker Compose.
 - Os números de testes e tamanhos de bundle presentes nos relatórios antigos descrevem apenas o momento de cada etapa.
 - Instruções antigas dizendo que serviços deveriam permanecer ativos não definem o estado atual do ambiente.

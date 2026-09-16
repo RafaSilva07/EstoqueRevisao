@@ -12,11 +12,12 @@ export class ProductsRepository {
   ) {}
 
   findById(id: string, manager?: EntityManager): Promise<ProductEntity | null> {
-    return (manager?.getRepository(ProductEntity) ?? this.repository).findOne({ where: { id } });
+    return (manager?.getRepository(ProductEntity) ?? this.repository).findOne({ where: { id }, relations: { unitProducts: true } });
   }
 
   findAndCount(query: ProductQueryDto): Promise<[ProductEntity[], number]> {
-    const builder = this.repository.createQueryBuilder('product');
+    const builder = this.repository.createQueryBuilder('product').leftJoinAndSelect('product.unitProducts', 'unitProduct');
+    if (query.defaultUnit) builder.andWhere('product.defaultUnit = :unit', { unit: query.defaultUnit });
 
     if (query.search) {
       const field = query.searchField === 'code'

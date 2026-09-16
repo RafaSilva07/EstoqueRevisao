@@ -61,6 +61,8 @@ Somente a confirmação gera entradas/saídas nos relatórios existentes. Nas sa
 
 Produtos possuem listagem, busca, filtros, detalhe, criação, edição e ativação/inativação. O formulário identifica código, descrição, tipo de unidade e prazo padrão em anos; o prazo apenas sugere a validade de novas operações. O detalhe permite listar, criar, editar e ativar/inativar conversões de unidade.
 
+O tipo de unidade é uma seleção: Unidade (UN), Fardo (FD) ou Caixa (CX). Embalagens exigem **unidades por embalagem** e a vinculação de um ou mais códigos unitários existentes, pesquisáveis por código/descrição. A API recebe `unitsPerPackage` e `unitProductIds`; o filtro `defaultUnit=UN` restringe a busca às opções unitárias. As opções e o fator também aparecem nos detalhes. Valores antigos são preservados; configurações ausentes não são presumidas.
+
 A consulta de produtos aceita `searchField=code|name` quando a interface precisa restringir as sugestões a um campo. Sem esse parâmetro, a busca geral continua considerando código e descrição.
 
 Rotas principais:
@@ -140,7 +142,9 @@ quantidade
 
 A tela mostra apenas produto/lote com saldo em Revisar. O usuário pode incluir vários itens e distribuir cada quantidade entre um ou mais destinos permitidos. O formulário informa quanto falta, quanto excede ou se a distribuição está completa e bloqueia a confirmação inválida.
 
-A revisão preserva obrigatoriamente produto, lote, fabricação e validade. Não oferece seleção nem criação de lote. O histórico apresenta todas as distribuições dentro do mesmo documento. Duas validades do mesmo código de lote são selecionadas e distribuídas separadamente.
+A revisão de UN preserva o produto. Para FD/CX, o operador informa quantas embalagens revisar, escolhe **um código unitário resultante por item** entre os vinculados e distribui o total convertido entre os destinos. Exemplo: 10 CX × 12 = 120 UN. O formulário e a confirmação mostram origem, resultado e fator; a API revalida `outputProductId`, `expectedUnitsPerPackage` e a soma das distribuições, debita embalagens e credita unidades atomicamente.
+
+Lote, fabricação e validade são preservados; não há edição desses campos na revisão. O produto unitário recebe uma referência interna equivalente, reutilizando a validação e a confirmação de validade divergente. O histórico mostra a transformação e todas as distribuições em uma única operação. O estorno retira as unidades e devolve as embalagens originais; se faltarem unidades no destino, nada é alterado. Revisões antigas permanecem com o comportamento original registrado.
 
 ## Histórico de movimentações
 
@@ -178,6 +182,8 @@ Os endpoints de exportação existentes no backend ainda não possuem tela. Dash
 `GET /api/v1/reports/reviews` aceita período, produto, lote, classificação/destino e paginação. Retorna as distribuições de revisões efetivadas compatíveis, a quantidade total revisada separada por unidade e os totais de todos os destinos configurados para revisão — inicialmente Lata Boa, Varejo e TUF. Classificações sem quantidade válida são retornadas com total zero nas unidades presentes no resultado; revisões canceladas não entram nos resultados nem nos totais.
 
 A interface `Relatórios > Revisões` apresenta esses totais sem recalculá-los, filtros combináveis, resultados paginados em cards no mobile e tabela no desktop, estados de carregamento, vazio e erro e ação para limpar filtros. Reutiliza `movements.read` e não oferece exportação nem dashboard.
+
+Revisões com desmontagem mostram o código unitário e as quantidades de saída em UN. Movimentações mostram separadamente as embalagens consumidas e as unidades produzidas; o CSV já existente também inclui o produto resultante e a quantidade produzida.
 
 ## Relatório de estoque e validades
 

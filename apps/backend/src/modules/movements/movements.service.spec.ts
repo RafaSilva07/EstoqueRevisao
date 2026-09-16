@@ -16,7 +16,7 @@ import { MovementsService } from './movements.service';
 describe('MovementsService', () => {
   const findBatch = jest.fn(({ id }: { id: string }) => Promise.resolve({ id, code: id }));
   const lockQuery = { where: jest.fn().mockReturnThis(), setLock: jest.fn().mockReturnThis(), getOne: jest.fn() };
-  const manager = { getRepository: () => ({ findOneBy: findBatch, createQueryBuilder: (): typeof lockQuery => lockQuery }) } as unknown as EntityManager;
+  const manager = { query: jest.fn().mockResolvedValue([]), getRepository: () => ({ findOneBy: findBatch, createQueryBuilder: (): typeof lockQuery => lockQuery }) } as unknown as EntityManager;
   const lots = { resolveExistingInTransaction: jest.fn() };
   const originId = '10000000-0000-4000-8000-000000000006';
   const destinationId = '10000000-0000-4000-8000-000000000002';
@@ -31,13 +31,14 @@ describe('MovementsService', () => {
   };
   const repository = { findByRequestKey: jest.fn(), findById: jest.fn(), findByIdForUpdate: jest.fn(), findAndCount: jest.fn(), save: jest.fn(), saveItems: jest.fn(), saveDistributions: jest.fn() };
   const locations = { findById: jest.fn(), findByReviewRole: jest.fn() };
-  const stock = { addQuantity: jest.fn(), removeQuantity: jest.fn(), transferQuantity: jest.fn(), distributeQuantity: jest.fn(), restoreDistributedQuantity: jest.fn() };
+  const stock = { lockPositions: jest.fn(), addQuantity: jest.fn(), removeQuantity: jest.fn(), transferQuantity: jest.fn(), distributeQuantity: jest.fn(), restoreDistributedQuantity: jest.fn() };
   const audit = { record: jest.fn() };
   const dataSource = { transaction: jest.fn((operation: (value: EntityManager) => unknown) => operation(manager)) };
   const service = new MovementsService(repository as unknown as MovementsRepository, locations as unknown as StockLocationsRepository, stock as unknown as StockPositionsService, audit as unknown as AuditService, dataSource as unknown as DataSource, lots as unknown as OperationalLotsService);
 
   beforeEach(() => {
     jest.clearAllMocks();
+    lockQuery.getOne.mockResolvedValue({ defaultUnit: 'UN', active: true });
     repository.findByRequestKey.mockResolvedValue(null);
     repository.save.mockImplementation((value: unknown) => Promise.resolve(value));
     repository.saveItems.mockImplementation((value: unknown) => Promise.resolve(value));

@@ -118,7 +118,7 @@ function MovementResults({ items }: { items: MovementReportItem[] }) {
         <td data-label="Tipo">{movementLabels[item.type]}</td>
         <td data-label="Produto/lote"><strong>{item.productCode} - {item.productName}</strong><small className="cell-note">Lote {item.batchCode}</small><small className="cell-note">Fabricação {formatDate(item.manufacturingDate)} · validade {formatDate(item.expirationDate)}</small>{item.destinationBatchCode && <small className="cell-note">Destino: {item.destinationBatchCode} · fabricação {formatDate(item.destinationManufacturingDate ?? '')} · validade {formatDate(item.destinationExpirationDate ?? '')}</small>}</td>
         <td data-label="Origem/destino">{item.origin}<small className="cell-note">para {item.reviewDestinations || item.destination}</small></td>
-        <td data-label="Quantidade" className="quantity">{item.quantity.toLocaleString('pt-BR')} {item.unit}</td>
+        <td data-label="Quantidade" className="quantity">{item.quantity.toLocaleString('pt-BR')} {item.unit}{item.outputProductCode && <small className="cell-note">→ {item.outputQuantity} UN · {item.outputProductCode} — {item.outputProductName}</small>}</td>
         <td data-label="Status"><span className={`badge ${item.status === 'EFETIVADA' ? 'active' : 'canceled'}`}>{item.status === 'EFETIVADA' ? 'Efetivada' : 'Cancelada'}</span><small className="cell-note">{item.responsible}</small></td>
       </tr>)}</tbody>
     </table></div>

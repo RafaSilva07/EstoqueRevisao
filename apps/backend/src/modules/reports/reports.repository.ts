@@ -66,6 +66,9 @@ export class ReportsRepository {
       .addSelect('destinationBatch.code', 'destinationBatchCode')
       .addSelect('destinationBatch.manufacturingDate', 'destinationManufacturingDate')
       .addSelect('destinationBatch.expirationDate', 'destinationExpirationDate')
+      .addSelect('item.outputQuantity', 'outputQuantity')
+      .addSelect("item.output_product_snapshot->>'code'", 'outputProductCode')
+      .addSelect("item.output_product_snapshot->>'name'", 'outputProductName')
       .addSelect('item.quantity', 'quantity')
       .addSelect(`COALESCE(item.product_snapshot->>'defaultUnit', product.default_unit)`, 'unit')
       .addSelect(`(
@@ -130,21 +133,21 @@ export class ReportsRepository {
       .select('distribution.id', 'distributionId')
       .addSelect('movement.id', 'movementId')
       .addSelect('movement.occurredAt', 'occurredAt')
-      .addSelect('product.id', 'productId')
-      .addSelect(`COALESCE(item.product_snapshot->>'code', product.code)`, 'productCode')
-      .addSelect(`COALESCE(item.product_snapshot->>'name', product.name)`, 'productName')
-      .addSelect('batch.id', 'batchId')
+      .addSelect('COALESCE(item.outputProductId, product.id)', 'productId')
+      .addSelect(`COALESCE(item.output_product_snapshot->>'code', item.product_snapshot->>'code', product.code)`, 'productCode')
+      .addSelect(`COALESCE(item.output_product_snapshot->>'name', item.product_snapshot->>'name', product.name)`, 'productName')
+      .addSelect('COALESCE(item.outputBatchId, batch.id)', 'batchId')
       .addSelect('batch.code', 'batchCode')
       .addSelect('batch.manufacturingDate', 'manufacturingDate')
       .addSelect('batch.expirationDate', 'expirationDate')
       .addSelect('destination.id', 'destinationLocationId')
       .addSelect('destination.name', 'destination')
       .addSelect('distribution.quantity', 'quantity')
-      .addSelect(`COALESCE(item.product_snapshot->>'defaultUnit', product.default_unit)`, 'unit')
+      .addSelect(`COALESCE(item.output_product_snapshot->>'defaultUnit', item.product_snapshot->>'defaultUnit', product.default_unit)`, 'unit')
       .addSelect('responsible.username', 'responsible')
       .orderBy('movement.occurredAt', 'DESC')
       .addOrderBy('movement.id', 'ASC')
-      .addOrderBy(`COALESCE(item.product_snapshot->>'name', product.name)`, 'ASC')
+      .addOrderBy(`COALESCE(item.output_product_snapshot->>'name', item.product_snapshot->>'name', product.name)`, 'ASC')
       .addOrderBy('destination.name', 'ASC')
       .addOrderBy('distribution.id', 'ASC');
     if (paginated) {
@@ -154,15 +157,15 @@ export class ReportsRepository {
       .select('destination.id', 'destinationLocationId')
       .addSelect('destination.code', 'destinationCode')
       .addSelect('destination.name', 'destination')
-      .addSelect(`COALESCE(item.product_snapshot->>'defaultUnit', product.default_unit)`, 'unit')
+      .addSelect(`COALESCE(item.output_product_snapshot->>'defaultUnit', item.product_snapshot->>'defaultUnit', product.default_unit)`, 'unit')
       .addSelect('COUNT(distribution.id)', 'rows')
       .addSelect('COALESCE(SUM(distribution.quantity), 0)', 'quantity')
       .groupBy('destination.id')
       .addGroupBy('destination.code')
       .addGroupBy('destination.name')
-      .addGroupBy(`COALESCE(item.product_snapshot->>'defaultUnit', product.default_unit)`)
+      .addGroupBy(`COALESCE(item.output_product_snapshot->>'defaultUnit', item.product_snapshot->>'defaultUnit', product.default_unit)`)
       .orderBy('destination.name', 'ASC')
-      .addOrderBy(`COALESCE(item.product_snapshot->>'defaultUnit', product.default_unit)`, 'ASC');
+      .addOrderBy(`COALESCE(item.output_product_snapshot->>'defaultUnit', item.product_snapshot->>'defaultUnit', product.default_unit)`, 'ASC');
 
     const classificationsBuilder = this.stockLocations.createQueryBuilder('classification')
       .select('classification.id', 'destinationLocationId')
@@ -296,9 +299,9 @@ export class ReportsRepository {
     if (query.dateFrom) builder.andWhere('movement.occurredAt >= :dateFrom', { dateFrom: query.dateFrom });
     if (query.dateTo) builder.andWhere('movement.occurredAt <= :dateTo', { dateTo: query.dateTo });
     if (query.type) builder.andWhere('movement.type = :type', { type: query.type });
-    if (query.productId) builder.andWhere('item.productId = :productId', { productId: query.productId });
-    if (query.product) builder.andWhere(`(COALESCE(item.product_snapshot->>'code', product.code) ILIKE :product OR COALESCE(item.product_snapshot->>'name', product.name) ILIKE :product)`, { product: `%${query.product}%` });
-    if (query.batchId) builder.andWhere('item.batchId = :batchId', { batchId: query.batchId });
+    if (query.productId) builder.andWhere('(item.productId = :productId OR item.outputProductId = :productId)', { productId: query.productId });
+    if (query.product) builder.andWhere(`(COALESCE(item.product_snapshot->>'code', product.code) ILIKE :product OR COALESCE(item.product_snapshot->>'name', product.name) ILIKE :product OR item.output_product_snapshot->>'code' ILIKE :product OR item.output_product_snapshot->>'name' ILIKE :product)`, { product: `%${query.product}%` });
+    if (query.batchId) builder.andWhere('(item.batchId = :batchId OR item.outputBatchId = :batchId)', { batchId: query.batchId });
     if (query.batch) builder.andWhere('batch.code ILIKE :batch', { batch: `%${query.batch}%` });
     if (query.originLocationId) builder.andWhere('movement.originLocationId = :originLocationId', { originLocationId: query.originLocationId });
     if (query.origin) builder.andWhere('(origin.code ILIKE :origin OR origin.name ILIKE :origin)', { origin: `%${query.origin}%` });
@@ -348,9 +351,9 @@ export class ReportsRepository {
   ): SelectQueryBuilder<MovementItemDistributionEntity> {
     if (query.dateFrom) builder.andWhere('movement.occurredAt >= :dateFrom', { dateFrom: query.dateFrom });
     if (query.dateTo) builder.andWhere('movement.occurredAt <= :dateTo', { dateTo: query.dateTo });
-    if (query.productId) builder.andWhere('item.productId = :productId', { productId: query.productId });
-    if (query.product) builder.andWhere(`(COALESCE(item.product_snapshot->>'code', product.code) ILIKE :product OR COALESCE(item.product_snapshot->>'name', product.name) ILIKE :product)`, { product: `%${query.product}%` });
-    if (query.batchId) builder.andWhere('item.batchId = :batchId', { batchId: query.batchId });
+    if (query.productId) builder.andWhere('(item.productId = :productId OR item.outputProductId = :productId)', { productId: query.productId });
+    if (query.product) builder.andWhere(`(COALESCE(item.product_snapshot->>'code', product.code) ILIKE :product OR COALESCE(item.product_snapshot->>'name', product.name) ILIKE :product OR item.output_product_snapshot->>'code' ILIKE :product OR item.output_product_snapshot->>'name' ILIKE :product)`, { product: `%${query.product}%` });
+    if (query.batchId) builder.andWhere('(item.batchId = :batchId OR item.outputBatchId = :batchId)', { batchId: query.batchId });
     if (query.batch) builder.andWhere('batch.code ILIKE :batch', { batch: `%${query.batch}%` });
     if (query.destinationLocationId) builder.andWhere('distribution.destinationLocationId = :destinationLocationId', { destinationLocationId: query.destinationLocationId });
     if (query.destination) builder.andWhere('(destination.code ILIKE :destination OR destination.name ILIKE :destination)', { destination: `%${query.destination}%` });
@@ -411,6 +414,7 @@ export class ReportsRepository {
       destinationManufacturingDate: row.destinationManufacturingDate ? this.civilDate(row.destinationManufacturingDate) : null,
       destinationExpirationDate: row.destinationExpirationDate ? this.civilDate(row.destinationExpirationDate) : null,
       destinationBatchId: this.nullableString(row.destinationBatchId), destinationBatchCode: this.nullableString(row.destinationBatchCode),
+      outputProductCode: this.nullableString(row.outputProductCode), outputProductName: this.nullableString(row.outputProductName), outputQuantity: row.outputQuantity == null ? null : this.number(row.outputQuantity),
       quantity: this.number(row.quantity), unit: this.string(row.unit), reviewDestinations: this.string(row.reviewDestinations),
       canceledAt: row.canceledAt ? this.iso(row.canceledAt) : null,
       canceledBy: this.nullableString(row.canceledBy), cancellationReason: this.nullableString(row.cancellationReason),

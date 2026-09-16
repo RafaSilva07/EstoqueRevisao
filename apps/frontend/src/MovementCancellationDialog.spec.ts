@@ -15,6 +15,15 @@ const base = {
 } as unknown as Movement;
 
 describe('impacto do cancelamento', () => {
+  it('distingue as unidades retiradas das embalagens devolvidas', () => {
+    const impact = movementCancellationImpact({ ...base, type: 'REVISAO', items: [{ ...base.items[0],
+      productSnapshot: { code: 'CX', name: 'Caixa', defaultUnit: 'CX' },
+      outputProductSnapshot: { code: 'UN', name: 'Produto unitário', defaultUnit: 'UN' }, outputQuantity: 120,
+      distributions: [{ destinationLocation: { name: 'Lata Boa' }, quantity: 120 }],
+    }] } as Movement);
+    expect(impact[0]).toContain('120 UN de UN - Produto unitário');
+    expect(impact[1]).toContain('10 CX para Revisar (CX - Caixa)');
+  });
   it('explicita lotes e locais ao estornar transferencia', () => {
     const impact = movementCancellationImpact({
       ...base,

@@ -26,6 +26,8 @@ export interface Product {
   code: string;
   name: string;
   defaultUnit: string;
+  unitsPerPackage?: number | null;
+  unitProducts?: Product[];
   shelfLifeYears?: number | null;
   active: boolean;
 }
@@ -81,6 +83,12 @@ export interface StockPosition {
 }
 
 export interface MovementItem {
+  outputProductId?: string | null;
+  outputProduct?: Product | null;
+  outputBatch?: Batch | null;
+  outputQuantity?: number | null;
+  unitsPerPackage?: number | null;
+  outputProductSnapshot?: Pick<Product, 'code' | 'name' | 'defaultUnit'> | null;
   id: string;
   productId: string;
   batchId: string;
@@ -132,6 +140,9 @@ export interface ReportResult<T, TTotals> extends Paginated<T> {
 }
 
 export interface MovementReportItem {
+  outputProductCode?: string | null;
+  outputProductName?: string | null;
+  outputQuantity?: number | null;
   itemId: string;
   movementId: string;
   occurredAt: string;

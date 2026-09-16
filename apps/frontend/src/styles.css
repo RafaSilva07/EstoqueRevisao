@@ -41,6 +41,9 @@ input[type="date"]::-webkit-date-and-time-value { min-width: 0; text-align: left
 .user-roles label { display: flex; align-items: center; gap: .65rem; }
 .user-roles input { width: 1.2rem; min-height: 1.2rem; flex: 0 0 1.2rem; }
 .admin-users-link { margin-bottom: 1rem; }
+.packaging-options { padding: 0; list-style: none; }
+.packaging-options li { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; justify-content: space-between; padding: .6rem 0; }
+.packaging-options span { min-width: 0; overflow-wrap: anywhere; }
 textarea { resize: vertical; }
 input:disabled, select:disabled { background: #edf1f4; color: #667786; }
 label { display: grid; gap: .4rem; min-width: 0; color: #354d61; font-size: .88rem; font-weight: 700; }

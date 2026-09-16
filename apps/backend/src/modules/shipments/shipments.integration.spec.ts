@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { ShipmentObservations1789430400000 } from '../../database/migrations/1789430400000-shipment-observations';
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { databaseEntities, databaseMigrations } from '../../database/typeorm.config';
@@ -211,7 +212,10 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     await expect(movements.cancel(movement.id,{reason:'teste'},users.REVISAO.id,metadata())).rejects.toBeInstanceOf(ConflictException);
     await expect(db.getRepository(ShipmentEntity).delete(shipment.id)).rejects.toThrow();
     await expect(db.getRepository(ShipmentItemEntity).update(shipment.items[0].id,{quantity:99})).rejects.toThrow();
-    await expect(db.undoLastMigration()).rejects.toThrow('rollback destrutivo');
+    const runner = db.createQueryRunner();
+    await runner.connect(); await runner.startTransaction();
+    try { await expect(new ShipmentObservations1789430400000().down(runner)).rejects.toThrow('rollback destrutivo'); }
+    finally { await runner.rollbackTransaction(); await runner.release(); }
   });
   it('lista envios paginados e bloqueia rotas diretas dos setores', async () => {
     const external = await db.getRepository(StockLocationEntity).findOneByOrFail({sector:'PRODUCAO'});

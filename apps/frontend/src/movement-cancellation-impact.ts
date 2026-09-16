@@ -16,8 +16,9 @@ export function movementCancellationImpact(movement: Movement): string[] {
     if (movement.type === 'TRANSFERENCIA_INTERNA') {
       return [`Retirar ${item.quantity} ${historicalProduct.defaultUnit} de ${product} / lote ${item.destinationBatch?.code}${destinationExpiry} / ${movement.destinationLocation?.name} e devolver ao lote ${item.batch.code}${originExpiry} / ${movement.originLocation.name}.`];
     }
+    const output = item.outputProductSnapshot ?? historicalProduct;
     return item.distributions.map((distribution) => (
-      `Retirar ${distribution.quantity} ${historicalProduct.defaultUnit} de ${product} / lote ${item.batch.code}${originExpiry} / ${distribution.destinationLocation.name}.`
-    )).concat(`Devolver o total de ${item.quantity} ${historicalProduct.defaultUnit} para Revisar.`);
+      `Retirar ${distribution.quantity} ${output.defaultUnit} de ${output.code} - ${output.name} / lote ${item.batch.code}${originExpiry} / ${distribution.destinationLocation.name}.`
+    )).concat(`Devolver o total de ${item.quantity} ${historicalProduct.defaultUnit} para Revisar (${product}).`);
   });
 }
