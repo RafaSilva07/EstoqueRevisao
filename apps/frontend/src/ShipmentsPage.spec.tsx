@@ -17,8 +17,9 @@ describe('Interface de envios', () => {
     const html = renderToStaticMarkup(<NewShipment sector="REVISAO" onCreated={() => undefined} onClose={() => undefined} />);
     expect(html).toContain('fica em trânsito');
     expect(html).toContain('Produção'); expect(html).toContain('Expedição');
-    expect(html).toContain('Digite no código ou na descrição');
-    expect(html).toContain('Observação deste produto');
+    expect(html).toContain('Adicionar produto');
+    expect(html).not.toContain('Digite no código ou na descrição');
+    expect(html).not.toContain('Observação deste produto');
     expect(html).toContain('Observação geral do envio');
     expect(html).toContain('<button disabled="">Conferir e enviar</button>');
   });

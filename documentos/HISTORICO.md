@@ -45,6 +45,10 @@ Envios entre todos os setores passaram a aceitar uma observação geral e uma ob
 
 Administradores passaram a alternar entre as interfaces e regras operacionais de Revisão, Produção e Expedição sem trocar de usuário. O backend valida o modo por requisição e preserva a identidade real na auditoria. Resumo em [relatorios/RELATORIO_ETAPA_26_MODO_OPERACIONAL_ADMIN.md](./relatorios/RELATORIO_ETAPA_26_MODO_OPERACIONAL_ADMIN.md).
 
+## Etapa 29 — Inclusão de produtos em modais
+
+Listas operacionais com inclusão em modal, aviso de código duplicado no cadastro e ajuste de alinhamento dos campos. Sem migration ou mudança das regras de estoque. Resumo em [relatorios/RELATORIO_ETAPA_29_MODAIS_PRODUTOS.md](./relatorios/RELATORIO_ETAPA_29_MODAIS_PRODUTOS.md).
+
 ## Decisões consolidadas
 
 | Registro histórico | Situação atual |

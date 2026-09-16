@@ -46,7 +46,20 @@ input[type="date"]::-webkit-date-and-time-value { min-width: 0; text-align: left
 .packaging-options span { min-width: 0; overflow-wrap: anywhere; }
 textarea { resize: vertical; }
 input:disabled, select:disabled { background: #edf1f4; color: #667786; }
-label { display: grid; gap: .4rem; min-width: 0; color: #354d61; font-size: .88rem; font-weight: 700; }
+label { display: grid; align-content: start; gap: .4rem; min-width: 0; color: #354d61; font-size: .88rem; font-weight: 700; }
+.item-list-heading { align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+.dialog-backdrop:has(#add-product-title), .dialog-backdrop:has(#review-item-title) { place-items: center; }
+label .field-error { color: var(--danger); }
+.position-select { display: grid; min-width: 0; gap: .4rem; }
+.position-select-label { color: #354d61; font-size: .88rem; font-weight: 700; }
+.position-select-trigger { display: flex; justify-content: space-between; align-items: center; gap: .6rem; width: 100%; border: 1px solid var(--line); background: #fff; color: var(--ink); text-align: left; font-weight: 500; }
+.position-select-trigger > span:first-child { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.position-select-trigger:hover:not(:disabled), .position-select-trigger:focus-visible { background: #fff; color: var(--ink); border-color: var(--primary); }
+.position-select-list { min-width: 0; max-height: min(16rem, 35dvh); overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: .5rem; padding: .3rem; background: #fff; }
+.position-select-list button { display: block; width: 100%; border-radius: .3rem; background: #fff; color: var(--ink); text-align: left; font-size: .88rem; font-weight: 500; white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
+.position-select-list button.highlighted, .position-select-list button:hover { background: var(--primary-soft); }
+.position-select-list button[aria-selected="true"] { box-shadow: inset 3px 0 var(--primary); }
+.dialog .review-card { border: 0; padding: 0; box-shadow: none; }
 label small { color: var(--muted); font-weight: 500; }
 h1, h2, h3, p { margin-top: 0; }
 h1 { margin-bottom: .55rem; color: #123b4b; font-size: clamp(1.5rem, 5vw, 2rem); line-height: 1.12; }

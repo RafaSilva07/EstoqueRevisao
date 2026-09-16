@@ -65,6 +65,8 @@ O tipo de unidade é uma seleção: Unidade (UN), Fardo (FD) ou Caixa (CX). Emba
 
 A consulta de produtos aceita `searchField=code|name` quando a interface precisa restringir as sugestões a um campo. Sem esse parâmetro, a busca geral continua considerando código e descrição.
 
+Cadastro e edição abrem em modal. Ao digitar o código, um aviso abaixo do campo identifica duplicidade, inclusive em produto inativo, e impede salvar enquanto ela estiver presente. A consulta usa o filtro exato `code` de `GET /products`, sem diferenciar maiúsculas/minúsculas; respostas antigas da digitação são descartadas. Falhas de consulta são informadas e a API continua validando a unicidade ao salvar.
+
 Rotas principais:
 
 ```text
@@ -126,7 +128,7 @@ O mesmo fluxo atende:
 - outro lote para outro local;
 - outro lote no mesmo local.
 
-Após escolher a posição de origem e a quantidade, o usuário seleciona o local de destino e mantém lote/validade ou informa os dados de destino inline (`items[].destinationLot`). Combinações existentes são reutilizadas automaticamente. A API continua aceitando `destinationBatchId` para uma variante existente do mesmo produto; não se enviam os dois formatos juntos. A tela mostra a rota completa antes de confirmar e bloqueia a combinação sem mudança real.
+Após escolher os locais, o usuário adiciona a posição de origem e a quantidade no modal, mantendo lote/validade ou informando os dados de destino (`items[].destinationLot`). Combinações existentes são reutilizadas automaticamente. A API continua aceitando `destinationBatchId` para uma variante existente do mesmo produto; não se enviam os dois formatos juntos. A tela mostra a rota completa antes de confirmar e bloqueia a combinação sem mudança real.
 
 No histórico, cada item conserva:
 
@@ -198,6 +200,10 @@ A Home apresenta os saldos atuais de Revisar, Lata Boa, Varejo e TUF, a quantida
 Antes dos indicadores, a Home destaca envios aguardando recebimento e decisões recentes. Os atalhos operacionais levam diretamente a Entrada, Saída, Revisão, Transferência e consulta de Estoque. A visualização usa cards no mobile e tabela responsiva para a atividade recente, sem gráficos, exportações ou indicadores de BI.
 
 ## Experiência de uso
+
+Seletores de lote/posição nos envios, saídas, transferências e revisões usam uma lista contida no formulário, com quebra de linha e rolagem vertical. Textos usam `prod:` e `val:` para fabricação e validade, preservando as datas completas e o saldo. A seleção funciona por toque, mouse e teclado; Escape fecha a lista antes de fechar o modal.
+
+Envios, entradas, saídas, transferências e revisões apresentam a lista e o botão **Adicionar produto**. Os campos ficam em modal central com rolagem interna: salvar inclui o item e fecha; cancelar descarta somente o rascunho. Na revisão, quantidade, código resultante e distribuições são preenchidos antes de salvar, com edição posterior do item ainda não confirmado. Observação geral e confirmação final permanecem na operação. Reutilizados os campos e validações existentes, sem alteração de saldos ou regras transacionais. Campos com texto de ajuda são alinhados pelo topo para não deslocar os controles vizinhos.
 
 - Home com atalhos somente para funções disponíveis ao usuário.
 - Tela compacta de operações no mobile.

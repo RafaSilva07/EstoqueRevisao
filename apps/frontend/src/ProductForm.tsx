@@ -1,5 +1,5 @@
-import { FormEvent, useState } from 'react';
-import { Product } from './api';
+import { FormEvent, useEffect, useState } from 'react';
+import { api, Paginated, Product } from './api';
 import { ProductAutocomplete } from './ProductAutocomplete';
 
 export function ProductForm({ product, busy, onSave, onCancel }: {
@@ -9,11 +9,25 @@ export function ProductForm({ product, busy, onSave, onCancel }: {
   const [options, setOptions] = useState<Product[]>(product?.unitProducts ?? []);
   const [selected, setSelected] = useState<Product | null>(null);
   const [searchKey, setSearchKey] = useState(0);
+  const [code, setCode] = useState(product?.code ?? '');
+  const [codeCheck, setCodeCheck] = useState<{ code: string; duplicate: Product | null; error: boolean } | null>(null);
+  const normalizedCode = code.trim().toLowerCase();
+  const duplicate = codeCheck?.code === normalizedCode ? codeCheck.duplicate : null;
+  useEffect(() => {
+    if (!normalizedCode || normalizedCode === product?.code.toLowerCase()) return;
+    let active = true;
+    const timeout = window.setTimeout(() => {
+      void api.get<Paginated<Product>>(`/products?code=${encodeURIComponent(normalizedCode)}&limit=1`)
+        .then((result) => { if (active) setCodeCheck({ code: normalizedCode, duplicate: result.items.find((item) => item.id !== product?.id) ?? null, error: false }); })
+        .catch(() => { if (active) setCodeCheck({ code: normalizedCode, duplicate: null, error: true }); });
+    }, 300);
+    return () => { active = false; window.clearTimeout(timeout); };
+  }, [normalizedCode, product?.code, product?.id]);
   const packaging = unit === 'FD' || unit === 'CX';
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || (packaging && !options.length)) return;
+    if (busy || duplicate || (packaging && !options.length)) return;
     const form = new FormData(event.currentTarget);
     void onSave({ code: form.get('code'), name: form.get('name'), shelfLifeYears: Number(form.get('shelfLifeYears')),
       ...(product?.defaultUnit === unit ? {} : { defaultUnit: unit }),
@@ -23,7 +37,7 @@ export function ProductForm({ product, busy, onSave, onCancel }: {
   }
 
   return <form className="form-grid" onSubmit={submit}>
-    <label>Código *<input name="code" defaultValue={product?.code} required maxLength={60} disabled={busy} autoFocus /></label>
+    <label>Código *<input name="code" value={code} onChange={(event) => setCode(event.target.value)} aria-invalid={Boolean(duplicate)} aria-describedby="product-code-feedback" required maxLength={60} disabled={busy} autoFocus /><small id="product-code-feedback" className={duplicate ? 'field-error' : undefined} role="status">{duplicate ? `Código já cadastrado: ${duplicate.name}${duplicate.active ? '' : ' (inativo)'}.` : codeCheck?.code === normalizedCode && codeCheck.error ? 'Não foi possível consultar o código. Ele será validado ao salvar.' : ''}</small></label>
     <label>Descrição *<input name="name" defaultValue={product?.name} required maxLength={200} disabled={busy} /></label>
     <label>Tipo de unidade *<select value={unit} onChange={(event) => setUnit(event.target.value)} disabled={busy}>
       <option value="UN">Unidade (UN)</option><option value="FD">Fardo (FD)</option><option value="CX">Caixa (CX)</option>
@@ -42,6 +56,6 @@ export function ProductForm({ product, busy, onSave, onCancel }: {
       {!options.length && <p>Cadastre primeiro um produto Unidade (UN) e vincule ao menos uma opção.</p>}
       <ul className="packaging-options">{options.map((option) => <li key={option.id}><span>{option.code} — {option.name}{!option.active && ' (inativo)'}</span><button type="button" className="secondary" onClick={() => setOptions(options.filter((item) => item.id !== option.id))}>Remover vínculo</button></li>)}</ul>
     </fieldset>}
-    <div className="form-actions wide"><button type="button" className="secondary" disabled={busy} onClick={onCancel}>Voltar</button><button disabled={busy || (packaging && !options.length)}>{busy ? 'Salvando...' : 'Salvar produto'}</button></div>
+    <div className="form-actions wide"><button type="button" className="secondary" disabled={busy} onClick={onCancel}>Voltar</button><button disabled={busy || Boolean(duplicate) || (packaging && !options.length)}>{busy ? 'Salvando...' : 'Salvar produto'}</button></div>
   </form>;
 }

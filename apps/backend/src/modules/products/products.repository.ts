@@ -18,6 +18,7 @@ export class ProductsRepository {
   findAndCount(query: ProductQueryDto): Promise<[ProductEntity[], number]> {
     const builder = this.repository.createQueryBuilder('product').leftJoinAndSelect('product.unitProducts', 'unitProduct');
     if (query.defaultUnit) builder.andWhere('product.defaultUnit = :unit', { unit: query.defaultUnit });
+    if (query.code) builder.andWhere('LOWER(product.code) = LOWER(:code)', { code: query.code });
 
     if (query.search) {
       const field = query.searchField === 'code'

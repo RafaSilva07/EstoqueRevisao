@@ -1,3 +1,4 @@
+import { PositionSelect } from './PositionSelect';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, Movement, Paginated, Product, StockLocation, StockPosition } from './api';
 import { EmptyState, LoadingState, Modal, Notice, OperationGuide, PageHeader } from './components';
@@ -41,6 +42,7 @@ export function ExternalExitPage({
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState('');
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -96,6 +98,8 @@ export function ExternalExitPage({
     setItems([]);
   }
 
+  function closeItem() { setAdding(false); setError(''); setProductId(''); setBatchId(''); setQuantity(''); }
+
   function addItem(event: FormEvent) {
     event.preventDefault();
     const numericQuantity = Number(quantity);
@@ -116,9 +120,7 @@ export function ExternalExitPage({
       position: selectedPosition,
       quantity: numericQuantity,
     }]);
-    setBatchId('');
-    setQuantity('');
-    setError('');
+    closeItem();
   }
 
   async function submit() {
@@ -157,7 +159,7 @@ export function ExternalExitPage({
       description="Selecione uma origem controlada; produtos e lotes exibidos possuem saldo disponivel."
     />
     <OperationGuide />
-    {error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
+    {error && !adding && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
     <section className="surface form-panel">
       <h2><span className="step-number">1</span> Origem e destino</h2>
       <div className="form-grid">
@@ -178,8 +180,9 @@ export function ExternalExitPage({
         </label>
       </div>
     </section>
-    <section className="surface form-panel">
-      <h2><span className="step-number">2</span> Adicionar item</h2>
+    {adding && <Modal labelledBy="add-product-title" onClose={closeItem}>
+      <div className="panel-heading item-list-heading"><h2 id="add-product-title">Adicionar produto</h2><button type="button" className="secondary" onClick={closeItem}>Cancelar</button></div>
+      {error && <Notice kind="error">{error}</Notice>}
       {!originId ? <p className="muted">Escolha a origem para consultar o saldo.</p> : loadingStock ? <LoadingState label="Consultando saldo da origem" /> : positions.length === 0 ? <EmptyState title="Origem sem saldo disponivel" description="Escolha outro local ou registre uma entrada antes da saida." /> : <form className="form-grid" onSubmit={addItem}>
         <label><span>Produto <span className="required">*</span></span>
           <select value={productId} onChange={(event) => { setProductId(event.target.value); setBatchId(''); }} required>
@@ -187,21 +190,17 @@ export function ExternalExitPage({
             {products.map((product) => <option key={product.id} value={product.id}>{product.code} - {product.name}</option>)}
           </select>
         </label>
-        <label><span>Lote <span className="required">*</span></span>
-          <select value={batchId} onChange={(event) => setBatchId(event.target.value)} disabled={!productId} required>
-            <option value="">Selecione</option>
-            {productPositions.map((position) => <option key={position.id} value={position.batchId}>{position.batch.code} - validade {formatDate(position.batch.expirationDate)} - saldo {position.quantity}</option>)}
-          </select>
-        </label>
+        <PositionSelect label="Lote *" value={batchId} onChange={setBatchId} disabled={!productId}
+          options={productPositions.map((position) => ({ value: position.batchId, label: `Lote: ${position.batch.code} · val: ${formatDate(position.batch.expirationDate)} · saldo: ${position.quantity}` }))} />
         {selectedPosition && <div className="available-balance" role="status"><span>Saldo disponivel</span><strong>{selectedPosition.quantity} {selectedPosition.product.defaultUnit}</strong><small>Validade {formatDate(selectedPosition.batch.expirationDate)}</small></div>}
         <label><span>Quantidade <span className="required">*</span></span>
           <input inputMode="numeric" type="number" min="1" max={selectedPosition?.quantity} step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} required />
         </label>
         <div className="form-actions"><button>+ Adicionar</button></div>
       </form>}
-    </section>
+    </Modal>}
     <section className="surface list-panel">
-      <h2><span className="step-number">3</span> Itens da saida ({items.length})</h2>
+      <div className="panel-heading item-list-heading"><h2>Produtos ({items.length})</h2><button type="button" disabled={!originId || busy} onClick={() => { setError(''); setAdding(true); }}>Adicionar produto</button></div>
       {items.length === 0 ? <EmptyState title="Nenhum item adicionado" description="Adicione ao menos um produto e lote com saldo." /> : <div className="entry-items">{items.map((item) => <article key={item.key} className="entry-item"><div><strong>{item.position.product.name}</strong><span>Lote {item.position.batch.code} / validade {formatDate(item.position.batch.expirationDate)}</span><span>{item.quantity} de {item.position.quantity} {item.position.product.defaultUnit} disponiveis</span></div><button className="secondary" onClick={() => setItems((current) => current.filter((candidate) => candidate.key !== item.key))}>Remover</button></article>)}</div>}
       {(!originId || !destinationId || items.length === 0) && <p className="action-hint">Selecione origem, destino e adicione ao menos um item para continuar.</p>}<button className="button-wide" disabled={!originId || !destinationId || items.length === 0 || busy} onClick={() => setConfirming(true)}>Revisar saida</button>
     </section>

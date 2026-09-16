@@ -5,6 +5,12 @@ import { optionalBoolean, trimString } from '../../../shared/validation/transfor
 
 export class ProductQueryDto extends PaginationQueryDto {
   @IsOptional()
+  @Transform(trimString)
+  @IsString()
+  @MaxLength(60)
+  code?: string;
+
+  @IsOptional()
   @IsIn(['UN', 'FD', 'CX'])
   defaultUnit?: string;
 

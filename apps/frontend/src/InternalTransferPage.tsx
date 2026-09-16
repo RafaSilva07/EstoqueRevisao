@@ -1,3 +1,4 @@
+import { PositionSelect } from './PositionSelect';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, Paginated, Product, StockLocation, StockPosition } from './api';
 import { EmptyState, LoadingState, Modal, Notice, OperationGuide, PageHeader } from './components';
@@ -51,6 +52,7 @@ export function InternalTransferPage({
   const [loadingStock, setLoadingStock] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState('');
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -116,6 +118,8 @@ export function InternalTransferPage({
     setChangeLot(false); setDestinationLot(emptyLot); setLotReady(false); setLotKey((key) => key + 1);
   }
 
+  function closeItem() { setAdding(false); setError(''); setProductId(''); changeSourceBatch(''); setQuantity(''); }
+
   function addItem(event: FormEvent) {
     event.preventDefault();
     const numericQuantity = Number(quantity);
@@ -152,10 +156,7 @@ export function InternalTransferPage({
       destinationBatchId: changeLot ? undefined : selectedPosition.batchId,
       quantity: numericQuantity,
     }]);
-    setBatchId('');
-    setChangeLot(false); setDestinationLot(emptyLot); setLotReady(false); setLotKey((key) => key + 1);
-    setQuantity('');
-    setError('');
+    closeItem();
   }
 
   async function submit() {
@@ -178,7 +179,7 @@ export function InternalTransferPage({
       description="Mova o produto para outro local, outro lote ou ambos sem alterar a quantidade total."
     />
     <OperationGuide />
-    {error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
+    {error && !adding && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
     <section className="surface form-panel">
       <h2><span className="step-number">1</span> Origem e destino</h2>
       <div className="form-grid">
@@ -201,8 +202,9 @@ export function InternalTransferPage({
         </label>
       </div>
     </section>
-    <section className="surface form-panel">
-      <h2><span className="step-number">2</span> Adicionar item</h2>
+    {adding && <Modal labelledBy="add-product-title" onClose={closeItem}>
+      <div className="panel-heading item-list-heading"><h2 id="add-product-title">Adicionar produto</h2><button type="button" className="secondary" onClick={closeItem}>Cancelar</button></div>
+      {error && <Notice kind="error">{error}</Notice>}
       {!originId ? <p className="muted">Escolha a origem para consultar o saldo.</p> : loadingStock ? <LoadingState label="Consultando saldo da origem" /> : positions.length === 0 ? <EmptyState title="Origem sem saldo disponivel" description="Escolha outro local ou registre uma entrada antes da transferencia." /> : <form className="form-grid" onSubmit={addItem}>
         <label><span>Produto <span className="required">*</span></span>
           <select value={productId} onChange={(event) => { setProductId(event.target.value); changeSourceBatch(''); }} required>
@@ -210,12 +212,8 @@ export function InternalTransferPage({
             {products.map((product) => <option key={product.id} value={product.id}>{product.code} - {product.name}</option>)}
           </select>
         </label>
-        <label><span>Lote de origem <span className="required">*</span></span>
-          <select value={batchId} onChange={(event) => changeSourceBatch(event.target.value)} disabled={!productId} required>
-            <option value="">Selecione</option>
-            {sourcePositions.map((position) => <option key={position.id} value={position.batchId}>{position.batch.code} - validade {formatDate(position.batch.expirationDate)} - saldo {position.quantity}</option>)}
-          </select>
-        </label>
+        <PositionSelect label="Lote de origem *" value={batchId} onChange={changeSourceBatch} disabled={!productId}
+          options={sourcePositions.map((position) => ({ value: position.batchId, label: `Lote: ${position.batch.code} · val: ${formatDate(position.batch.expirationDate)} · saldo: ${position.quantity}` }))} />
         {selectedPosition && <div className="available-balance" role="status"><span>Disponivel em {locationFor(originId)?.name}</span><strong>{selectedPosition.quantity} {selectedPosition.product.defaultUnit}</strong><small>Validade {formatDate(selectedPosition.batch.expirationDate)}</small></div>}
         <label><span>Quantidade <span className="required">*</span></span>
           <input inputMode="numeric" type="number" min="1" max={selectedPosition?.quantity} step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} required />
@@ -231,9 +229,9 @@ export function InternalTransferPage({
         {changeLot && selectedProduct && <OperationalLotFields key={productId + ':' + lotKey} product={selectedProduct} value={destinationLot} onChange={setDestinationLot} onReady={setLotReady} />}
         <div className="form-actions"><button disabled={changeLot && !lotReady}>+ Adicionar</button></div>
       </form>}
-    </section>
+    </Modal>}
     <section className="surface list-panel">
-      <h2><span className="step-number">3</span> Itens da transferencia ({items.length})</h2>
+      <div className="panel-heading item-list-heading"><h2>Produtos ({items.length})</h2><button type="button" disabled={!originId || !destinationId || busy} onClick={() => { setError(''); setAdding(true); }}>Adicionar produto</button></div>
       {items.length === 0 ? <EmptyState title="Nenhum item adicionado" description="Adicione ao menos uma posicao de origem e seu lote de destino." /> : <div className="entry-items">{items.map((item) => <article key={item.key} className="entry-item"><div><strong>{item.position.product.name}</strong><span>{locationFor(originId)?.name} / lote {item.position.batch.code} / validade {formatDate(item.position.batch.expirationDate)}</span><span>→ {locationFor(destinationId)?.name} / lote {item.destinationBatch.code} / validade {formatDate(item.destinationBatch.expirationDate)}</span><b>{item.quantity} {item.position.product.defaultUnit}</b></div><button className="secondary" onClick={() => setItems((current) => current.filter((candidate) => candidate.key !== item.key))}>Remover</button></article>)}</div>}
       {(!originId || !destinationId || items.length === 0) && <p className="action-hint">Selecione origem, destino e adicione ao menos um item para continuar.</p>}<button className="button-wide" disabled={!originId || !destinationId || items.length === 0 || busy} onClick={() => { submission.resetConfirmation(); setConfirming(true); }}>Revisar transferencia</button>
     </section>
