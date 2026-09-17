@@ -46,7 +46,7 @@ Este documento consolida o comportamento funcional vigente. Regras históricas s
 - A confirmação fica vinculada às divergências apresentadas. Uma validade concorrente ainda não apresentada exige nova confirmação. Recusar/fechar não grava saldo, lote nem movimentação.
 - Entradas com o mesmo produto, lote, validade e local acumulam o saldo, mantendo cada movimentação individual no histórico.
 - Fabricação e validade são obrigatórias, e a validade não pode anteceder a fabricação.
-- A fabricação deve estar entre 2000 e 2099.
+- A fabricação deve estar entre 2000 e a data atual; datas futuras não são permitidas. A regra também é aplicada quando a fabricação é obtida a partir do código CONSERVADI.
 - O código possui seis letras e representa `DDMMYY` pela tabela `CONSERVADI`:
 
 | Dígito | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |

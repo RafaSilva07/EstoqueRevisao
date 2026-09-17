@@ -9,6 +9,8 @@ export function OperationalLotFields({ product, value, onChange, onReady, resolv
   onChange: (lot: OperationalLot) => void;
   onReady: (ready: boolean) => void;
 }) {
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const [suggested, setSuggested] = useState('');
@@ -63,7 +65,7 @@ export function OperationalLotFields({ product, value, onChange, onReady, resolv
           aria-invalid={Boolean(error)} />
       </label>
       <label>Fabricação
-        <input type="date" min="2000-01-01" max="2099-12-31" value={value.manufacturingDate}
+        <input type="date" min="2000-01-01" max={today} value={value.manufacturingDate}
           onChange={(event) => change('manufacturingDate', event.target.value)}
           onBlur={(event) => { if (event.target.value !== '' && !pending) void resolve('manufacturingDate', event.target.value); }}
           aria-invalid={Boolean(error)} />

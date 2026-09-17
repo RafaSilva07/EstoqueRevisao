@@ -13,6 +13,9 @@ describe('lotes operacionais na interface', () => {
     expect(html).toContain('Preencha o lote ou a fabricação');
     expect(html).toContain('Lote CONSERVADI');
     expect(html).toContain('required=""');
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    expect(html).toContain(`max="${today}"`);
     expect(html).not.toContain('Criar lote');
   });
   it('identifica as validades exatas no impacto do estorno', () => {

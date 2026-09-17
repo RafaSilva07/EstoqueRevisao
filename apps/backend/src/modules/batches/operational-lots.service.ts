@@ -74,7 +74,17 @@ export class OperationalLotsService {
   }
 
   private resolve(dto: { code?: string; manufacturingDate?: string }): { code: string; manufacturingDate: string } {
-    try { return this.codec.resolve(dto.code, dto.manufacturingDate); }
+    try {
+      const resolved = this.codec.resolve(dto.code, dto.manufacturingDate);
+      const today = new Intl.DateTimeFormat('en-CA').format(new Date());
+      if (resolved.manufacturingDate > today) {
+        throw new BadRequestException({
+          code: 'FUTURE_MANUFACTURING_DATE',
+          message: 'A data de fabricação deve ser igual ou anterior à data atual.',
+        });
+      }
+      return resolved;
+    }
     catch (error) {
       if (error instanceof BatchCodeError) throw new BadRequestException({ code: error.code, message: error.message });
       throw error;

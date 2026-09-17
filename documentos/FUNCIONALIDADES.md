@@ -88,7 +88,7 @@ PATCH           /api/v1/product-conversions/:id/status
 
 ## Lotes operacionais
 
-Não existe mais tela/menu de cadastro de lotes, modal de criação antecipada nem endpoints de criação/edição separados. O componente `OperationalLotFields` é compartilhado por entrada, transferência e envios externos: preencha lote **ou** fabricação, saia do campo para completar o correspondente e revise a validade sugerida/editável.
+Não existe mais tela/menu de cadastro de lotes, modal de criação antecipada nem endpoints de criação/edição separados. O componente `OperationalLotFields` é compartilhado por entrada, transferência e envios externos: preencha lote **ou** fabricação, saia do campo para completar o correspondente e revise a validade sugerida/editável. A fabricação aceita somente a data atual ou anterior; o backend aplica a mesma validação quando a data é derivada do lote CONSERVADI.
 
 ```text
 POST            /api/v1/movements/resolve-lot
