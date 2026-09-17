@@ -216,6 +216,12 @@ Envios, entradas, saídas, transferências e revisões apresentam a lista e o bo
 - Feedback padronizado de loading, vazio, sucesso e erro.
 - Confirmação antes de operações críticas e bloqueio dos botões durante envio.
 
+## Perfil e fila PCP
+
+Usuários com o perfil exclusivo `PCP` entram em uma interface própria, sem menus de criação, edição, cancelamento ou aceite. A fila inicia em movimentações concluídas e pendentes para o PCP, das mais antigas para as mais novas, e permite combinar período, estado operacional, estado PCP, tipo, origem, destino, produto/lote e ordenação. Os resultados são paginados no backend e usam cards responsivos no celular por meio da tabela adaptativa existente.
+
+O detalhe apresenta rota, responsável, observações, itens, lotes, fabricação, validade, distribuições, eventos auditáveis e fotos privadas de envios confirmados. Uma movimentação concluída e pendente mostra **Marcar como executada**; o modal aceita observação opcional, impede duplo envio e atualiza a fila após sucesso. A API revalida o estado sob transação e lock, grava usuário/data/observação em campos próprios e não altera dados operacionais.
+
 ## Ainda não implementado
 
 Os itens fora do escopo atual estão consolidados no fim de [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md). Não apresente esses itens como disponíveis nem crie implementações fictícias.

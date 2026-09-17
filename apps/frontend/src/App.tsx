@@ -16,8 +16,9 @@ import { OperationalHomePage } from './OperationalHomePage';
 import { Sector, sectorLabel } from './shipments';
 import { UsersPage } from './UsersPage';
 import { ProductForm } from './ProductForm';
+import { PcpPage } from './PcpPage';
 
-type Page = 'users' | 'shipments' | 'home' | 'operations' | 'new-entry' | 'new-exit' | 'new-transfer' | 'new-review' | 'movements' | 'inventory' | 'reports' | 'reports-reviews' | 'reports-stock' | 'products' | 'stocks' | 'more';
+type Page = 'pcp' | 'users' | 'shipments' | 'home' | 'operations' | 'new-entry' | 'new-exit' | 'new-transfer' | 'new-review' | 'movements' | 'inventory' | 'reports' | 'reports-reviews' | 'reports-stock' | 'products' | 'stocks' | 'more';
 type Navigate = (page: Page) => void;
 const messageFrom = (error: unknown) => error instanceof Error ? error.message : 'Ocorreu um erro inesperado.';
 
@@ -208,6 +209,7 @@ export function App() {
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
   const switcher = isAdmin && <OperationalSectorSwitcher value={activeSector} onChange={switchSector} />;
+  if (user.roles.includes('PCP') && !isAdmin) return <div className="sector-portal pcp-portal"><header className="topbar"><strong>ER · PCP · {user.username}</strong><button className="secondary" onClick={logout} disabled={loggingOut}>{loggingOut ? 'Saindo…' : 'Sair'}</button></header><main className="sector-workspace"><PcpPage /></main></div>;
   if (activeSector !== 'REVISAO') return <div className="sector-portal"><header className="topbar"><strong>ER · {user.username} · {sectorLabel[activeSector]}</strong><div className="user-area">{switcher}<button className="secondary" onClick={logout} disabled={loggingOut}>Sair</button></div></header><main className="sector-workspace">{isAdmin && <button className="secondary admin-users-link" onClick={() => navigate(page === 'users' ? 'home' : 'users')}>{page === 'users' ? 'Voltar aos envios' : 'Gerenciar usuários'}</button>}{page === 'users' && isAdmin ? <UsersPage currentUserId={user.id} onOwnUpdate={logout} /> : <>{can('shipments.read') && <ShipmentsPage key={activeSector} user={activeUser} />}</>}</main></div>;
   return <div className="app-shell"><a className="skip-link" href="#main-content">Ir para o conteúdo</a>
     <header className="topbar"><button className="brand" onClick={() => navigate('home')} aria-label="Ir para o inicio"><span>ER</span><strong>Estoque Revisao</strong></button><div className="user-area">{switcher}<span className="user-name">{user.username}</span><button className="secondary desktop-logout" onClick={logout}>Sair</button></div></header>

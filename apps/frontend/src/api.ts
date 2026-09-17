@@ -127,7 +127,36 @@ export interface Movement {
   destinationLocation: StockLocation | null;
   responsibleUser: { id: string; username: string };
   canceledByUser: { id: string; username: string } | null;
+  pcpExecutionStatus: 'PENDENTE' | 'EXECUTADA';
+  pcpExecutedByUserId: string | null;
+  pcpExecutedAt: string | null;
+  pcpExecutionObservation: string | null;
+  pcpExecutedByUser: { id: string; username: string } | null;
   items: MovementItem[];
+}
+
+export interface PcpMovementSummary extends Omit<Movement, 'items' | 'canceledByUser'> {
+  itemCount: number;
+}
+
+export interface PcpAuditEvent {
+  id: string; action: string; result: string; createdAt: string;
+  user: { id: string; username: string } | null;
+}
+
+export interface PcpShipmentEvidence {
+  shipmentId: string; itemId: string; productId: string; batchId: string;
+  stockLocationId: string | null; quantity: number; photoMimeType: string | null;
+}
+
+export interface PcpMovementDetail extends Movement {
+  operationalStatus: 'CONCLUIDA' | 'CANCELADA';
+  auditHistory: PcpAuditEvent[];
+  shipmentEvidence: PcpShipmentEvidence[];
+  shipment: null | {
+    id: string; status: string; originSector: string; destinationSector: string; createdAt: string; decidedAt: string | null;
+    createdBy: { id: string; username: string }; decidedBy: { id: string; username: string } | null;
+  };
 }
 
 export interface QuantityByUnit {

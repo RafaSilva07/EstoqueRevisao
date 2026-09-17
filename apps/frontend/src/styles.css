@@ -466,3 +466,18 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
   .photo-viewer-dialog { height: calc(100dvh - 1rem); }
   .photo-viewer-viewport { height: min(62dvh, 34rem); }
 }
+
+.pcp-list { overflow: hidden; }
+.pcp-list code { color: var(--primary-dark); font-weight: 700; }
+.pcp-detail-dialog { width: min(100%, 60rem); }
+.pcp-detail-dialog h2 small { color: var(--muted); font-size: .8rem; }
+.pcp-evidence-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 1rem; }
+.pcp-audit-list { display: grid; gap: .5rem; padding: 0; list-style: none; }
+.pcp-audit-list li { display: flex; justify-content: space-between; gap: .75rem; border-bottom: 1px solid var(--line); padding: .5rem 0; }
+.pcp-audit-list span { color: var(--muted); text-align: right; }
+.badge.pending { background: #fff2cc; color: #6b4e00; }
+@media (max-width: 759px) {
+  .pcp-list { border: 0; background: transparent; padding: 0; box-shadow: none; }
+  .pcp-audit-list li { display: grid; }
+  .pcp-audit-list span { text-align: left; }
+}

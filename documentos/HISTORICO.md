@@ -88,6 +88,7 @@ Os ADRs completos estão em [`arquivo/adrs/`](./arquivo/adrs/). As decisões vig
 | `1789430400000-shipment-observations.ts` | Observação geral e por item nos envios. |
 | `1789516800000-review-package-unpacking.ts` | Configuração e histórico da desmontagem de fardos/caixas na revisão. |
 | `1789603200000-shipment-item-photos.ts` | Referência privada, MIME, tamanho e integridade da foto por item de envio. |
+| `1789689600000-pcp-movement-execution.ts` | Estado administrativo PCP, executor, instante, observação, índices, papel e permissões. |
 
 `synchronize` permanece desativado. Migrations são a única forma autorizada de alterar o schema.
 
@@ -131,3 +132,7 @@ Adicionado gerenciamento exclusivo de ADMIN com consulta, criação, edição e 
 - Acrescente ao histórico apenas decisões e marcos que ajudem a entender o estado atual.
 - Crie ADR separado somente para decisão arquitetural relevante e, depois, incorpore seu resultado aos documentos canônicos.
 - Relatórios de execução podem ser arquivados; não replique neles todas as regras do sistema.
+
+## Etapa 33 — Perfil PCP e execução administrativa
+
+Criado o perfil transversal PCP com fila global paginada, filtros combináveis, detalhe completo e transição auditável de pendente para executada. O estado PCP foi mantido separado do estado operacional conforme [ADR 024](./arquivo/adrs/ADR_024_SEPARACAO_STATUS_OPERACIONAL_EXECUCAO_PCP.md). Envios somente aparecem após confirmação e geração da movimentação efetiva; fotos continuam privadas e são apenas consultadas. Resumo em [relatórios/RELATORIO_ETAPA_33_PCP.md](./relatorios/RELATORIO_ETAPA_33_PCP.md).

@@ -7,7 +7,7 @@ import { useMovementSubmission } from './useMovementSubmission';
 import { Sector, sectorLabel, Shipment, shipmentStatusLabel } from './shipments';
 import { PhotoViewer } from './PhotoViewer';
 
-function ShipmentPhoto({ shipmentId, itemId, productName, available }: { shipmentId: string; itemId: string; productName: string; available: boolean }) {
+export function ShipmentPhoto({ shipmentId, itemId, productName, available }: { shipmentId: string; itemId: string; productName: string; available: boolean }) {
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   useEffect(() => {

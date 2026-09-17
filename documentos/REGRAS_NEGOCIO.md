@@ -181,6 +181,15 @@ Reversões:
 
 - O histórico mostra tipo, estado, responsável e data originais, rota, itens, lotes, fabricação, validade, quantidades e distribuições. Referências de lote/validade não podem ser editadas. Novos itens também guardam uma cópia de código, descrição e unidade do produto; alterações posteriores no cadastro não reescrevem essa cópia. Dados antigos sem essa cópia continuam consultáveis, sem fabricar um histórico que não foi registrado.
 - Movimentações canceladas continuam consultáveis e mostram responsável, data e motivo do cancelamento.
+
+## Execução administrativa pelo PCP
+
+- O estado operacional e o estado de execução PCP são dimensões independentes. Uma movimentação efetivada equivale a `CONCLUIDA` para o PCP e nasce com `status_execucao_pcp = PENDENTE`.
+- Somente movimentações concluídas podem transitar uma única vez de `PENDENTE` para `EXECUTADA`. Canceladas, recusadas, aguardando aceite ou incompletas não podem ser executadas.
+- Envios somente entram na fila depois do aceite, quando geram a movimentação efetiva vinculada. Solicitações pendentes ou recusadas não geram item executável.
+- A execução registra o usuário autenticado, data/hora e observação opcional própria, sem alterar observação, itens, lote, datas, quantidade, origem, destino, foto ou qualquer dado operacional.
+- Concorrência é serializada por lock pessimista. A primeira confirmação vence; tentativas posteriores recebem conflito e não reabrem a execução.
+- `PCP` é um perfil exclusivo de leitura global e da ação específica de execução. Não recebe permissões de criação, edição, cancelamento ou decisão de envios.
 - Não existem rotas para editar ou excluir movimentações.
 - A auditoria registra usuário, ação, entidade, identificador, resultado, data/hora, request ID, IP, user-agent e dados anteriores/novos quando aplicável.
 - Auditoria não substitui o histórico operacional e não possui endpoints de edição ou exclusão.

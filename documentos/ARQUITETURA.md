@@ -124,6 +124,7 @@ stocks.read / stocks.create / stocks.update
 stock-positions.read
 movements.read / movements.create / movements.cancel
 shipments.read / shipments.create / shipments.decide
+pcp.movements.read / pcp.movements.execute
 ```
 
 ## Logs, auditoria e dados sensíveis
@@ -141,6 +142,25 @@ shipments.read / shipments.create / shipments.decide
 - O backend valida as variáveis ao iniciar.
 - PostgreSQL de desenvolvimento roda em `postgres:17-alpine` via Docker Compose, com health check, porta limitada ao loopback e volume persistente.
 - API e frontend rodam diretamente pelo Node.js no desenvolvimento e podem ser containerizados futuramente sem alteração de domínio.
+
+## Módulo PCP
+
+O módulo `pcp` expõe uma projeção paginada de `movements`, sem duplicar movimentações nem carregar itens/fotos na listagem. O detalhe reutiliza o agregado completo, a auditoria central e, quando existe `shipment_id`, apenas as referências de evidência dos itens do envio. A imagem privada continua sendo servida pelo endpoint autenticado de envios e nunca pelo banco ou frontend diretamente.
+
+```text
+fluxo operacional -> EFETIVADA/CONCLUIDA -> PCP PENDENTE -> PCP EXECUTADA
+envio -> AGUARDANDO_RECEBIMENTO -> CONFIRMADO -> movement EFETIVADA -> PCP PENDENTE
+```
+
+`movements.pcp_execution_status` é separado de `movements.status`; executor, instante e observação administrativa completam a transição. Constraints garantem a coerência dos campos e índices atendem fila por estado/data. A execução usa transação, lock pessimista da movimentação e auditoria `PCP_MOVEMENT_EXECUTE`.
+
+Endpoints:
+
+- `GET /api/v1/pcp/movements`: período, estado operacional, estado PCP, tipo, origem, destino, produto/lote, ordenação e paginação;
+- `GET /api/v1/pcp/movements/:id`: agregado, evidências e histórico auditável;
+- `POST /api/v1/pcp/movements/:id/execution`: transição irreversível com observação opcional.
+
+As permissões são `pcp.movements.read` e `pcp.movements.execute`. O papel exclusivo `PCP` recebe ainda somente leituras necessárias de produtos, lotes, locais, saldos e evidências. Autorizações operacionais continuam protegidas pelos guards existentes.
 - `DATABASE_URL` é o banco local; `TEST_DATABASE_URL` deve apontar para banco isolado e descartável.
 
 ## Frontend

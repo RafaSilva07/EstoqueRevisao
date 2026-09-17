@@ -16,6 +16,7 @@ import { StocksModule } from './modules/stocks/stocks.module';
 import { MovementsModule } from './modules/movements/movements.module';
 import { ShipmentsModule } from './modules/shipments/shipments.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { PcpModule } from './modules/pcp/pcp.module';
 import { GlobalExceptionFilter } from './shared/http/global-exception.filter';
 import { LoggingModule } from './shared/logging/logging.module';
 import { RequestContextMiddleware } from './shared/logging/request-context.middleware';
@@ -41,6 +42,7 @@ import { RequestContextMiddleware } from './shared/logging/request-context.middl
     StocksModule,
     MovementsModule,
     ReportsModule,
+    PcpModule,
     ShipmentsModule,
     HealthModule,
   ],

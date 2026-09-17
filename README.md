@@ -2,6 +2,8 @@
 
 Sistema web para controle de estoque por produto, lote e local lógico. A aplicação usa React/TypeScript/Vite, NestJS/TypeScript e PostgreSQL 17 em uma arquitetura de monólito modular.
 
+Inclui o perfil transversal PCP para consultar movimentações concluídas e registrar sua execução administrativa sem alterar os dados operacionais.
+
 ## Documentação
 
 A fonte principal para desenvolvimento está em [`documentos/README.md`](./documentos/README.md). Comece por esse índice antes de alterar regras, funcionalidades ou arquitetura.

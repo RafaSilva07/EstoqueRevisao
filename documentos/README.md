@@ -28,7 +28,8 @@ O EstoqueRevisao é um sistema web para controle de produtos por lote e local l�
 - entrada e saída diretas para outros locais externos;
 - transferência interna, inclusive com troca ou criação de lote;
 - revisão com distribuição de cada item entre múltiplos destinos;
-- histórico de movimentações e cancelamento com estorno integral.
+- histórico de movimentações e cancelamento com estorno integral;
+- fila transversal do PCP para consulta global e registro auditável da execução administrativa de movimentações concluídas;
 - relatórios filtráveis de movimentações, classificação da revisão e estoque atual, com exportação CSV.
 
 O sistema é um monólito modular: React/TypeScript/Vite no frontend, NestJS/TypeScript no backend e PostgreSQL 17 com TypeORM. Não utiliza microserviços.

@@ -59,6 +59,13 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     await expect(service.create({ ...input(), roleCodes: ['FICTICIO'] }, actor, metadata())).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('cria PCP exclusivo na Revisão e rejeita combinação operacional', async () => {
+    const pcp = await service.create({ ...input('pcp-test'), sector: 'REVISAO', roleCodes: ['PCP'] }, actor, metadata());
+    expect(pcp.roles.map((role) => role.code)).toEqual(['PCP']);
+    await expect(service.create({ ...input('pcp-setor'), sector: 'PRODUCAO', roleCodes: ['PCP'] }, actor, metadata())).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.create({ ...input('pcp-misto'), sector: 'REVISAO', roleCodes: ['PCP', 'PRODUCAO'] }, actor, metadata())).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('edita credenciais/perfil, revoga sessões, inativa preservando registro e permite reativar', async () => {
     const created = await service.create(input(), actor, metadata());
     const session = Object.assign(new AuthSessionEntity(), { userId: created.id, refreshTokenHash: 'a'.repeat(64), expiresAt: new Date(Date.now() + 60000) });

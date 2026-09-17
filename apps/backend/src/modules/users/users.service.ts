@@ -72,9 +72,10 @@ export class UsersService {
         const roleCodes = dto.roleCodes ?? user.roles?.map((role) => role.code) ?? [];
         const roles = await manager.getRepository(RoleEntity).findBy({ code: In(roleCodes) });
         if (!roles.length || roles.length !== roleCodes.length) throw new BadRequestException('Perfil inválido.');
+        if (roleCodes.includes('PCP') && roleCodes.length !== 1) throw new BadRequestException('O perfil PCP é exclusivo e não pode ser combinado com perfis operacionais.');
         const status = dto.status ?? user.status;
         const sector = dto.sector ?? user.sector;
-        if (roleCodes.includes('ADMIN') && sector !== 'REVISAO') throw new BadRequestException('Administrador deve pertencer à Revisão; use o modo operacional para alternar setores.');
+        if (roleCodes.some((code) => code === 'ADMIN' || code === 'PCP') && sector !== 'REVISAO') throw new BadRequestException('Administrador e PCP devem pertencer à Revisão.');
         if (id === actor && (status !== UserStatus.Active || !roleCodes.includes('ADMIN'))) {
           throw new ConflictException('Você não pode desativar sua própria conta nem remover seu acesso administrativo.');
         }
