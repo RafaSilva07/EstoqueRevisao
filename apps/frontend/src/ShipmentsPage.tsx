@@ -5,11 +5,11 @@ import { formatDate, formatDateTime } from './format';
 import { NewShipment } from './NewShipment';
 import { useMovementSubmission } from './useMovementSubmission';
 import { Sector, sectorLabel, Shipment, shipmentStatusLabel } from './shipments';
+import { PhotoViewer } from './PhotoViewer';
 
 function ShipmentPhoto({ shipmentId, itemId, productName, available }: { shipmentId: string; itemId: string; productName: string; available: boolean }) {
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
-  const [expanded, setExpanded] = useState(false);
   useEffect(() => {
     if (!available) return;
     let active = true; let objectUrl = '';
@@ -21,19 +21,17 @@ function ShipmentPhoto({ shipmentId, itemId, productName, available }: { shipmen
   if (!available) return <span className="muted">Item histórico sem foto.</span>;
   if (error) return <span className="photo-required">{error}</span>;
   if (!url) return <span className="muted">Carregando foto…</span>;
-  return <div className="shipment-photo"><button type="button" className="secondary" aria-label={`Ampliar foto de ${productName}`} onClick={() => setExpanded(true)}><img src={url} alt={`Foto de ${productName}`} /></button>
-    {expanded && <Modal labelledBy="shipment-photo-title" onClose={() => setExpanded(false)}><h2 id="shipment-photo-title">Foto de {productName}</h2><img className="camera-preview" src={url} alt={`Foto ampliada de ${productName}`} /><div className="dialog-actions"><button type="button" onClick={() => setExpanded(false)}>Fechar</button></div></Modal>}
-  </div>;
+  return <PhotoViewer src={url} alt={`Foto de ${productName}`} status="Toque para ampliar e conferir" />;
 }
 
 function ShipmentItems({ shipment }: { shipment: Shipment }) {
-  return <ul className="movement-detail-items">{shipment.items.map((item) => <li key={item.id}>
-    <strong>{item.productSnapshot.code} — {item.productSnapshot.name}</strong>
-    <span>Lote {item.batch.code} · fabricação {formatDate(item.batch.manufacturingDate)}</span>
-    <span>Validade {formatDate(item.batch.expirationDate)}</span>
-    {item.stockLocation && <span>Origem: {item.stockLocation.name}</span>}
-    <b>{item.quantity} {item.productSnapshot.defaultUnit}</b>
-    {item.observation && <span><strong>Observação do produto:</strong> {item.observation}</span>}
+  return <ul className="movement-detail-items shipment-items">{shipment.items.map((item) => <li className="shipment-item-card" key={item.id}>
+    <div className="shipment-item-heading"><strong>{item.productSnapshot.code} — {item.productSnapshot.name}</strong><b>{item.quantity} {item.productSnapshot.defaultUnit}</b></div>
+    <div className="shipment-item-data"><span>Lote {item.batch.code} · fabricação {formatDate(item.batch.manufacturingDate)}</span>
+      <span>Validade {formatDate(item.batch.expirationDate)}</span>
+      {item.stockLocation && <span>Origem: {item.stockLocation.name}</span>}
+      {item.observation && <span><strong>Observação do produto:</strong> {item.observation}</span>}
+    </div>
     <ShipmentPhoto shipmentId={shipment.id} itemId={item.id} productName={item.productSnapshot.name} available={Boolean(item.photoMimeType)} />
   </li>)}</ul>;
 }

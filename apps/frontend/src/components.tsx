@@ -36,10 +36,11 @@ export function Notice({ kind, children, onClose }: {
   </div>;
 }
 
-export function Modal({ children, labelledBy, busy = false, onClose }: {
+export function Modal({ children, labelledBy, busy = false, className = '', onClose }: {
   children: ReactNode;
   labelledBy: string;
   busy?: boolean;
+  className?: string;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLElement>(null);
@@ -58,7 +59,7 @@ export function Modal({ children, labelledBy, busy = false, onClose }: {
   return <div className="dialog-backdrop" onMouseDown={(event) => {
     if (event.target === event.currentTarget && !busy) onClose();
   }}>
-    <section ref={ref} className="dialog confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby={labelledBy} aria-busy={busy} tabIndex={-1} onKeyDown={(event) => {
+    <section ref={ref} className={`dialog confirmation-dialog ${className}`.trim()} role="dialog" aria-modal="true" aria-labelledby={labelledBy} aria-busy={busy} tabIndex={-1} onKeyDown={(event) => {
       if (event.key === 'Escape') { event.stopPropagation(); if (!busy) onClose(); }
       if (event.key !== 'Tab') return;
       const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]')).filter((node) => node.getClientRects().length > 0);

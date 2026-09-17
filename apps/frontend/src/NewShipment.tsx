@@ -10,6 +10,7 @@ import { useMovementSubmission } from './useMovementSubmission';
 import { Sector, sectorLabel } from './shipments';
 import { CameraModal } from './CameraModal';
 import { allShipmentPhotosReady, replaceShipmentPhoto } from './shipment-photo-state';
+import { PhotoViewer } from './PhotoViewer';
 
 interface DraftItem { key: string; product: Product; lot: OperationalLot; quantity: number; observation: string | null; position?: StockPosition; photo?: File; photoUrl?: string }
 
@@ -175,12 +176,13 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: Sector; on
       return false;
     }));
   }
-  const summary = <ul className="movement-detail-items">{items.map((item) => <li key={item.key}>
-    <strong>{item.product.code} — {item.product.name}</strong><span>Lote {item.lot.code} · fabricação {formatDate(item.lot.manufacturingDate)}</span>
-    <span>Validade {formatDate(item.lot.expirationDate)}{item.position ? ` · ${item.position.stockLocation.name}` : ''}</span>
-    <b>{item.quantity} {item.product.defaultUnit}</b>
-    {item.observation && <span><strong>Observação do produto:</strong> {item.observation}</span>}
-    {item.photoUrl ? <div className="shipment-photo"><img src={item.photoUrl} alt={`Foto de ${item.product.name}`} /><span>✓ Foto adicionada</span></div> : <span className="photo-required">⚠ Foto obrigatória</span>}
+  const summary = <ul className="movement-detail-items shipment-items">{items.map((item) => <li className="shipment-item-card" key={item.key}>
+    <div className="shipment-item-heading"><strong>{item.product.code} — {item.product.name}</strong><b>{item.quantity} {item.product.defaultUnit}</b></div>
+    <div className="shipment-item-data"><span>Lote {item.lot.code} · fabricação {formatDate(item.lot.manufacturingDate)}</span>
+      <span>Validade {formatDate(item.lot.expirationDate)}{item.position ? ` · ${item.position.stockLocation.name}` : ''}</span>
+      {item.observation && <span><strong>Observação do produto:</strong> {item.observation}</span>}
+    </div>
+    {item.photoUrl ? <PhotoViewer src={item.photoUrl} alt={`Foto de ${item.product.name}`} status="✓ Foto adicionada" /> : <span className="photo-required">⚠ Foto obrigatória</span>}
     {!confirming && <div className="row-actions"><button type="button" onClick={() => setCameraItemKey(item.key)}>{item.photo ? 'Refazer foto' : 'Tirar foto'}</button><button type="button" className="secondary" onClick={() => removeItem(item.key)}>Remover item</button></div>}
   </li>)}</ul>;
   return <>
