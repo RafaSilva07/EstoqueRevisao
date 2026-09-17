@@ -14,7 +14,7 @@ export class CreateUserDto {
   @Length(8, 128)
   password!: string;
 
-  @IsIn(['REVISAO', 'PRODUCAO', 'EXPEDICAO'])
+  @IsIn(['REVISAO', 'PRODUCAO', 'EXPEDICAO', 'PCP'])
   sector!: string;
 
   @IsArray()

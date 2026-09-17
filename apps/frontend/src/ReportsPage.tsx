@@ -4,6 +4,7 @@ import { EmptyState, FilterPanel, LoadingState, Notice, PageHeader } from './com
 import { formatDate, formatDateTime } from './format';
 import { ReportNavigation } from './ReportNavigation';
 import { buildReportQuery, formatQuantities, ReportFilters } from './report-utils';
+import { MovementDetailModal } from './MovementDetailModal';
 
 interface MovementFilters extends ReportFilters {
   dateFrom: string;
@@ -32,6 +33,7 @@ export function ReportsPage({ onReviews, onStock }: { onReviews: () => void; onS
   const [report, setReport] = useState<ReportResult<MovementReportItem, MovementReportTotals> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedMovementId, setSelectedMovementId] = useState<string>();
 
   const activeFilters = useMemo(() => Object.values(applied).filter(Boolean).length, [applied]);
   const load = useCallback(async () => {
@@ -87,13 +89,14 @@ export function ReportsPage({ onReviews, onStock }: { onReviews: () => void; onS
     </FilterPanel>
     {loading ? <LoadingState label="Carregando relatorio" /> : report && <>
       <ReportTotals totals={report.totals} />
-      <MovementResults items={report.items} />
+      <MovementResults items={report.items} onSelect={setSelectedMovementId} />
       {report.meta.totalPages > 1 && <div className="report-pagination">
         <button className="secondary" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Anterior</button>
         <span>Pagina {report.meta.page} de {report.meta.totalPages}</span>
         <button className="secondary" disabled={page >= report.meta.totalPages} onClick={() => setPage((current) => current + 1)}>Proxima</button>
       </div>}
     </>}
+    {selectedMovementId && <MovementDetailModal movementId={selectedMovementId} onClose={() => setSelectedMovementId(undefined)} />}
   </>;
 }
 
@@ -106,14 +109,14 @@ function ReportTotals({ totals }: { totals: MovementReportTotals }) {
   </section>;
 }
 
-function MovementResults({ items }: { items: MovementReportItem[] }) {
+function MovementResults({ items, onSelect }: { items: MovementReportItem[]; onSelect: (id: string) => void }) {
   if (items.length === 0) {
     return <EmptyState title="Nenhuma movimentacao encontrada" description="Ajuste ou limpe os filtros." />;
   }
   return <section className="surface list-panel">
     <div className="responsive-table"><table>
       <thead><tr><th>Data</th><th>Tipo</th><th>Produto/lote</th><th>Origem/destino</th><th>Quantidade</th><th>Status</th></tr></thead>
-      <tbody>{items.map((item) => <tr key={item.itemId}>
+      <tbody>{items.map((item) => <tr key={item.itemId} className="clickable-row" tabIndex={0} role="button" onClick={() => onSelect(item.movementId)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(item.movementId); } }}>
         <td data-label="Data">{formatDateTime(item.occurredAt)}</td>
         <td data-label="Tipo">{movementLabels[item.type]}</td>
         <td data-label="Produto/lote"><strong>{item.productCode} - {item.productName}</strong><small className="cell-note">Lote {item.batchCode}</small><small className="cell-note">Fabricação {formatDate(item.manufacturingDate)} · validade {formatDate(item.expirationDate)}</small>{item.destinationBatchCode && <small className="cell-note">Destino: {item.destinationBatchCode} · fabricação {formatDate(item.destinationManufacturingDate ?? '')} · validade {formatDate(item.destinationExpirationDate ?? '')}</small>}</td>

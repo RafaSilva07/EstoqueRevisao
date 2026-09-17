@@ -377,6 +377,10 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
 .responsive-table .cell-note { line-height: 1.5; }
 .responsive-table .quantity { white-space: normal; font-variant-numeric: tabular-nums; }
 .responsive-table tr[tabindex] { cursor: pointer; }
+.clickable-row:hover, .clickable-row:focus-visible { background: var(--primary-soft); }
+.clickable-row:focus-visible, .clickable-card:focus-visible { outline: 3px solid #24849c; outline-offset: 2px; }
+.clickable-card { cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+.clickable-card:hover { border-color: #91b7c2; box-shadow: 0 .5rem 1.25rem rgb(19 70 82 / 10%); }
 .responsive-table .row-actions { justify-content: flex-start; }
 .responsive-table td:last-child { border-bottom: 0; }
 .detail-panel { scroll-margin-top: 5rem; }
@@ -470,6 +474,9 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
 .pcp-list { overflow: hidden; }
 .pcp-list code { color: var(--primary-dark); font-weight: 700; }
 .pcp-detail-dialog { width: min(100%, 60rem); }
+.movement-detail-dialog { width: min(100%, 62rem); }
+.shipment-detail-dialog { width: min(100%, 60rem); }
+.movement-detail-dialog h2 small { color: var(--muted); font-size: .8rem; }
 .pcp-detail-dialog h2 small { color: var(--muted); font-size: .8rem; }
 .pcp-evidence-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 1rem; }
 .pcp-audit-list { display: grid; gap: .5rem; padding: 0; list-style: none; }

@@ -58,7 +58,7 @@ async function createUser(): Promise<void> {
     user.username = username;
     user.passwordHash = await passwordHasher.hash(password);
     user.status = UserStatus.Active;
-    user.sector = ['PRODUCAO', 'EXPEDICAO'].includes(roleCode.toUpperCase()) ? roleCode.toUpperCase() : 'REVISAO';
+    user.sector = ['PRODUCAO', 'EXPEDICAO', 'PCP'].includes(roleCode.toUpperCase()) ? roleCode.toUpperCase() : 'REVISAO';
 
     await dataSource.transaction(async (manager) => {
       const role = await manager

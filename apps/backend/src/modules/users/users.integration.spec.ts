@@ -59,11 +59,13 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     await expect(service.create({ ...input(), roleCodes: ['FICTICIO'] }, actor, metadata())).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('cria PCP exclusivo na Revisão e rejeita combinação operacional', async () => {
-    const pcp = await service.create({ ...input('pcp-test'), sector: 'REVISAO', roleCodes: ['PCP'] }, actor, metadata());
+  it('cria PCP em seu próprio setor e rejeita combinações incompatíveis', async () => {
+    const pcp = await service.create({ ...input('pcp-test'), sector: 'PCP', roleCodes: ['PCP'] }, actor, metadata());
     expect(pcp.roles.map((role) => role.code)).toEqual(['PCP']);
+    expect(pcp.sector).toBe('PCP');
     await expect(service.create({ ...input('pcp-setor'), sector: 'PRODUCAO', roleCodes: ['PCP'] }, actor, metadata())).rejects.toBeInstanceOf(BadRequestException);
-    await expect(service.create({ ...input('pcp-misto'), sector: 'REVISAO', roleCodes: ['PCP', 'PRODUCAO'] }, actor, metadata())).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.create({ ...input('pcp-misto'), sector: 'PCP', roleCodes: ['PCP', 'PRODUCAO'] }, actor, metadata())).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.create({ ...input('pcp-sem-perfil'), sector: 'PCP', roleCodes: ['PRODUCAO'] }, actor, metadata())).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('edita credenciais/perfil, revoga sessões, inativa preservando registro e permite reativar', async () => {

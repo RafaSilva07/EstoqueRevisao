@@ -16,7 +16,7 @@ Todas as entradas, saídas, transferências e distribuições de revisão aceita
 
 O frontend possui login, restauração da sessão pelo cookie HttpOnly e navegação condicionada às permissões.
 
-Usuários `ADMIN` possuem no cabeçalho da aplicação o seletor **Modo operacional**, que alterna entre Revisão, Produção e Expedição sem exigir outro login. Ao escolher um setor externo, a interface passa para o portal restrito de envios daquele setor; ao retornar para Revisão, recupera o painel e as rotinas internas. O backend valida a função administrativa e aplica as restrições do setor escolhido em cada requisição, mantendo o administrador real como responsável e autor na auditoria.
+Usuários `ADMIN` possuem no cabeçalho da aplicação o seletor **Modo operacional**, que alterna entre Revisão, Produção, Expedição e PCP sem exigir outro login. Produção/Expedição abrem o portal restrito de envios; PCP abre sua fila administrativa; Revisão recupera o painel e as rotinas internas. O backend valida a função administrativa e aplica as restrições do setor escolhido em cada requisição, mantendo o administrador real como responsável e autor na auditoria.
 
 ## Gerenciar usuários (ADMIN)
 
@@ -163,7 +163,7 @@ GET             /api/v1/movements
 GET             /api/v1/movements/:id
 ```
 
-A listagem filtra por período, tipo, origem, destino e produto. O detalhe apresenta identificador, tipo, estado, data/hora, responsável, rota, observação, itens, lotes, fabricação, validade, quantidades e distribuições. Os dados do produto confirmados em novos itens são preservados por snapshot; datas são preservadas nas variantes imutáveis. Relatórios históricos e CSVs existentes também mostram as datas de origem/destino. Registros efetivados e cancelados permanecem no mesmo histórico.
+A listagem filtra por período, tipo, origem, destino e produto. Cards/linhas de movimentações e históricos são clicáveis e abrem um modal central ampliado. O detalhe apresenta identificador, tipo, estados operacional e PCP, data/hora, responsável, rota, observação, itens, lotes, fabricação, validade, quantidades e distribuições. Os dados do produto confirmados em novos itens são preservados por snapshot; datas são preservadas nas variantes imutáveis. Relatórios históricos e CSVs existentes também mostram as datas de origem/destino. Registros efetivados e cancelados permanecem no mesmo histórico.
 
 ## Cancelamento e estorno
 
@@ -222,9 +222,9 @@ Envios, entradas, saídas, transferências e revisões apresentam a lista e o bo
 
 ## Perfil e fila PCP
 
-Usuários com o perfil exclusivo `PCP` entram em uma interface própria, sem menus de criação, edição, cancelamento ou aceite. A fila inicia em movimentações concluídas e pendentes para o PCP, das mais antigas para as mais novas, e permite combinar período, estado operacional, estado PCP, tipo, origem, destino, produto/lote e ordenação. Os resultados são paginados no backend e usam cards responsivos no celular por meio da tabela adaptativa existente.
+Usuários do setor e perfil exclusivo `PCP` entram em uma interface própria, sem menus de criação, edição, cancelamento ou aceite. Administradores acessam a mesma interface ao selecionar PCP no modo operacional. A fila inicia em movimentações concluídas e pendentes para o PCP, das mais antigas para as mais novas, e permite combinar período, estado operacional, estado PCP, tipo, origem, destino, produto/lote e ordenação. Os resultados são paginados no backend; a linha/card inteiro abre o detalhe em modal.
 
-O detalhe apresenta rota, responsável, observações, itens, lotes, fabricação, validade, distribuições, eventos auditáveis e fotos privadas de envios confirmados. Uma movimentação concluída e pendente mostra **Marcar como executada**; o modal aceita observação opcional, impede duplo envio e atualiza a fila após sucesso. A API revalida o estado sob transação e lock, grava usuário/data/observação em campos próprios e não altera dados operacionais.
+O detalhe apresenta rota, responsável, observações, itens, lotes, fabricação, validade, distribuições, eventos auditáveis e fotos privadas de envios confirmados. Uma movimentação efetivada permanece efetivada no estoque; inicialmente ela está pendente no PCP e, após **Marcar como executada**, somente o estado PCP muda para executada. O modal aceita observação opcional, impede duplo envio e atualiza a fila após sucesso. A API revalida o estado sob transação e lock, grava usuário/data/observação em campos próprios e não altera dados operacionais.
 
 ## Ainda não implementado
 

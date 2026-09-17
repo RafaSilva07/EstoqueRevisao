@@ -21,7 +21,7 @@ Este documento consolida o comportamento funcional vigente. Regras históricas s
 - Excluir significa inativar a conta, encerrar suas sessões e preservar os vínculos com histórico/auditoria. Contas inativas permanecem consultáveis e podem ser reativadas.
 - Alterar uma conta encerra suas sessões anteriores. Ao editar a própria conta, o administrador precisa entrar novamente.
 - Não é permitido inativar a própria conta nem remover seu acesso administrativo. O último administrador ativo é preservado, inclusive sob alterações concorrentes.
-- Administradores pertencem ao setor Revisão e utilizam o modo operacional para atuar nos outros setores.
+- Administradores pertencem ao setor Revisão e utilizam o modo operacional para atuar nos setores Produção, Expedição e PCP.
 - Alterações e auditoria são atômicas e nunca registram senhas ou hashes.
 
 ## Produtos e conversões
@@ -89,8 +89,8 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 
 ## Envios entre setores
 
-- Usuários possuem setor `REVISAO`, `PRODUCAO` ou `EXPEDICAO`. O setor atribuído vem da sessão validada no banco, nunca de um campo operacional comum. Usuários existentes permanecem na Revisão.
-- Somente usuários com função `ADMIN` podem alternar temporariamente o modo operacional entre Revisão, Produção e Expedição. O modo escolhido vale por requisição, aplica todas as restrições do setor selecionado e não altera o setor cadastrado nem a identidade registrada em histórico e auditoria. Cabeçalhos de alternância enviados por não administradores ou com valor inválido são rejeitados.
+- Usuários possuem setor `REVISAO`, `PRODUCAO`, `EXPEDICAO` ou `PCP`. O setor atribuído vem da sessão validada no banco, nunca de um campo operacional comum. PCP é um setor administrativo e não participa como origem ou destino de envios de mercadoria.
+- Somente usuários com função `ADMIN` podem alternar temporariamente o modo operacional entre Revisão, Produção, Expedição e PCP. O modo escolhido vale por requisição, aplica todas as restrições do setor selecionado e não altera o setor cadastrado nem a identidade registrada em histórico e auditoria. Cabeçalhos de alternância enviados por não administradores ou com valor inválido são rejeitados.
 - Produção/Expedição enviam somente para Revisão e decidem somente recebimentos destinados ao próprio setor. Não acessam operações, saldos ou relatórios internos da Revisão.
 - Revisão envia para Produção/Expedição e decide os envios desses setores. Permissões `shipments.read/create/decide` complementam a validação do setor.
 - Um envio tem vários itens e nasce `AGUARDANDO_RECEBIMENTO`. Os itens não são editáveis depois do envio. Somente o destinatário pode decidir uma única vez: `CONFIRMADO` ou `RECUSADO`; recusa exige motivo de até 1000 caracteres.
@@ -190,7 +190,7 @@ Reversões:
 - Envios somente entram na fila depois do aceite, quando geram a movimentação efetiva vinculada. Solicitações pendentes ou recusadas não geram item executável.
 - A execução registra o usuário autenticado, data/hora e observação opcional própria, sem alterar observação, itens, lote, datas, quantidade, origem, destino, foto ou qualquer dado operacional.
 - Concorrência é serializada por lock pessimista. A primeira confirmação vence; tentativas posteriores recebem conflito e não reabrem a execução.
-- `PCP` é um perfil exclusivo de leitura global e da ação específica de execução. Não recebe permissões de criação, edição, cancelamento ou decisão de envios.
+- `PCP` é simultaneamente setor e perfil exclusivo de leitura global e da ação específica de execução. Usuários PCP devem ter setor e perfil PCP; não recebem permissões de criação, edição, cancelamento ou decisão de envios. Administradores podem assumir o modo PCP sem mudar seu cadastro.
 - Não existem rotas para editar ou excluir movimentações.
 - A auditoria registra usuário, ação, entidade, identificador, resultado, data/hora, request ID, IP, user-agent e dados anteriores/novos quando aplicável.
 - Auditoria não substitui o histórico operacional e não possui endpoints de edição ou exclusão.

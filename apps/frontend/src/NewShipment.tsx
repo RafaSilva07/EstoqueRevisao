@@ -7,16 +7,16 @@ import { ProductAutocomplete } from './ProductAutocomplete';
 import { emptyLot, OperationalLot } from './operational-lot';
 import { formatDate } from './format';
 import { useMovementSubmission } from './useMovementSubmission';
-import { Sector, sectorLabel } from './shipments';
+import { ShipmentSector, sectorLabel } from './shipments';
 import { CameraModal } from './CameraModal';
 import { allShipmentPhotosReady, replaceShipmentPhoto } from './shipment-photo-state';
 import { PhotoViewer } from './PhotoViewer';
 
 interface DraftItem { key: string; product: Product; lot: OperationalLot; quantity: number; observation: string | null; position?: StockPosition; photo?: File; photoUrl?: string }
 
-export function NewShipment({ sector, onCreated, onClose }: { sector: Sector; onCreated: (id: string) => void; onClose: () => void }) {
+export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSector; onCreated: (id: string) => void; onClose: () => void }) {
   const outgoing = sector === 'REVISAO';
-  const [destination, setDestination] = useState<Sector>(outgoing ? 'PRODUCAO' : 'REVISAO');
+  const [destination, setDestination] = useState<ShipmentSector>(outgoing ? 'PRODUCAO' : 'REVISAO');
   const [product, setProduct] = useState<Product | null>(null);
   const [productResetKey, setProductResetKey] = useState(0);
   const [positions, setPositions] = useState<StockPosition[]>([]);
@@ -188,7 +188,7 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: Sector; on
   return <>
     <PageHeader eyebrow="Envios entre setores" title={outgoing ? 'Novo envio' : 'Novo envio para Revisão'} action={<button className="secondary" onClick={onClose}>Voltar</button>} />
     {error && !adding && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
-    <section className="surface form-panel"><h2>1. Destino</h2>{outgoing ? <label>Enviar para<select value={destination} onChange={(event) => setDestination(event.target.value as Sector)}><option value="PRODUCAO">Produção</option><option value="EXPEDICAO">Expedição</option></select></label> : <p>Revisão · entrada em A Revisar somente após confirmação.</p>}
+    <section className="surface form-panel"><h2>1. Destino</h2>{outgoing ? <label>Enviar para<select value={destination} onChange={(event) => setDestination(event.target.value as ShipmentSector)}><option value="PRODUCAO">Produção</option><option value="EXPEDICAO">Expedição</option></select></label> : <p>Revisão · entrada em A Revisar somente após confirmação.</p>}
       {outgoing && <p className="muted">Ao enviar, a quantidade sai do disponível e fica em trânsito. Uma recusa devolve o saldo à posição original.</p>}</section>
     {adding && <Modal labelledBy="add-product-title" onClose={closeItem}><div className="panel-heading item-list-heading"><h2 id="add-product-title">Adicionar produto</h2><button type="button" className="secondary" onClick={closeItem}>Cancelar</button></div>
       {error && <Notice kind="error">{error}</Notice>}

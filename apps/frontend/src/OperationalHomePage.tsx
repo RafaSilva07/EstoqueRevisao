@@ -3,6 +3,7 @@ import { api, Movement, Paginated, ReportResult, StockReportItem, StockReportTot
 import { EmptyState, LoadingState, Notice, PageHeader } from './components';
 import { formatQuantities } from './report-utils';
 import { formatDateTime } from './format';
+import { MovementDetailModal } from './MovementDetailModal';
 
 type OperationalHomePageProps = {
   inventory: boolean;
@@ -52,6 +53,7 @@ export function OperationalHomePage({
   const [recentMovements, setRecentMovements] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(inventory || movementsRead);
   const [error, setError] = useState('');
+  const [selectedMovement, setSelectedMovement] = useState<Movement | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -175,7 +177,7 @@ export function OperationalHomePage({
                 <thead><tr><th>Data</th><th>Tipo</th><th>Movimentação</th><th>Status</th></tr></thead>
                 <tbody>
                   {recentMovements.map((movement) => (
-                    <tr key={movement.id}>
+                    <tr key={movement.id} className="clickable-row" tabIndex={0} role="button" onClick={() => setSelectedMovement(movement)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedMovement(movement); } }}>
                       <td data-label="Data">{formatDateTime(movement.occurredAt)}</td>
                       <td data-label="Tipo">{movementLabels[movement.type]}</td>
                       <td data-label="Movimentação">{movementRoute(movement)}</td>
@@ -188,6 +190,7 @@ export function OperationalHomePage({
           )}
         </section>
       )}
+      {selectedMovement && <MovementDetailModal movementId={selectedMovement.id} initialMovement={selectedMovement} onClose={() => setSelectedMovement(null)} />}
     </section>
   );
 }

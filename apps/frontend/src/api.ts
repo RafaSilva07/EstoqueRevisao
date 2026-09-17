@@ -1,7 +1,7 @@
 export interface UserSession {
   id: string;
   username: string;
-  sector?: 'REVISAO' | 'PRODUCAO' | 'EXPEDICAO';
+  sector?: 'REVISAO' | 'PRODUCAO' | 'EXPEDICAO' | 'PCP';
   roles: string[];
   permissions: string[];
 }

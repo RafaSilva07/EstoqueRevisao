@@ -4,6 +4,7 @@ import { EmptyState, FilterPanel, LoadingState, Notice, PageHeader } from './com
 import { formatDate, formatDateTime } from './format';
 import { ReportNavigation } from './ReportNavigation';
 import { buildReportQuery, formatQuantities, ReportFilters } from './report-utils';
+import { MovementDetailModal } from './MovementDetailModal';
 
 interface ReviewFilters extends ReportFilters {
   dateFrom: string;
@@ -24,6 +25,7 @@ export function ReviewReportsPage({ onMovements, onStock }: { onMovements: () =>
   const [report, setReport] = useState<ReportResult<ReviewReportItem, ReviewReportTotals> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedMovementId, setSelectedMovementId] = useState<string>();
 
   const activeFilters = useMemo(() => Object.values(applied).filter(Boolean).length, [applied]);
   const load = useCallback(async () => {
@@ -78,13 +80,14 @@ export function ReviewReportsPage({ onMovements, onStock }: { onMovements: () =>
     </FilterPanel>
     {loading ? <LoadingState label="Carregando relatorio" /> : report && <>
       <ReviewTotals totals={report.totals} />
-      <ReviewResults items={report.items} />
+      <ReviewResults items={report.items} onSelect={setSelectedMovementId} />
       {report.meta.totalPages > 1 && <div className="report-pagination">
         <button className="secondary" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Anterior</button>
         <span>Pagina {report.meta.page} de {report.meta.totalPages}</span>
         <button className="secondary" disabled={page >= report.meta.totalPages} onClick={() => setPage((current) => current + 1)}>Proxima</button>
       </div>}
     </>}
+    {selectedMovementId && <MovementDetailModal movementId={selectedMovementId} onClose={() => setSelectedMovementId(undefined)} />}
   </>;
 }
 
@@ -98,14 +101,14 @@ function ReviewTotals({ totals }: { totals: ReviewReportTotals }) {
   </section>;
 }
 
-function ReviewResults({ items }: { items: ReviewReportItem[] }) {
+function ReviewResults({ items, onSelect }: { items: ReviewReportItem[]; onSelect: (id: string) => void }) {
   if (items.length === 0) {
     return <EmptyState title="Nenhuma revisao encontrada" description="Ajuste ou limpe os filtros." />;
   }
   return <section className="surface list-panel">
     <div className="responsive-table"><table>
       <thead><tr><th>Data</th><th>Produto/lote</th><th>Classificacao</th><th>Quantidade</th><th>Responsavel</th></tr></thead>
-      <tbody>{items.map((item) => <tr key={item.distributionId}>
+      <tbody>{items.map((item) => <tr key={item.distributionId} className="clickable-row" tabIndex={0} role="button" onClick={() => onSelect(item.movementId)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(item.movementId); } }}>
         <td data-label="Data">{formatDateTime(item.occurredAt)}</td>
         <td data-label="Produto/lote"><strong>{item.productCode} - {item.productName}</strong><small className="cell-note">Lote {item.batchCode} · fabricação {formatDate(item.manufacturingDate)} · validade {formatDate(item.expirationDate)}</small></td>
         <td data-label="Classificacao"><span className="badge active">{item.destination}</span></td>

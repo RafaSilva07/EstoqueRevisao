@@ -4,7 +4,7 @@ import { EmptyState, LoadingState, Modal, Notice, PageHeader } from './component
 import { formatDate, formatDateTime } from './format';
 import { NewShipment } from './NewShipment';
 import { useMovementSubmission } from './useMovementSubmission';
-import { Sector, sectorLabel, Shipment, shipmentStatusLabel } from './shipments';
+import { ShipmentSector, sectorLabel, Shipment, shipmentStatusLabel } from './shipments';
 import { PhotoViewer } from './PhotoViewer';
 
 export function ShipmentPhoto({ shipmentId, itemId, productName, available }: { shipmentId: string; itemId: string; productName: string; available: boolean }) {
@@ -83,25 +83,25 @@ export function ShipmentsPage({ user }: { user: UserSession }) {
     const timer = window.setInterval(() => void load(), 30000);
     return () => window.clearInterval(timer);
   }, [load, selected, creating]);
-  if (creating) return <NewShipment sector={user.sector as Sector} onClose={() => setCreating(false)} onCreated={() => { setCreating(false); setSelected(null); setView('sent'); setPage(1); setSuccess('Envio criado. Aguardando confirmação do destinatário.'); void load(); }} />;
+  if (creating) return <NewShipment sector={user.sector as ShipmentSector} onClose={() => setCreating(false)} onCreated={() => { setCreating(false); setSelected(null); setView('sent'); setPage(1); setSuccess('Envio criado. Aguardando confirmação do destinatário.'); void load(); }} />;
   return <>
     {user.sector !== 'REVISAO' && <ShipmentHomeNotice onOpen={() => { setView('pending'); setPage(1); }} />}
-    <PageHeader eyebrow={sectorLabel[user.sector as Sector]} title="Envios entre setores" description="Receba, acompanhe seus envios e consulte as decisões." action={canCreate && <button onClick={() => setCreating(true)}>{user.sector === 'REVISAO' ? 'Novo envio' : 'Novo envio para Revisão'}</button>} />
+    <PageHeader eyebrow={sectorLabel[user.sector as ShipmentSector]} title="Envios entre setores" description="Receba, acompanhe seus envios e consulte as decisões." action={canCreate && <button onClick={() => setCreating(true)}>{user.sector === 'REVISAO' ? 'Novo envio' : 'Novo envio para Revisão'}</button>} />
     {success && <Notice kind="success" onClose={() => setSuccess('')}>{success}</Notice>}
     <nav className="shipment-tabs" aria-label="Consultas de envios">{([['pending','Aguardando minha ação'],['sent','Enviados por mim'],['history','Histórico']] as const).map(([key,label]) => <button key={key} className={view === key ? '' : 'secondary'} aria-pressed={view === key} onClick={() => { setView(key); setPage(1); setSelected(null); }}>{label}</button>)}</nav>
     {error ? <Notice kind="error">{error} <button className="secondary" onClick={() => void load()}>Tentar novamente</button></Notice> : loading ? <LoadingState label="Consultando envios" /> : !data?.items.length ? <EmptyState title="Nenhum envio nesta consulta" description="Novos recebimentos e decisões aparecerão aqui." /> : <>
-      <div className="shipment-list">{data.items.map((shipment) => <article className="surface shipment-card" key={shipment.id}>
+      <div className="shipment-list">{data.items.map((shipment) => <article className="surface shipment-card clickable-card" key={shipment.id} tabIndex={0} role="button" onClick={() => { setSelected(shipment); setDecision(null); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(shipment); setDecision(null); } }}>
         <span className={`badge ${shipment.status === 'CONFIRMADO' ? 'active' : shipment.status === 'RECUSADO' ? 'canceled' : ''}`}>{shipmentStatusLabel[shipment.status]}</span>
         <h2>{sectorLabel[shipment.originSector]} → {sectorLabel[shipment.destinationSector]}</h2>
         <p>{shipment.createdBy.username} · {formatDateTime(shipment.createdAt)}</p><p>{shipment.items.length} item(ns)</p>
         {shipment.originSector === 'REVISAO' && shipment.status === 'AGUARDANDO_RECEBIMENTO' && <p><strong>Quantidade em trânsito, fora do saldo disponível.</strong></p>}
         {shipment.decidedAt && <p>{shipmentStatusLabel[shipment.status]} por {shipment.decidedBy?.username} em {formatDateTime(shipment.decidedAt)}</p>}
         {shipment.refusalReason && <Notice kind="info">Motivo da recusa: {shipment.refusalReason}</Notice>}
-        <button className="secondary button-wide" onClick={() => { setSelected(shipment); setDecision(null); }}>Ver itens e detalhes</button>
+        <button className="secondary button-wide" onClick={(event) => { event.stopPropagation(); setSelected(shipment); setDecision(null); }}>Ver itens e detalhes</button>
       </article>)}</div>
       <div className="shipment-pagination"><button className="secondary" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Anterior</button><span>Página {page} de {data.meta.totalPages} · {data.meta.total} envios</span><button className="secondary" disabled={page >= data.meta.totalPages} onClick={() => setPage((value) => value + 1)}>Próxima</button></div>
     </>}
-    {selected && !decision && <Modal labelledBy="shipment-detail-title" onClose={() => setSelected(null)}>
+    {selected && !decision && <Modal labelledBy="shipment-detail-title" className="shipment-detail-dialog" onClose={() => setSelected(null)}>
       <h2 id="shipment-detail-title">{sectorLabel[selected.originSector]} → {sectorLabel[selected.destinationSector]}</h2>
       <p><strong>{shipmentStatusLabel[selected.status]}</strong></p><p>Enviado por {selected.createdBy.username} em {formatDateTime(selected.createdAt)}</p>
       <small className="shipment-id">Envio {selected.id}</small>
@@ -120,6 +120,7 @@ export function ShipmentsPage({ user }: { user: UserSession }) {
 export function ShipmentHomeNotice({ onOpen }: { onOpen: () => void }) {
   const [pending, setPending] = useState<number | null>(null);
   const [sent, setSent] = useState<Shipment[]>([]);
+  const [selected, setSelected] = useState<Shipment | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
     let active = true;
@@ -132,6 +133,7 @@ export function ShipmentHomeNotice({ onOpen }: { onOpen: () => void }) {
   return <section className="surface shipment-card"><p className="eyebrow">Envios entre setores</p><h2>Aguardando meu recebimento</h2>
     {error ? <Notice kind="error">{error}</Notice> : pending === null ? <LoadingState label="Consultando pendências" /> : <p><strong>{pending}</strong> envio(s) aguardando sua ação.</p>}
     <button onClick={onOpen}>Abrir envios e recebimentos</button>
-    {sent.length > 0 && <><h3>Atualizações dos seus envios</h3><ul className="movement-detail-items">{sent.map((shipment) => <li key={shipment.id}><strong>{sectorLabel[shipment.destinationSector]} · {shipmentStatusLabel[shipment.status]}</strong><span>{formatDateTime(shipment.decidedAt ?? shipment.createdAt)}</span>{shipment.refusalReason && <span>Motivo: {shipment.refusalReason}</span>}</li>)}</ul></>}
+    {sent.length > 0 && <><h3>Atualizações dos seus envios</h3><ul className="movement-detail-items">{sent.map((shipment) => <li className="clickable-card" tabIndex={0} role="button" onClick={() => setSelected(shipment)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(shipment); } }} key={shipment.id}><strong>{sectorLabel[shipment.destinationSector]} · {shipmentStatusLabel[shipment.status]}</strong><span>{formatDateTime(shipment.decidedAt ?? shipment.createdAt)}</span>{shipment.refusalReason && <span>Motivo: {shipment.refusalReason}</span>}</li>)}</ul></>}
+    {selected && <Modal labelledBy="shipment-update-title" className="shipment-detail-dialog" onClose={() => setSelected(null)}><h2 id="shipment-update-title">{sectorLabel[selected.originSector]} → {sectorLabel[selected.destinationSector]}</h2><p><strong>{shipmentStatusLabel[selected.status]}</strong></p><p>Enviado por {selected.createdBy.username} em {formatDateTime(selected.createdAt)}</p>{selected.observation && <p><strong>Observação geral:</strong> {selected.observation}</p>}<ShipmentItems shipment={selected} />{selected.decidedAt && <p>{shipmentStatusLabel[selected.status]} por {selected.decidedBy?.username} em {formatDateTime(selected.decidedAt)}</p>}{selected.refusalReason && <Notice kind="info">Motivo da recusa: {selected.refusalReason}</Notice>}<button className="secondary button-wide" onClick={() => setSelected(null)}>Fechar detalhes</button></Modal>}
   </section>;
 }

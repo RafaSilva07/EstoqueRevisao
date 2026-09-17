@@ -28,6 +28,8 @@ describe('Permissões por setor', () => {
     expect(check('REVISAO', ['shipments.create'], ['shipments.create'], ['ADMIN'], 'PRODUCAO')).toBe(true);
     expect(check('REVISAO', ['movements.create'], ['movements.create'], ['ADMIN'], 'PRODUCAO')).toBe(false);
     expect(check('REVISAO', ['movements.create'], ['movements.create'], ['ADMIN'], 'REVISAO')).toBe(true);
+    expect(check('REVISAO', ['pcp.movements.execute'], ['pcp.movements.execute'], ['ADMIN'], 'PCP')).toBe(true);
+    expect(check('REVISAO', ['movements.create'], ['movements.create'], ['ADMIN'], 'PCP')).toBe(false);
   });
   it('rejeita troca por não administrador ou para setor inválido', () => {
     expect(() => check('PRODUCAO', ['shipments.read'], ['shipments.read'], ['PRODUCAO'], 'REVISAO')).toThrow(ForbiddenException);

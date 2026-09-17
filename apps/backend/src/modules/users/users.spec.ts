@@ -10,7 +10,7 @@ describe('Administração de usuários', () => {
     expect(new AdminGuard().canActivate(context)).toBe(false);
   });
   it('permite ADMIN independentemente do modo operacional', () => {
-    for (const sector of ['REVISAO', 'PRODUCAO', 'EXPEDICAO']) {
+    for (const sector of ['REVISAO', 'PRODUCAO', 'EXPEDICAO', 'PCP']) {
       const context = { switchToHttp: (): unknown => ({ getRequest: (): unknown => ({ user: { roles: ['ADMIN'], sector } }) }) } as unknown as ExecutionContext;
       expect(new AdminGuard().canActivate(context)).toBe(true);
     }
@@ -20,6 +20,7 @@ describe('Administração de usuários', () => {
     const dto = plainToInstance(CreateUserDto, valid);
     expect(await validate(dto)).toHaveLength(0);
     expect(dto.username).toBe('operador');
+    expect(await validate(plainToInstance(CreateUserDto, { ...valid, sector: 'PCP', roleCodes: ['PCP'] }))).toHaveLength(0);
     for (const patch of [{ username: ' ' }, { password: 'curta' }, { sector: 'INVALIDO' }, { roleCodes: [] }, { roleCodes: ['ADMIN', 'ADMIN'] }]) {
       expect((await validate(plainToInstance(CreateUserDto, { ...valid, ...patch }))).length).toBeGreaterThan(0);
     }

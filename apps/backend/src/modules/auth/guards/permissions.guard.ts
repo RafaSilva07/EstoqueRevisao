@@ -25,12 +25,14 @@ export class PermissionsGuard implements CanActivate {
       if (!user?.roles.includes('ADMIN')) {
         throw new ForbiddenException('Somente administradores podem alternar o setor operacional.');
       }
-      if (typeof requestedSector !== 'string' || !['REVISAO', 'PRODUCAO', 'EXPEDICAO'].includes(requestedSector)) {
+      if (typeof requestedSector !== 'string' || !['REVISAO', 'PRODUCAO', 'EXPEDICAO', 'PCP'].includes(requestedSector)) {
         throw new BadRequestException('Setor operacional inválido.');
       }
       user.sector = requestedSector;
     }
-    if (user?.sector && user.sector !== 'REVISAO' && required.some((permission) => !permission.startsWith('shipments.') && permission !== 'products.read')) return false;
+    const pcpPermissions = ['pcp.movements.read', 'pcp.movements.execute', 'products.read', 'batches.read', 'stocks.read', 'stock-positions.read', 'shipments.read'];
+    if (user?.sector === 'PCP' && required.some((permission) => !pcpPermissions.includes(permission))) return false;
+    if (user?.sector && !['REVISAO', 'PCP'].includes(user.sector) && required.some((permission) => !permission.startsWith('shipments.') && permission !== 'products.read')) return false;
     return Boolean(user && required.every((permission) => user.permissions.includes(permission)));
   }
 }
