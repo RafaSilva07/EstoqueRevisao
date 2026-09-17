@@ -27,6 +27,7 @@ export interface Product {
   name: string;
   defaultUnit: string;
   unitsPerPackage?: number | null;
+  unitWeightGrams?: number | null;
   unitProducts?: Product[];
   shelfLifeYears?: number | null;
   active: boolean;

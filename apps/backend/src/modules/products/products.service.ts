@@ -50,6 +50,7 @@ export class ProductsService {
       product.active = true;
       product.createdById = userId;
       product.updatedById = userId;
+      this.configureUnitWeight(product, dto);
       await this.configurePackaging(product, dto, manager);
 
       try {
@@ -113,6 +114,7 @@ export class ProductsService {
       product.defaultUnit = dto.defaultUnit ?? product.defaultUnit;
       product.shelfLifeYears = dto.shelfLifeYears ?? product.shelfLifeYears;
       product.updatedById = userId;
+      this.configureUnitWeight(product, dto);
       await this.configurePackaging(product, dto, manager);
 
       try {
@@ -177,8 +179,24 @@ export class ProductsService {
       shelfLifeYears: product.shelfLifeYears,
       active: product.active,
       unitsPerPackage: product.unitsPerPackage,
+      unitWeightGrams: product.unitWeightGrams,
       unitProductIds: product.unitProducts?.map((unit) => unit.id) ?? [],
     };
+  }
+
+  private configureUnitWeight(product: ProductEntity, dto: UpdateProductDto): void {
+    const weight = dto.unitWeightGrams === undefined ? product.unitWeightGrams : dto.unitWeightGrams;
+    if (product.defaultUnit === 'UN') {
+      if (!Number.isSafeInteger(weight) || !weight || weight < 1) {
+        throw new BadRequestException('Informe a gramatura da unidade em gramas inteiras e positivas.');
+      }
+      product.unitWeightGrams = weight;
+      return;
+    }
+    if (dto.unitWeightGrams != null) {
+      throw new BadRequestException('Gramatura por unidade deve ser informada somente para produtos UN.');
+    }
+    product.unitWeightGrams = null;
   }
 
   private async configurePackaging(product: ProductEntity, dto: UpdateProductDto, manager: EntityManager): Promise<void> {

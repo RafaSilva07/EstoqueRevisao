@@ -31,6 +31,7 @@ export function ProductForm({ product, busy, onSave, onCancel }: {
     const form = new FormData(event.currentTarget);
     void onSave({ code: form.get('code'), name: form.get('name'), shelfLifeYears: Number(form.get('shelfLifeYears')),
       ...(product?.defaultUnit === unit ? {} : { defaultUnit: unit }),
+      unitWeightGrams: unit === 'UN' ? Number(form.get('unitWeightGrams')) : null,
       unitsPerPackage: packaging ? Number(form.get('unitsPerPackage')) : null,
       unitProductIds: packaging ? options.map((option) => option.id) : [],
     });
@@ -44,6 +45,7 @@ export function ProductForm({ product, busy, onSave, onCancel }: {
       {!['UN', 'FD', 'CX'].includes(unit) && <option value={unit}>{unit} (cadastro anterior)</option>}
     </select></label>
     <label>Prazo padrão de validade (anos) *<input name="shelfLifeYears" type="number" min="1" step="1" defaultValue={product?.shelfLifeYears ?? ''} required disabled={busy} /><small>Sugere a validade de novas operações. Não altera o histórico.</small></label>
+    {unit === 'UN' && <label>Gramatura da unidade (g) *<input name="unitWeightGrams" type="number" inputMode="numeric" min="1" max="2147483647" step="1" defaultValue={product?.unitWeightGrams ?? ''} required disabled={busy} /><small>Peso, em gramas, de uma unidade deste código.</small></label>}
     {packaging && <fieldset className="operational-lot wide" disabled={busy}>
       <legend>Conteúdo do fardo/caixa</legend>
       <label>Unidades por embalagem *<input name="unitsPerPackage" type="number" min="1" max="2147483647" step="1" defaultValue={product?.unitsPerPackage ?? ''} required /></label>

@@ -58,7 +58,7 @@ Evite abstrações prematuras. Uma regra compartilhada deve ser extraída quando
 - `users`, `roles`, `permissions`, `user_roles`, `role_permissions`: identidade e autorização.
 - `auth_sessions`: refresh tokens e revogação de sessão.
 - `audit_logs`: trilha técnica/administrativa persistente.
-- `products`, `product_unit_conversions`: cadastro mestre e conversões. Produto possui `shelf_life_years`, obrigatório em novas criações da API e nulo apenas para legados ainda não configurados.
+- `products`, `product_unit_conversions`: cadastro mestre e conversões. Produto possui `shelf_life_years`, obrigatório em novas criações da API e nulo apenas para legados ainda não configurados. `unit_weight_grams` guarda um inteiro positivo somente para `UN`; permanece nulo em embalagens e em registros unitários antigos ainda não atualizados.
 - `batches`: referências internas imutáveis de produto/código/fabricação/validade; unicidade por produto + código normalizado + validade, sem cadastro mestre público.
 - `stock_locations`: locais lógicos hierárquicos e configuração da revisão.
 - `stock_positions`: saldo materializado por produto, variante de lote/validade e local. O `batch_id` identifica a validade; as chaves de saldo e os serviços atômicos existentes permanecem.

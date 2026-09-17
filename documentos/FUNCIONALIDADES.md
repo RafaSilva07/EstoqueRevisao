@@ -32,6 +32,10 @@ GET/PATCH/DELETE /api/v1/users/:id
 
 Listagem aceita `search`, `page` e `limit`. `DELETE` inativa, sem excluir fisicamente. Respostas e auditoria não expõem credenciais. Os formulários mantêm campos de data limitados à largura disponível, inclusive dentro dos campos operacionais de lote no mobile.
 
+## Cadastro de produtos
+
+O cadastro mantém código, descrição, unidade, prazo de validade e, para fardos/caixas, quantidade e alternativas unitárias. Produtos do tipo `UN` também exigem **Gramatura da unidade (g)**, em gramas inteiras e positivas. O campo aparece somente para `UN`, é retornado nas consultas e registrado na auditoria; `FD` e `CX` mantêm a gramatura nula e não recebem cálculo de peso total. Cadastros unitários anteriores permanecem sem valor inventado e precisam ter a gramatura preenchida ao serem editados.
+
 ## Envios entre setores
 
 A Revisão acessa **Envios entre setores** pelo início, operações ou menu; Produção/Expedição recebem uma interface restrita ao próprio setor. As três consultas são **Aguardando minha ação**, **Enviados por mim** e **Histórico**, com paginação, cards e detalhes. O início destaca pendências e decisões recentes dos próprios envios; a indicação é atualizada a cada 30 segundos, sem interromper formulários/decisões abertos.

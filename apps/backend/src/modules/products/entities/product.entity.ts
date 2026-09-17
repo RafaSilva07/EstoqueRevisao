@@ -32,6 +32,9 @@ export class ProductEntity {
   @Column({ name: 'units_per_package', type: 'integer', nullable: true })
   unitsPerPackage: number | null = null;
 
+  @Column({ name: 'unit_weight_grams', type: 'integer', nullable: true })
+  unitWeightGrams: number | null = null;
+
   @ManyToMany(() => ProductEntity)
   @JoinTable({ name: 'product_unit_options', joinColumn: { name: 'package_product_id', referencedColumnName: 'id' }, inverseJoinColumn: { name: 'unit_product_id', referencedColumnName: 'id' } })
   unitProducts!: ProductEntity[];

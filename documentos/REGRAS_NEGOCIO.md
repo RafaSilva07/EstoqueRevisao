@@ -26,12 +26,13 @@ Este documento consolida o comportamento funcional vigente. Regras históricas s
 
 ## Produtos e conversões
 
-- Produto é o cadastro mestre: código único, descrição (`name`), tipo de unidade (`defaultUnit`), prazo padrão de validade em anos inteiros positivos e estado ativo/inativo. Novos cadastros exigem o prazo; produtos antigos sem essa informação permanecem sem sugestão até serem configurados, sem inventar um padrão.
+- Produto é o cadastro mestre: código único, descrição (`name`), tipo de unidade (`defaultUnit`), prazo padrão de validade em anos inteiros positivos e estado ativo/inativo. Produtos `UN` também possuem gramatura, correspondente ao peso positivo e inteiro, em gramas, de uma unidade. Novos cadastros exigem prazo e, para `UN`, gramatura; produtos antigos sem essas informações permanecem pendentes até serem configurados, sem inventar valores.
 - O código do produto é único sem diferenciação entre maiúsculas e minúsculas.
 - Cadastros referenciados são inativados em vez de excluídos.
 - Conversões pertencem a um produto, possuem fator positivo e não podem repetir o mesmo par de unidades.
 - Unidade de origem e destino de uma conversão devem ser diferentes.
 - Novos cadastros selecionam Unidade (`UN`), Fardo (`FD`) ou Caixa (`CX`). Fardo/caixa exige quantidade inteira positiva de unidades por embalagem e um ou mais produtos `UN` ativos vinculados como alternativas. Não se trata de uma embalagem com mistura de códigos.
+- Gramatura pertence somente ao código `UN`; `FD` e `CX` não recebem peso calculado nem gramatura própria nesta etapa.
 - Cada item revisado escolhe um único código unitário entre essas alternativas. As conversões antigas de unidade do mesmo produto não definem a desmontagem entre códigos diferentes.
 - Unidade e quantidade por embalagem não podem ser alteradas em produto que já possui lote operacional; uma configuração ausente de embalagem antiga pode ser completada. Um produto vinculado como opção unitária não pode mudar para fardo/caixa. Mudanças posteriores de nome ou opções não reescrevem revisões realizadas.
 - Cadastros antigos mantêm seus dados, sem inventar fatores ou vínculos. Embalagens `FD`/`CX` sem configuração precisam ser completadas antes de revisar.

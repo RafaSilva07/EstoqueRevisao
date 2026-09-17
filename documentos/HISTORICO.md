@@ -89,6 +89,7 @@ Os ADRs completos estão em [`arquivo/adrs/`](./arquivo/adrs/). As decisões vig
 | `1789516800000-review-package-unpacking.ts` | Configuração e histórico da desmontagem de fardos/caixas na revisão. |
 | `1789603200000-shipment-item-photos.ts` | Referência privada, MIME, tamanho e integridade da foto por item de envio. |
 | `1789689600000-pcp-movement-execution.ts` | Estado administrativo PCP, executor, instante, observação, índices, papel e permissões. |
+| `1789776000000-product-unit-weight.ts` | Gramatura positiva em gramas para produtos unitários, preservando legados sem valor inferido. |
 
 `synchronize` permanece desativado. Migrations são a única forma autorizada de alterar o schema.
 
@@ -136,3 +137,7 @@ Adicionado gerenciamento exclusivo de ADMIN com consulta, criação, edição e 
 ## Etapa 33 — Perfil PCP e execução administrativa
 
 Criado o perfil transversal PCP com fila global paginada, filtros combináveis, detalhe completo e transição auditável de pendente para executada. O estado PCP foi mantido separado do estado operacional conforme [ADR 024](./arquivo/adrs/ADR_024_SEPARACAO_STATUS_OPERACIONAL_EXECUCAO_PCP.md). Envios somente aparecem após confirmação e geração da movimentação efetiva; fotos continuam privadas e são apenas consultadas. Resumo em [relatórios/RELATORIO_ETAPA_33_PCP.md](./relatorios/RELATORIO_ETAPA_33_PCP.md).
+
+## Etapa 34 — Gramatura de produtos unitários
+
+Produtos `UN` passaram a registrar o peso de uma unidade em gramas inteiras positivas. Novos cadastros exigem o valor; `FD`/`CX` não o aceitam e produtos antigos permanecem sem valor inventado até atualização. Resumo em [relatórios/RELATORIO_ETAPA_34_GRAMATURA_PRODUTOS.md](./relatorios/RELATORIO_ETAPA_34_GRAMATURA_PRODUTOS.md).

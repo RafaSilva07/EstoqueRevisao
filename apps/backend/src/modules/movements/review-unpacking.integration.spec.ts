@@ -59,8 +59,8 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
   beforeEach(async () => {
     jest.restoreAllMocks();
     await db.query('TRUNCATE audit_logs, products, movements, shipments, stock_positions CASCADE');
-    unit = await products.create({ code: 'UN-A', name: 'Produto unitário A', defaultUnit: 'UN', shelfLifeYears: 3 }, userId, meta());
-    alternative = await products.create({ code: 'UN-B', name: 'Produto unitário B', defaultUnit: 'UN', shelfLifeYears: 3 }, userId, meta());
+    unit = await products.create({ code: 'UN-A', name: 'Produto unitário A', defaultUnit: 'UN', unitWeightGrams: 350, shelfLifeYears: 3 }, userId, meta());
+    alternative = await products.create({ code: 'UN-B', name: 'Produto unitário B', defaultUnit: 'UN', unitWeightGrams: 500, shelfLifeYears: 3 }, userId, meta());
     pack = await products.create({ code: 'CX-A', name: 'Caixa A', defaultUnit: 'CX', shelfLifeYears: 3, unitsPerPackage: 12, unitProductIds: [unit.id, alternative.id] }, userId, meta());
     const entry = await movements.createExternalEntry({ requestKey: randomUUID(), originLocationId: external, destinationLocationId: source, items: [{ productId: pack.id, lot, quantity: 20 }] }, userId, meta());
     batch = entry.items[0].batch;
@@ -87,7 +87,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
   it('seleciona a segunda opção e impede códigos não vinculados, ausentes ou embalagens', async () => {
     const result = await movements.createReview(review(alternative.id), userId, meta());
     expect(result.items[0].outputProductId).toBe(alternative.id);
-    const other = await products.create({ code: 'UN-C', name: 'Outro', defaultUnit: 'UN', shelfLifeYears: 3 }, userId, meta());
+    const other = await products.create({ code: 'UN-C', name: 'Outro', defaultUnit: 'UN', unitWeightGrams: 250, shelfLifeYears: 3 }, userId, meta());
     for (const id of [other.id, pack.id, undefined]) {
       const dto = review(); dto.items[0].outputProductId = id;
       await expect(movements.createReview(dto, userId, meta())).rejects.toBeInstanceOf(BadRequestException);

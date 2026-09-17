@@ -29,6 +29,12 @@ export class CreateProductDto {
   unitsPerPackage?: number | null;
 
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(2147483647)
+  unitWeightGrams?: number | null;
+
+  @IsOptional()
   @IsArray()
   @ArrayUnique()
   @ArrayMaxSize(100)

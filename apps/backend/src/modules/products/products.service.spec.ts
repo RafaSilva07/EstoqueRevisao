@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import { AuditRecordInput } from '../audit/audit.types';
@@ -29,18 +30,32 @@ describe('ProductsService', () => {
     repository.save.mockImplementation((product: ProductEntity) => Promise.resolve(product));
 
     const product = await service.create(
-      { code: 'P001', name: 'Produto teste', defaultUnit: 'UN', shelfLifeYears: 3 },
+      { code: 'P001', name: 'Produto teste', defaultUnit: 'UN', unitWeightGrams: 350, shelfLifeYears: 3 },
       '10000000-0000-4000-8000-000000000001',
       { requestId: 'request-1', ipAddress: null, userAgent: null },
     );
 
-    expect(product).toMatchObject({ code: 'P001', active: true });
+    expect(product).toMatchObject({ code: 'P001', unitWeightGrams: 350, active: true });
     expect(repository.save).toHaveBeenCalledWith(product, manager);
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
       manager,
       action: 'PRODUCT_CREATE',
       entityId: product.id,
     }));
+  });
+
+  it('exige gramatura em UN e rejeita gramatura em embalagem', async () => {
+    repository.existsByCode.mockResolvedValue(false);
+    await expect(service.create(
+      { code: 'UN-SEM-PESO', name: 'Sem peso', defaultUnit: 'UN', shelfLifeYears: 3 },
+      '10000000-0000-4000-8000-000000000001',
+      { requestId: 'request-weight-1', ipAddress: null, userAgent: null },
+    )).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.create(
+      { code: 'CX-COM-PESO', name: 'Caixa', defaultUnit: 'CX', unitWeightGrams: 350, shelfLifeYears: 3, unitsPerPackage: 12, unitProductIds: ['10000000-0000-4000-8000-000000000099'] },
+      '10000000-0000-4000-8000-000000000001',
+      { requestId: 'request-weight-2', ipAddress: null, userAgent: null },
+    )).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('inativa sem excluir o produto e registra a mudanca', async () => {
