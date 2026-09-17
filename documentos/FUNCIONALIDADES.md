@@ -44,7 +44,7 @@ Em todos os sentidos de envio, cada produto pode receber uma observação opcion
 
 Cada produto do envio exige uma foto própria. O botão **Tirar foto** abre a câmera dentro da aplicação, prioriza a câmera traseira e permite capturar, refazer e usar a imagem. A lista identifica itens completos ou sem foto, aceita substituição antes do envio e bloqueia a conferência enquanto faltar evidência. A captura é reduzida para até aproximadamente 1600 px e enviada como JPEG; o backend também aceita PNG/WebP de até 5 MB e aplica a validação definitiva.
 
-Destinatário e remetente podem visualizar a miniatura e ampliar a foto nos detalhes, inclusive após confirmação ou recusa. A leitura passa por `GET /api/v1/shipments/:id/items/:itemId/photo`, com autenticação e escopo do setor. Itens históricos criados antes desta regra continuam visíveis com a indicação de ausência da foto.
+Destinatário e remetente podem visualizar a miniatura e abrir a foto em um visualizador próprio, inclusive após confirmação ou recusa. O visualizador permite zoom de 100% a 400%, roda do mouse, duplo clique, restauração e deslocamento por arraste com mouse ou toque. Os cards de produto mantêm código/descrição, quantidade, lote, datas, observação e evidência em grupos alinhados tanto no resumo quanto na decisão de recebimento. A leitura passa por `GET /api/v1/shipments/:id/items/:itemId/photo`, com autenticação e escopo do setor. Itens históricos criados antes desta regra continuam visíveis com a indicação de ausência da foto.
 
 Não há edição posterior: destinatário confirma ou recusa com motivo e responsável/data registrados. Recusas oferecem **Criar novo envio**, sem alterar o documento recusado. Loading, erros, sucesso e bloqueio de duplo envio seguem os componentes existentes.
 

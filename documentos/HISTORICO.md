@@ -53,6 +53,10 @@ Listas operacionais com inclusão em modal, aviso de código duplicado no cadast
 
 Envios entre setores passaram a exigir uma evidência privada por item, capturada na própria aplicação e preservada no aceite, recusa e histórico. Storage local/Supabase desacoplado e leitura autenticada. Resumo em [relatorios/RELATORIO_ETAPA_31_FOTOS_ENVIOS.md](./relatorios/RELATORIO_ETAPA_31_FOTOS_ENVIOS.md).
 
+## Etapa 32 — Conferência visual dos envios
+
+Os cards de produto foram alinhados no resumo e no recebimento. A evidência passou a abrir em visualizador responsivo com zoom e deslocamento próprios. Resumo em [relatorios/RELATORIO_ETAPA_32_CONFERENCIA_VISUAL_ENVIOS.md](./relatorios/RELATORIO_ETAPA_32_CONFERENCIA_VISUAL_ENVIOS.md).
+
 ## Decisões consolidadas
 
 | Registro histórico | Situação atual |
