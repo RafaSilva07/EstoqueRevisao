@@ -30,6 +30,7 @@ apps/
       stocks/        locais e posições de estoque
       movements/     operações e histórico
       shipments/     envios setoriais, reserva e decisão de recebimento
+      storage/       armazenamento privado local/Supabase das evidências
       reports/       consultas operacionais e exportação CSV
       health/        saúde da aplicação e do banco
     shared/          logs, erros, validação e paginação
@@ -62,6 +63,7 @@ Evite abstrações prematuras. Uma regra compartilhada deve ser extraída quando
 - `stock_locations`: locais lógicos hierárquicos e configuração da revisão.
 - `stock_positions`: saldo materializado por produto, variante de lote/validade e local. O `batch_id` identifica a validade; as chaves de saldo e os serviços atômicos existentes permanecem.
 - `shipments`, `shipment_items`: workflow imutável com itens e origens congelados; itens pendentes originados na Revisão são o registro do trânsito. O saldo disponível permanece em `stock_positions`, sem novo local artificial.
+- `shipment_items` também guarda `photo_storage_key`, MIME e tamanho. A imagem permanece fora do PostgreSQL e a chave não é exposta nas respostas comuns.
 - `movements`: cabeçalho, estado, metadados de cancelamento e `shipment_id` opcional; índice único por envio/origem impede duplicar a efetivação.
 - `movement_items`: produto, referências imutáveis de lote/datas de origem e destino, quantidade e `product_snapshot` de código/descrição/unidade nas novas operações. Legados não recebem snapshots inventados.
 - `movement_item_distributions`: destinos e parcelas de itens revisados.
@@ -80,6 +82,7 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 - Remoção usa `UPDATE` condicionado a `quantity >= requested`.
 - Transferências e distribuições bloqueiam posições com `pessimistic_write` em ordem determinística.
 - `ShipmentsService` reutiliza lotes, saldo, repositório de movimentações e auditoria com o mesmo manager. Criação serializa retries via advisory lock transacional da chave; decisão bloqueia a linha do envio. Triggers impedem edição/exclusão de envios e itens. Retorno da reserva usa a mesma operação de crédito atômico, sem exigir produto ainda ativo.
+- Fotos são gravadas antes da transação do envio pelo `StorageService`; qualquer rejeição, conflito ou rollback executa exclusão compensatória. O item imutável recebe a chave somente na criação. Uma interrupção abrupta entre storage e compensação pode deixar objeto órfão e deverá ser tratada por limpeza operacional futura.
 - Cancelamento bloqueia primeiro a movimentação original e depois as posições necessárias.
 - Revisões e estornos bloqueiam o conjunto completo de posições em ordem de produto/lote/local antes das alterações, inclusive quando várias embalagens convergem no mesmo código unitário. O serviço central de saldos mantém os débitos condicionais e créditos atômicos.
 - Alterações do cadastro de embalagem e leitura da configuração na revisão usam o advisory lock transacional `product-packaging`. A revisão bloqueia produtos em ordem antes de resolver referências de lote. A auditoria registra fator, saída e distribuições na mesma transação; o estorno usa exclusivamente os dados persistidos da operação.
@@ -94,6 +97,7 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 - Relatórios aplicam os mesmos filtros nas linhas e totais; a exportação CSV remove apenas a paginação.
 - Erros seguem envelope padronizado com código, mensagem, request ID, timestamp e caminho.
 - Erros internos não expõem stack trace, SQL ou detalhes de infraestrutura ao cliente.
+- A criação de envio usa `multipart/form-data`, com JSON em `payload` e um campo `photos` por item na mesma ordem. O backend limita quantidade/tamanho e revalida presença, MIME e conteúdo não vazio.
 - Criações de movimentação usam `request_key` UUID para idempotência.
 - Não existem endpoints públicos para alterar saldo nem endpoints de edição/exclusão de movimentação.
 
@@ -133,6 +137,7 @@ shipments.read / shipments.create / shipments.decide
 ## Configuração e PostgreSQL
 
 - Variáveis públicas estão documentadas em `.env.example`; valores reais ficam no `.env`, fora do Git.
+- `STORAGE_DRIVER=local` grava em `FILE_STORAGE_PATH`; `supabase` usa bucket privado, `SUPABASE_URL` e `SUPABASE_SECRET_KEY` disponível exclusivamente no backend (com suporte à `SUPABASE_SERVICE_ROLE_KEY` legada). Fotos são lidas por rota autenticada da API.
 - O backend valida as variáveis ao iniciar.
 - PostgreSQL de desenvolvimento roda em `postgres:17-alpine` via Docker Compose, com health check, porta limitada ao loopback e volume persistente.
 - API e frontend rodam diretamente pelo Node.js no desenvolvimento e podem ser containerizados futuramente sem alteração de domínio.
@@ -147,6 +152,7 @@ shipments.read / shipments.create / shipments.decide
 - Ações são ocultadas conforme permissões, mas a proteção definitiva permanece no backend.
 - A área Relatórios usa cards/listas no celular e reutiliza `movements.read` e `stock-positions.read`, sem criar permissões redundantes.
 - Componentes compartilhados atuais incluem cabeçalho de página, avisos, loading, estado vazio, confirmação, campos operacionais de lote/datas e envio idempotente com confirmação de validade divergente.
+- `CameraModal` usa `getUserMedia` dentro da aplicação, prefere a câmera traseira, reduz o maior lado para aproximadamente 1600 px, gera JPEG e encerra todas as trilhas ao capturar ou fechar. Câmera publicada exige HTTPS; localhost continua válido no desenvolvimento.
 
 ## Testes e critérios de mudança
 

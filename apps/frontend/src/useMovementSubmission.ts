@@ -11,7 +11,7 @@ export function useMovementSubmission(path: string, onCreated: (id: string) => v
 
   function resetConfirmation() { setConflict(null); accepted.current = []; setError(''); }
 
-  async function submit(payload: Record<string, unknown>) {
+  async function submit(payload: Record<string, unknown>, files?: File[]) {
     if (inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
@@ -19,9 +19,10 @@ export function useMovementSubmission(path: string, onCreated: (id: string) => v
     // This runs only on an explicit second click after showing the conflict.
     if (conflict) accepted.current = [...new Set([...accepted.current, ...(conflict.details?.expirationKeys ?? [])])];
     try {
-      const movement = await api.post<{ id: string }>(path, {
+      const body = {
         ...payload, ...(withRequestKey ? { requestKey: requestKey.current } : {}), confirmedExpirationKeys: accepted.current,
-      });
+      };
+      const movement = files ? await api.postMultipart<{ id: string }>(path, body, files) : await api.post<{ id: string }>(path, body);
       requestKey.current = crypto.randomUUID();
       onCreated(movement.id);
     } catch (caught) {

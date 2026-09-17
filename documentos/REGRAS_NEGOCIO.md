@@ -94,6 +94,9 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 - Revisão envia para Produção/Expedição e decide os envios desses setores. Permissões `shipments.read/create/decide` complementam a validação do setor.
 - Um envio tem vários itens e nasce `AGUARDANDO_RECEBIMENTO`. Os itens não são editáveis depois do envio. Somente o destinatário pode decidir uma única vez: `CONFIRMADO` ou `RECUSADO`; recusa exige motivo de até 1000 caracteres.
 - O remetente pode registrar uma observação geral no envio e uma observação específica em cada item/produto. Ambas são opcionais, possuem até 1000 caracteres, são preservadas no histórico e tornam-se imutáveis junto com o envio.
+- Cada item de um novo envio deve possuir exatamente uma foto JPEG, PNG ou WebP, não vazia e com até 5 MB. A foto é evidência daquele item, não do cadastro mestre nem do lote, e permanece vinculada após confirmação ou recusa.
+- O envio só nasce `AGUARDANDO_RECEBIMENTO` quando todos os itens e fotos válidas são recebidos. Fotos não podem ser substituídas depois do envio. Registros históricos anteriores à regra permanecem consultáveis sem foto.
+- Somente usuários autorizados a consultar o envio podem carregar suas fotos. O storage é privado; o banco guarda apenas chave, tipo e tamanho, nunca o binário nem URL pública permanente.
 - Produção/Expedição → Revisão: criar não altera saldo; confirmar adiciona os itens à origem configurada da revisão (`review_role = SOURCE`, “A Revisar”); recusar não altera saldo.
 - Revisão → Produção/Expedição: criar retira atomicamente a quantidade disponível das posições selecionadas. Os itens pendentes representam **em trânsito**, sem criar um local consumível por outras operações. Confirmar encerra o trânsito e registra a saída sem descontar novamente; recusar devolve exatamente às posições originais, inclusive se o produto tiver sido inativado.
 - O tipo de um local com quantidade em trânsito não pode mudar até a decisão, garantindo a restauração em caso de recusa.
@@ -103,7 +106,7 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 - Confirmação gera movimentação externa vinculada ao envio. Como o cabeçalho atual possui uma origem, um envio com várias origens internas gera uma movimentação por local de origem, sob a mesma transação e vínculo.
 - Envios e itens não são excluídos. Remetente, destinatário, datas, responsável pela decisão, motivo, observações e snapshot dos produtos permanecem no histórico. Correções exigem novo envio independente.
 - Movimentações vinculadas a envio confirmado não aceitam cancelamento isolado: devolução exige novo envio no sentido inverso e confirmação do outro setor. Cancelamentos de movimentações anteriores ou não vinculadas continuam disponíveis.
-- Indicações internas mostram pendências e decisões recentes dos próprios envios, com motivo de recusa. Não há e-mail, push, fotos ou controle de “lido”.
+- Indicações internas mostram pendências e decisões recentes dos próprios envios, com motivo de recusa. Não há e-mail, push ou controle de “lido”.
 
 ## Entrada externa
 
@@ -196,7 +199,7 @@ Reversões:
 
 ## Fora do escopo atual
 
-- fotos/evidências de envios e notificações externas;
+- notificações externas;
 - transformação ou criação de produto/lote específica do Varejo;
 - mapa físico detalhado de armazenagem;
 - reversão automática de uma cadeia de operações dependentes;

@@ -6,6 +6,8 @@ import {
   IsNotEmpty,
   IsString,
   IsUrl,
+  IsOptional,
+  IsIn,
   Min,
   MinLength,
   validateSync,
@@ -84,6 +86,21 @@ export class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   FILE_STORAGE_PATH = './storage';
+
+  @IsIn(['local', 'supabase'])
+  STORAGE_DRIVER: 'local' | 'supabase' = 'local';
+
+  @IsString() @IsNotEmpty()
+  STORAGE_BUCKET = 'shipment-evidence';
+
+  @IsOptional() @IsUrl({ require_tld: false })
+  SUPABASE_URL?: string;
+
+  @IsOptional() @IsString() @IsNotEmpty()
+  SUPABASE_SECRET_KEY?: string;
+
+  @IsOptional() @IsString() @IsNotEmpty()
+  SUPABASE_SERVICE_ROLE_KEY?: string;
 }
 
 export function validateEnvironment(config: Record<string, unknown>): EnvironmentVariables {
@@ -97,6 +114,9 @@ export function validateEnvironment(config: Record<string, unknown>): Environmen
 
   if (errors.length > 0) {
     throw new Error(`Configuracao de ambiente invalida: ${errors.toString()}`);
+  }
+  if (validated.STORAGE_DRIVER === 'supabase' && (!validated.SUPABASE_URL || (!validated.SUPABASE_SECRET_KEY && !validated.SUPABASE_SERVICE_ROLE_KEY))) {
+    throw new Error('SUPABASE_URL e SUPABASE_SECRET_KEY são obrigatórias para STORAGE_DRIVER=supabase.');
   }
 
   return validated;

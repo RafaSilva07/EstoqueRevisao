@@ -425,6 +425,11 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
 .shipment-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1rem; }
 .shipment-card { padding: 1rem; min-width: 0; overflow-wrap: anywhere; margin-bottom: 1rem; }
 .shipment-card h2 { font-size: 1.2rem; }
+.shipment-photo { display: grid; gap: .45rem; margin-top: .4rem; }
+.shipment-photo img, .camera-preview { display: block; width: 100%; max-height: min(55dvh, 28rem); border-radius: .6rem; background: #17242b; object-fit: contain; }
+.shipment-photo button { width: fit-content; padding: .25rem; background: transparent; }
+.shipment-photo button img { width: 8rem; height: 6rem; object-fit: cover; }
+.photo-required { color: var(--danger) !important; font-weight: 700; }
 .shipment-id { overflow-wrap: anywhere; }
 .sector-workspace { max-width: 75rem; margin: 0 auto; padding: 5.5rem 1rem 2rem; }
 .sector-portal .topbar { gap: .5rem; }

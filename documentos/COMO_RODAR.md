@@ -30,6 +30,18 @@ Edite `.env` antes de iniciar. No mínimo:
 - defina `JWT_ACCESS_SECRET` com pelo menos 32 caracteres;
 - defina `BOOTSTRAP_USERNAME` e `BOOTSTRAP_PASSWORD` para o primeiro acesso;
 - em desenvolvimento local, mantenha `FRONTEND_URL=http://localhost:5173` e `VITE_API_URL=http://localhost:3000/api/v1`.
+- para fotos locais, mantenha `STORAGE_DRIVER=local` e configure `FILE_STORAGE_PATH=./storage`; o diretório é criado automaticamente e não entra no Git.
+
+Para usar Supabase Storage, crie um bucket **privado** (por padrão `shipment-evidence`) e configure somente no backend:
+
+```dotenv
+STORAGE_DRIVER=supabase
+STORAGE_BUCKET=shipment-evidence
+SUPABASE_URL=https://seu-projeto.supabase.co
+SUPABASE_SECRET_KEY=sb_secret_sua-chave-de-backend
+```
+
+Nunca use `SUPABASE_SECRET_KEY` em variável `VITE_*`, no frontend ou no Git. Projetos antigos ainda podem usar `SUPABASE_SERVICE_ROLE_KEY`, mas a secret key atual é a opção recomendada. No ambiente publicado, use HTTPS para permitir acesso à câmera pelo navegador.
 
 O projeto não possui credenciais fixas. O primeiro usuário será criado com `BOOTSTRAP_USERNAME` e `BOOTSTRAP_PASSWORD` do seu `.env`, usando o perfil `ADMIN` por padrão.
 

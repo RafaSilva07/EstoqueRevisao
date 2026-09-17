@@ -4,6 +4,9 @@ import { StocksModule } from '../stocks/stocks.module';
 import { MovementsModule } from '../movements/movements.module';
 import { ShipmentsController } from './shipments.controller';
 import { ShipmentsService } from './shipments.service';
+import { StorageModule } from '../storage/storage.module';
+import { CreateShipmentMultipartPipe } from './create-shipment-multipart.pipe';
+import { ShipmentPhotosInterceptor } from './shipment-photos.interceptor';
 
-@Module({ imports: [BatchesModule, StocksModule, MovementsModule], controllers: [ShipmentsController], providers: [ShipmentsService] })
+@Module({ imports: [BatchesModule, StocksModule, MovementsModule, StorageModule], controllers: [ShipmentsController], providers: [ShipmentsService, CreateShipmentMultipartPipe, ShipmentPhotosInterceptor] })
 export class ShipmentsModule {}

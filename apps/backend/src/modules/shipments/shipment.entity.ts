@@ -39,5 +39,8 @@ export class ShipmentItemEntity {
   @ManyToOne(() => StockLocationEntity) @JoinColumn({ name: 'stock_location_id' }) stockLocation!: StockLocationEntity | null;
   @Column({ type: 'numeric', precision: 18, scale: 6, transformer: { to: (value: number) => value, from: (value: string) => Number(value) } }) quantity!: number;
   @Column({ type: 'varchar', length: 1000, nullable: true }) observation!: string | null;
+  @Column({ name: 'photo_storage_key', type: 'varchar', length: 300, nullable: true, select: false }) photoStorageKey!: string | null;
+  @Column({ name: 'photo_mime_type', type: 'varchar', length: 30, nullable: true }) photoMimeType!: string | null;
+  @Column({ name: 'photo_size', type: 'integer', nullable: true }) photoSize!: number | null;
   @Column({ name: 'product_snapshot', type: 'jsonb' }) productSnapshot!: { code: string; name: string; defaultUnit: string };
 }

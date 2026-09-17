@@ -42,6 +42,10 @@ Usuários externos reutilizam o produto selecionado e os campos CONSERVADI/fabri
 
 Em todos os sentidos de envio, cada produto pode receber uma observação opcional e o envio pode receber uma observação geral. Os textos são conferidos antes do envio, ficam disponíveis ao destinatário e no histórico e não podem ser editados após a criação. A observação geral também acompanha a movimentação gerada quando o recebimento é confirmado.
 
+Cada produto do envio exige uma foto própria. O botão **Tirar foto** abre a câmera dentro da aplicação, prioriza a câmera traseira e permite capturar, refazer e usar a imagem. A lista identifica itens completos ou sem foto, aceita substituição antes do envio e bloqueia a conferência enquanto faltar evidência. A captura é reduzida para até aproximadamente 1600 px e enviada como JPEG; o backend também aceita PNG/WebP de até 5 MB e aplica a validação definitiva.
+
+Destinatário e remetente podem visualizar a miniatura e ampliar a foto nos detalhes, inclusive após confirmação ou recusa. A leitura passa por `GET /api/v1/shipments/:id/items/:itemId/photo`, com autenticação e escopo do setor. Itens históricos criados antes desta regra continuam visíveis com a indicação de ausência da foto.
+
 Não há edição posterior: destinatário confirma ou recusa com motivo e responsável/data registrados. Recusas oferecem **Criar novo envio**, sem alterar o documento recusado. Loading, erros, sucesso e bloqueio de duplo envio seguem os componentes existentes.
 
 ```text
@@ -53,7 +57,7 @@ POST            /api/v1/shipments/:id/confirmation
 POST            /api/v1/shipments/:id/refusal
 ```
 
-Listagem: `view=pending|sent|history|updates`, `page` e `limit`; `updates` retorna decisões recentes dos próprios envios para a indicação da Home. Consultas respeitam o setor. `available-positions` é exclusivo da Revisão, exige `productId` e ao menos `batchCode` ou `manufacturingDate`, e retorna somente saldo positivo de produto/local ativos. Criação recebe `requestKey`, `destinationSector` e `items`; origem é inferida do usuário. Itens externos recebem `productId/lot/quantity` (ou variante existente via `batchId`); itens da Revisão recebem `productId/batchId/stockLocationId/quantity`. Confirmação aceita `confirmedExpirationKeys` quando houver divergência apresentada; recusa exige `reason`.
+Listagem: `view=pending|sent|history|updates`, `page` e `limit`; `updates` retorna decisões recentes dos próprios envios para a indicação da Home. Consultas respeitam o setor. `available-positions` é exclusivo da Revisão, exige `productId` e ao menos `batchCode` ou `manufacturingDate`, e retorna somente saldo positivo de produto/local ativos. Criação recebe multipart com `payload` contendo `requestKey`, `destinationSector` e `items`, além de um arquivo `photos` por item na mesma ordem; origem é inferida do usuário. Itens externos recebem `productId/lot/quantity` (ou variante existente via `batchId`); itens da Revisão recebem `productId/batchId/stockLocationId/quantity`. Confirmação aceita `confirmedExpirationKeys` quando houver divergência apresentada; recusa exige `reason`.
 
 Somente a confirmação gera entradas/saídas nos relatórios existentes. Nas saídas da Revisão, o saldo já fica indisponível desde a criação e aparece como **em trânsito** nos envios pendentes; recusa restaura o disponível. Estoque/Home/relatório de validades mostram saldo disponível. Movimentos vinculados exibem o identificador do envio na observação e não oferecem cancelamento isolado; devoluções são novos envios. Regras completas em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#envios-entre-setores).
 

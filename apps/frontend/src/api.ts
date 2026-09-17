@@ -284,6 +284,25 @@ export class ApiClient {
     return this.request<T>(path, { method: 'POST', body: JSON.stringify(body) });
   }
 
+  postMultipart<T>(path: string, payload: unknown, files: File[]): Promise<T> {
+    const body = new FormData();
+    body.append('payload', JSON.stringify(payload));
+    files.forEach((file) => body.append('photos', file, file.name));
+    return this.request<T>(path, { method: 'POST', body });
+  }
+
+  async getBlob(path: string): Promise<Blob> {
+    const headers = new Headers();
+    if (this.accessToken) headers.set('Authorization', `Bearer ${this.accessToken}`);
+    if (this.operationalSector) headers.set('X-Operational-Sector', this.operationalSector);
+    const response = await fetch(`${apiUrl}${path}`, { headers, credentials: 'include' });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({})) as ErrorEnvelope;
+      throw new ApiError(payload.error?.message ?? 'Não foi possível carregar a foto.', payload.error?.code, payload.error?.details);
+    }
+    return response.blob();
+  }
+
   patch<T>(path: string, body: unknown): Promise<T> {
     return this.request<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
   }
@@ -294,7 +313,7 @@ export class ApiClient {
 
   private async request<T>(path: string, options: RequestInit = {}, authenticated = true): Promise<T> {
     const headers = new Headers(options.headers);
-    if (options.body) headers.set('Content-Type', 'application/json');
+    if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
     if (authenticated && this.accessToken) headers.set('Authorization', `Bearer ${this.accessToken}`);
     if (authenticated && this.operationalSector) headers.set('X-Operational-Sector', this.operationalSector);
     const response = await fetch(`${apiUrl}${path}`, {

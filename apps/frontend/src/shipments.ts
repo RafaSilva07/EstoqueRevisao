@@ -11,5 +11,5 @@ export interface Shipment {
   createdAt: string; createdBy: { id: string; username: string };
   decidedAt: string | null; decidedBy: { username: string } | null; refusalReason: string | null;
   items: { id: string; quantity: number; productSnapshot: Pick<Product, 'code' | 'name' | 'defaultUnit'>;
-    batch: Batch; stockLocation: StockLocation | null; observation: string | null }[];
+    batch: Batch; stockLocation: StockLocation | null; observation: string | null; photoMimeType: string | null; photoSize: number | null }[];
 }

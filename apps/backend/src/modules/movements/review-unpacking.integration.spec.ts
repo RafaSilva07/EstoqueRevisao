@@ -25,6 +25,7 @@ import { MovementEntity } from './entities/movement.entity';
 import { MovementItemEntity } from './entities/movement-item.entity';
 import { MovementItemDistributionEntity } from './entities/movement-item-distribution.entity';
 import { CreateReviewDto } from './dto/create-review.dto';
+import { ReviewPackageUnpacking1789516800000 } from '../../database/migrations/1789516800000-review-package-unpacking';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 (databaseUrl ? describe : describe.skip)('Revisão com desmontagem (PostgreSQL)', () => {
@@ -153,7 +154,9 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     await expect(products.update(unit.id, { defaultUnit: 'CX', unitsPerPackage: 6, unitProductIds: [alternative.id] }, userId, meta())).rejects.toBeInstanceOf(ConflictException);
     await expect(products.update(pack.id, { unitProductIds: [pack.id] }, userId, meta())).rejects.toBeInstanceOf(BadRequestException);
     expect((await products.getById(pack.id)).unitProducts).toHaveLength(2);
-    await expect(db.undoLastMigration()).rejects.toThrow('rollback destrutivo');
+    const runner = db.createQueryRunner();
+    try { await expect(new ReviewPackageUnpacking1789516800000().down(runner)).rejects.toThrow('rollback destrutivo'); }
+    finally { await runner.release(); }
   });
 
   it('revisa embalagem e produto UN com outro lote na mesma operação e estorna ambos', async () => {

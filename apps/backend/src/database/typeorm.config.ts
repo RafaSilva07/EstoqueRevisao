@@ -27,6 +27,7 @@ import { ShipmentEntity, ShipmentItemEntity } from '../modules/shipments/shipmen
 import { SectorShipments1789344000000 } from './migrations/1789344000000-sector-shipments';
 import { ShipmentObservations1789430400000 } from './migrations/1789430400000-shipment-observations';
 import { ReviewPackageUnpacking1789516800000 } from './migrations/1789516800000-review-package-unpacking';
+import { ShipmentItemPhotos1789603200000 } from './migrations/1789603200000-shipment-item-photos';
 
 export const databaseEntities = [
   ShipmentEntity,
@@ -58,6 +59,7 @@ export const databaseMigrations = [
   SectorShipments1789344000000,
   ShipmentObservations1789430400000,
   ReviewPackageUnpacking1789516800000,
+  ShipmentItemPhotos1789603200000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {

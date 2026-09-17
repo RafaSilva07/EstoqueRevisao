@@ -8,8 +8,10 @@ import { emptyLot, OperationalLot } from './operational-lot';
 import { formatDate } from './format';
 import { useMovementSubmission } from './useMovementSubmission';
 import { Sector, sectorLabel } from './shipments';
+import { CameraModal } from './CameraModal';
+import { allShipmentPhotosReady, replaceShipmentPhoto } from './shipment-photo-state';
 
-interface DraftItem { key: string; product: Product; lot: OperationalLot; quantity: number; observation: string | null; position?: StockPosition }
+interface DraftItem { key: string; product: Product; lot: OperationalLot; quantity: number; observation: string | null; position?: StockPosition; photo?: File; photoUrl?: string }
 
 export function NewShipment({ sector, onCreated, onClose }: { sector: Sector; onCreated: (id: string) => void; onClose: () => void }) {
   const outgoing = sector === 'REVISAO';
@@ -35,8 +37,13 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: Sector; on
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [cameraItemKey, setCameraItemKey] = useState<string | null>(null);
+  const photoUrls = useRef(new Set<string>());
   const submission = useMovementSubmission('/shipments', onCreated);
   const canQueryPositions = outgoing && Boolean(product) && Boolean(batchCode.trim() || manufacturingDate);
+  const allPhotosReady = allShipmentPhotosReady(items);
+
+  useEffect(() => () => { photoUrls.current.forEach((url) => URL.revokeObjectURL(url)); }, []);
 
   useEffect(() => {
     if (!canQueryPositions || !product) return;
@@ -156,12 +163,25 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: Sector; on
     setPositionId('');
     setPositions([]);
   }
+  function attachPhoto(key: string, photo: File) {
+    const photoUrl = URL.createObjectURL(photo); photoUrls.current.add(photoUrl);
+    setItems((current) => replaceShipmentPhoto(current, key, photo, photoUrl, (previous) => { URL.revokeObjectURL(previous); photoUrls.current.delete(previous); }));
+    setCameraItemKey(null);
+  }
+  function removeItem(key: string) {
+    setItems((current) => current.filter((item) => {
+      if (item.key !== key) return true;
+      if (item.photoUrl) { URL.revokeObjectURL(item.photoUrl); photoUrls.current.delete(item.photoUrl); }
+      return false;
+    }));
+  }
   const summary = <ul className="movement-detail-items">{items.map((item) => <li key={item.key}>
     <strong>{item.product.code} — {item.product.name}</strong><span>Lote {item.lot.code} · fabricação {formatDate(item.lot.manufacturingDate)}</span>
     <span>Validade {formatDate(item.lot.expirationDate)}{item.position ? ` · ${item.position.stockLocation.name}` : ''}</span>
     <b>{item.quantity} {item.product.defaultUnit}</b>
     {item.observation && <span><strong>Observação do produto:</strong> {item.observation}</span>}
-    {!confirming && <button type="button" className="secondary" onClick={() => setItems((current) => current.filter((draft) => draft.key !== item.key))}>Remover item</button>}
+    {item.photoUrl ? <div className="shipment-photo"><img src={item.photoUrl} alt={`Foto de ${item.product.name}`} /><span>✓ Foto adicionada</span></div> : <span className="photo-required">⚠ Foto obrigatória</span>}
+    {!confirming && <div className="row-actions"><button type="button" onClick={() => setCameraItemKey(item.key)}>{item.photo ? 'Refazer foto' : 'Tirar foto'}</button><button type="button" className="secondary" onClick={() => removeItem(item.key)}>Remover item</button></div>}
   </li>)}</ul>;
   return <>
     <PageHeader eyebrow="Envios entre setores" title={outgoing ? 'Novo envio' : 'Novo envio para Revisão'} action={<button className="secondary" onClick={onClose}>Voltar</button>} />
@@ -194,14 +214,16 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: Sector; on
     </Modal>}
     <section className="surface form-panel"><div className="panel-heading item-list-heading"><h2>Produtos ({items.length})</h2><button type="button" onClick={() => { setError(''); setAdding(true); }}>Adicionar produto</button></div>{summary}
       <label>Observação geral do envio (opcional)<textarea value={observation} onChange={(event) => setObservation(event.target.value)} maxLength={1000} rows={3} /></label>
-      <button disabled={!items.length} onClick={() => { submission.resetConfirmation(); setConfirming(true); }}>Conferir e enviar</button></section>
+      {!allPhotosReady && items.length > 0 && <p className="action-hint photo-required">Adicione uma foto para cada produto antes de enviar.</p>}
+      <button disabled={!allPhotosReady} onClick={() => { submission.resetConfirmation(); setConfirming(true); }}>Conferir e enviar</button></section>
+    {cameraItemKey && <CameraModal onClose={() => setCameraItemKey(null)} onUse={(file) => attachPhoto(cameraItemKey, file)} />}
     {confirming && <Modal labelledBy="shipment-summary-title" busy={submission.busy} onClose={() => setConfirming(false)}>
       <h2 id="shipment-summary-title">{sectorLabel[sector]} → {sectorLabel[destination]}</h2>{summary}
       <p>Após enviar, os itens não poderão ser editados. O destinatário confirmará ou recusará o recebimento.</p>
       {submission.conflict && <Notice kind="info">{submission.conflict.message}</Notice>}
       {submission.error && <Notice kind="error">{submission.error}</Notice>}
       {observation.trim() && <p><strong>Observação geral:</strong> {observation.trim()}</p>}
-      <div className="dialog-actions"><button className="secondary" disabled={submission.busy} onClick={() => setConfirming(false)}>Voltar para conferir</button><button disabled={submission.busy} onClick={() => void submission.submit({ destinationSector: destination, observation: observation.trim() || undefined, items: items.map((item) => ({ productId: item.product.id, quantity: item.quantity, observation: item.observation ?? undefined, ...(item.position ? { batchId: item.position.batchId, stockLocationId: item.position.stockLocationId } : { lot: item.lot }) })) })}>{submission.busy ? 'Enviando…' : submission.conflict ? 'Confirmar validade diferente e enviar' : 'Enviar ao destinatário'}</button></div>
+      <div className="dialog-actions"><button className="secondary" disabled={submission.busy} onClick={() => setConfirming(false)}>Voltar para conferir</button><button disabled={submission.busy || !allPhotosReady} onClick={() => void submission.submit({ destinationSector: destination, observation: observation.trim() || undefined, items: items.map((item) => ({ productId: item.product.id, quantity: item.quantity, observation: item.observation ?? undefined, ...(item.position ? { batchId: item.position.batchId, stockLocationId: item.position.stockLocationId } : { lot: item.lot }) })) }, items.map((item) => item.photo!))}>{submission.busy ? 'Enviando…' : submission.conflict ? 'Confirmar validade diferente e enviar' : 'Enviar ao destinatário'}</button></div>
     </Modal>}
   </>;
 }

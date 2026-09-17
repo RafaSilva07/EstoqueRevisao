@@ -6,6 +6,7 @@ import { databaseEntities, databaseMigrations } from '../../database/typeorm.con
 import { AuditService } from '../audit/audit.service';
 import { AuditRepository } from '../audit/audit.repository';
 import { AuditLogEntity } from '../audit/entities/audit-log.entity';
+import { AuditRequestMetadata } from '../audit/audit.types';
 import { AuthenticatedUser } from '../auth/authenticated-user.interface';
 import { OperationalLotsService } from '../batches/operational-lots.service';
 import { BatchCodeCodec } from '../batches/domain/batch-code.codec';
@@ -25,6 +26,8 @@ import { MovementsRepository } from '../movements/movements.repository';
 import { MovementsService } from '../movements/movements.service';
 import { Sector, ShipmentEntity, ShipmentItemEntity } from './shipment.entity';
 import { ShipmentsService } from './shipments.service';
+import { CreateShipmentDto } from './shipment.dto';
+import { StorageService, UploadedImage } from '../storage/storage.service';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 (databaseUrl ? describe : describe.skip)('Envios entre setores (PostgreSQL)', () => {
@@ -42,7 +45,11 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     const lots = new OperationalLotsService(db, new BatchCodeCodec());
     const repository = new MovementsRepository(db.getRepository(MovementEntity));
     movements = new MovementsService(repository, locations, stock, audit, db, lots);
-    service = new ShipmentsService(db, lots, stock, repository, audit);
+    const storage = {
+      validateImage: jest.fn(), saveImage: jest.fn((file: UploadedImage) => Promise.resolve({ key: `shipments/2026/09/${randomUUID()}.jpg`, mimeType: file.mimetype, size: file.size })),
+      deleteImage: jest.fn(() => Promise.resolve()), readImage: jest.fn(() => Promise.resolve(Buffer.from('photo'))),
+    } as unknown as StorageService;
+    service = new ShipmentsService(db, lots, stock, repository, audit, storage);
     users = {} as Record<Sector, AuthenticatedUser>;
     for (const sector of ['REVISAO','PRODUCAO','EXPEDICAO'] as const) {
       const id = randomUUID();
@@ -62,8 +69,11 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     await db.query('UPDATE products SET active = true WHERE id = $1', [productId]);
   });
   afterAll(async () => { if (db?.isInitialized) await db.destroy(); });
-  const incoming = (sector: 'PRODUCAO' | 'EXPEDICAO' = 'PRODUCAO'): Promise<ShipmentEntity> => service.create({ requestKey: randomUUID(), destinationSector: 'REVISAO', items: [{ productId, batchId, quantity: 10 }] }, users[sector], metadata());
-  const reserve = (destinationSector: 'PRODUCAO' | 'EXPEDICAO' = 'PRODUCAO', quantity = 6, requestKey = randomUUID()): Promise<ShipmentEntity> => service.create({ requestKey, destinationSector, items: [{ productId, batchId, stockLocationId: sourceId, quantity }] }, users.REVISAO, metadata());
+  const image = (): UploadedImage => ({ buffer: Buffer.from('valid-photo'), mimetype: 'image/jpeg', size: 11, originalname: 'ignored.jpg' });
+  const createShipment = (dto: CreateShipmentDto, user: AuthenticatedUser, meta: AuditRequestMetadata): Promise<ShipmentEntity> =>
+    service.create(dto, dto.items.map(image), user, meta);
+  const incoming = (sector: 'PRODUCAO' | 'EXPEDICAO' = 'PRODUCAO'): Promise<ShipmentEntity> => createShipment({ requestKey: randomUUID(), destinationSector: 'REVISAO', items: [{ productId, batchId, quantity: 10 }] }, users[sector], metadata());
+  const reserve = (destinationSector: 'PRODUCAO' | 'EXPEDICAO' = 'PRODUCAO', quantity = 6, requestKey = randomUUID()): Promise<ShipmentEntity> => createShipment({ requestKey, destinationSector, items: [{ productId, batchId, stockLocationId: sourceId, quantity }] }, users.REVISAO, metadata());
   const balance = (location = sourceId): Promise<number> => stock.getBalance({ productId, batchId, stockLocationId: location });
   const seed = (quantity = 10, location = sourceId): Promise<StockPositionEntity> => db.transaction((manager) => stock.addQuantity({ productId, batchId, stockLocationId: location }, quantity, manager));
   const decide = (id: string, sector: Sector, refuse = false): Promise<ShipmentEntity> => service.decide(id, refuse ? 'RECUSADO' : 'CONFIRMADO', refuse ? 'Quantidade divergente' : null, {}, users[sector], metadata());
@@ -80,8 +90,23 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     expect(movement.type).toBe('ENTRADA_EXTERNA'); expect(movement.destinationLocationId).toBe(sourceId);
     expect(await db.getRepository(AuditLogEntity).countBy({ entityId: shipment.id })).toBe(2);
   });
+
+  it('exige uma foto por item e preserva a evidência após confirmação ou recusa', async () => {
+    const dto: CreateShipmentDto = { requestKey: randomUUID(), destinationSector: 'REVISAO', items: [{ productId, batchId, quantity: 2 }] };
+    await expect(service.create(dto, [], users.PRODUCAO, metadata())).rejects.toBeInstanceOf(BadRequestException);
+    const confirmed = await createShipment(dto, users.PRODUCAO, metadata());
+    expect(confirmed.items[0]).toMatchObject({ photoMimeType: 'image/jpeg', photoSize: 11 });
+    expect((await service.photo(confirmed.id, confirmed.items[0].id, users.REVISAO)).data.toString()).toBe('photo');
+    await expect(service.photo(confirmed.id, confirmed.items[0].id, users.EXPEDICAO)).rejects.toBeInstanceOf(NotFoundException);
+    await decide(confirmed.id, 'REVISAO');
+    expect((await service.get(confirmed.id, users.REVISAO)).items[0].photoMimeType).toBe('image/jpeg');
+
+    const refused = await incoming('EXPEDICAO');
+    await decide(refused.id, 'REVISAO', true);
+    expect((await service.get(refused.id, users.EXPEDICAO)).items[0].photoMimeType).toBe('image/jpeg');
+  });
   it('preserva observações do envio e de cada produto no histórico', async () => {
-    const shipment = await service.create({
+    const shipment = await createShipment({
       requestKey: randomUUID(), destinationSector: 'REVISAO', observation: '  Conferir lacre no recebimento  ',
       items: [{ productId, batchId, quantity: 3, observation: '  Embalagem identificada  ' }],
     }, users.PRODUCAO, metadata());
@@ -119,7 +144,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     const shipment = await incoming();
     await expect(decide(shipment.id, 'EXPEDICAO')).rejects.toBeInstanceOf(ForbiddenException);
     await expect(service.get(shipment.id, users.EXPEDICAO)).rejects.toBeInstanceOf(NotFoundException);
-    await expect(service.create({ requestKey: randomUUID(), destinationSector: 'EXPEDICAO', items: [{ productId, batchId, quantity: 1 }] }, users.PRODUCAO, metadata())).rejects.toBeInstanceOf(BadRequestException);
+    await expect(createShipment({ requestKey: randomUUID(), destinationSector: 'EXPEDICAO', items: [{ productId, batchId, quantity: 1 }] }, users.PRODUCAO, metadata())).rejects.toBeInstanceOf(BadRequestException);
     expect((await service.list({ view: 'pending', page: 1, limit: 10 }, users.EXPEDICAO)).meta.total).toBe(0);
   });
   it('confirmações concorrentes efetivam uma única entrada', async () => {
@@ -168,7 +193,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
   });
   it('recusa restaura múltiplos locais e confirmação vincula movimentos por origem', async () => {
     await seed(10); await seed(20,tufId);
-    const create = (): Promise<ShipmentEntity> => service.create({ requestKey: randomUUID(), destinationSector: 'EXPEDICAO', items: [
+    const create = (): Promise<ShipmentEntity> => createShipment({ requestKey: randomUUID(), destinationSector: 'EXPEDICAO', items: [
       { productId,batchId,stockLocationId: sourceId,quantity: 3 }, { productId,batchId,stockLocationId: tufId,quantity: 8 },
     ] },users.REVISAO,metadata());
     const a = await create(); expect(await balance()).toBe(7); expect(await balance(tufId)).toBe(12);
@@ -179,7 +204,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
   });
   it('reverte reservas anteriores quando outro item não tem saldo', async () => {
     await seed();
-    await expect(service.create({requestKey:randomUUID(),destinationSector:'PRODUCAO',items:[
+    await expect(createShipment({requestKey:randomUUID(),destinationSector:'PRODUCAO',items:[
       {productId,batchId,stockLocationId:sourceId,quantity:3}, {productId,batchId,stockLocationId:tufId,quantity:5},
     ]},users.REVISAO,metadata())).rejects.toBeInstanceOf(ConflictException);
     expect(await balance()).toBe(10); expect(await db.getRepository(ShipmentEntity).count()).toBe(0);
@@ -188,15 +213,15 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     const locations = new StockLocationsService(new StockLocationsRepository(db.getRepository(StockLocationEntity)),audit,db);
     const location = await locations.create({code:'SHIP-SOURCE',name:'Origem extra',kind:StockLocationKind.Stock},users.REVISAO.id,metadata());
     await seed(10,location.id);
-    const shipment = await service.create({requestKey:randomUUID(),destinationSector:'PRODUCAO',items:[{productId,batchId,stockLocationId:location.id,quantity:10}]},users.REVISAO,metadata());
+    const shipment = await createShipment({requestKey:randomUUID(),destinationSector:'PRODUCAO',items:[{productId,batchId,stockLocationId:location.id,quantity:10}]},users.REVISAO,metadata());
     await expect(locations.update(location.id,{kind:StockLocationKind.External},users.REVISAO.id,metadata())).rejects.toBeInstanceOf(ConflictException);
     await decide(shipment.id,'PRODUCAO',true); expect(await balance(location.id)).toBe(10);
   });
   it('reutiliza lote CONSERVADI e exige confirmação de validade divergente', async () => {
     const dto = { requestKey: randomUUID(), destinationSector: 'REVISAO' as const, items: [{ productId, lot: { manufacturingDate: '2026-08-31', expirationDate: '2029-08-31' }, quantity: 7 }] };
-    await expect(service.create(dto,users.PRODUCAO,metadata())).rejects.toBeInstanceOf(ConflictException);
+    await expect(createShipment(dto,users.PRODUCAO,metadata())).rejects.toBeInstanceOf(ConflictException);
     expect(await db.getRepository(ShipmentEntity).count()).toBe(0);
-    const shipment = await service.create({ ...dto, confirmedExpirationKeys: [`${productId}:SOCDNV:2028-08-31`] },users.PRODUCAO,metadata());
+    const shipment = await createShipment({ ...dto, confirmedExpirationKeys: [`${productId}:SOCDNV:2028-08-31`] },users.PRODUCAO,metadata());
     expect(shipment.items[0].batch.code).toBe('SOCDNV'); expect(await balance()).toBe(0);
     await expect(decide(shipment.id,'REVISAO')).rejects.toBeInstanceOf(ConflictException);
     await service.decide(shipment.id,'CONFIRMADO',null,{ confirmedExpirationKeys: [`${productId}:SOCDNV:2028-08-31`] },users.REVISAO,metadata());
@@ -204,7 +229,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
   });
   it('preserva snapshot e protege registros contra edição/exclusão e cancelamento isolado', async () => {
     // Use inline date unique to this test so prior variants need no implicit acceptance.
-    const shipment = await service.create({ requestKey: randomUUID(), destinationSector: 'REVISAO', items: [{ productId, lot: { manufacturingDate: '2026-09-14', expirationDate: '2028-09-14' }, quantity: 2 }] }, users.PRODUCAO,metadata());
+    const shipment = await createShipment({ requestKey: randomUUID(), destinationSector: 'REVISAO', items: [{ productId, lot: { manufacturingDate: '2026-09-14', expirationDate: '2028-09-14' }, quantity: 2 }] }, users.PRODUCAO,metadata());
     await db.query("UPDATE products SET name = 'Nome alterado' WHERE id = $1",[productId]);
     await decide(shipment.id,'REVISAO');
     const movement = await db.getRepository(MovementEntity).findOneByOrFail({ shipmentId:shipment.id });
@@ -220,7 +245,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
   it('lista envios paginados e bloqueia rotas diretas dos setores', async () => {
     const external = await db.getRepository(StockLocationEntity).findOneByOrFail({sector:'PRODUCAO'});
     await expect(movements.createExternalEntry({requestKey:randomUUID(),originLocationId:external.id,destinationLocationId:sourceId,items:[{productId,batchId,quantity:1}]},users.REVISAO.id,metadata())).rejects.toBeInstanceOf(BadRequestException);
-    for (let i = 0; i < 3; i++) await service.create({requestKey:randomUUID(),destinationSector:'REVISAO',items:[{productId,lot:{manufacturingDate:'2026-09-14',expirationDate:'2028-09-14'},quantity:1}]},users.PRODUCAO,metadata());
+    for (let i = 0; i < 3; i++) await createShipment({requestKey:randomUUID(),destinationSector:'REVISAO',items:[{productId,lot:{manufacturingDate:'2026-09-14',expirationDate:'2028-09-14'},quantity:1}]},users.PRODUCAO,metadata());
     const first = await service.list({view:'pending',page:1,limit:2},users.REVISAO);
     const second = await service.list({view:'pending',page:2,limit:2},users.REVISAO);
     expect(first.meta.total).toBe(3); expect(second.items).toHaveLength(1);

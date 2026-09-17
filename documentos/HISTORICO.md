@@ -49,6 +49,10 @@ Administradores passaram a alternar entre as interfaces e regras operacionais de
 
 Listas operacionais com inclusão em modal, aviso de código duplicado no cadastro e ajuste de alinhamento dos campos. Sem migration ou mudança das regras de estoque. Resumo em [relatorios/RELATORIO_ETAPA_29_MODAIS_PRODUTOS.md](./relatorios/RELATORIO_ETAPA_29_MODAIS_PRODUTOS.md).
 
+## Etapa 31 — Foto obrigatória por item de envio
+
+Envios entre setores passaram a exigir uma evidência privada por item, capturada na própria aplicação e preservada no aceite, recusa e histórico. Storage local/Supabase desacoplado e leitura autenticada. Resumo em [relatorios/RELATORIO_ETAPA_31_FOTOS_ENVIOS.md](./relatorios/RELATORIO_ETAPA_31_FOTOS_ENVIOS.md).
+
 ## Decisões consolidadas
 
 | Registro histórico | Situação atual |
@@ -77,6 +81,9 @@ Os ADRs completos estão em [`arquivo/adrs/`](./arquivo/adrs/). As decisões vig
 | `1788652800000-movement-cancellations.ts` | Estado/metadados de cancelamento e permissão `movements.cancel`. |
 | `1789084800000-operational-lot-expiration.ts` | Prazo do produto, variantes por validade, identidade imutável e snapshots dos novos itens. Não regrava dados antigos. O rollback recusa descartar variantes ou snapshots já utilizados. |
 | `1789344000000-sector-shipments.ts` | Setores/perfis, envios/itens, constraints, proteção de histórico e vínculo das movimentações. Rollback impede perda de envios ou usuários externos. |
+| `1789430400000-shipment-observations.ts` | Observação geral e por item nos envios. |
+| `1789516800000-review-package-unpacking.ts` | Configuração e histórico da desmontagem de fardos/caixas na revisão. |
+| `1789603200000-shipment-item-photos.ts` | Referência privada, MIME, tamanho e integridade da foto por item de envio. |
 
 `synchronize` permanece desativado. Migrations são a única forma autorizada de alterar o schema.
 
@@ -112,7 +119,7 @@ Adicionado gerenciamento exclusivo de ADMIN com consulta, criação, edição e 
 - Listagens que carregam até 100 registros precisarão de busca remota progressiva em bases maiores.
 - Renovação transparente do access token durante uma requisição expirada ainda pode ser aprimorada.
 - Edição de perfis/permissões personalizados e política de retenção/consulta da auditoria continuam pendentes; administração visual de usuários já está disponível.
-- Reversão automática encadeada, fotos e relatórios analíticos avançados permanecem fora do escopo atual.
+- Reversão automática encadeada, notificações externas e relatórios analíticos avançados permanecem fora do escopo atual.
 
 ## Política para próximas etapas
 

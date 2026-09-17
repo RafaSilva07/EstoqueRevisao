@@ -6,6 +6,26 @@ import { NewShipment } from './NewShipment';
 import { useMovementSubmission } from './useMovementSubmission';
 import { Sector, sectorLabel, Shipment, shipmentStatusLabel } from './shipments';
 
+function ShipmentPhoto({ shipmentId, itemId, productName, available }: { shipmentId: string; itemId: string; productName: string; available: boolean }) {
+  const [url, setUrl] = useState('');
+  const [error, setError] = useState('');
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (!available) return;
+    let active = true; let objectUrl = '';
+    void api.getBlob(`/shipments/${shipmentId}/items/${itemId}/photo`).then((blob) => {
+      if (!active) return; objectUrl = URL.createObjectURL(blob); setUrl(objectUrl);
+    }).catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível carregar a foto.'); });
+    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [available, itemId, shipmentId]);
+  if (!available) return <span className="muted">Item histórico sem foto.</span>;
+  if (error) return <span className="photo-required">{error}</span>;
+  if (!url) return <span className="muted">Carregando foto…</span>;
+  return <div className="shipment-photo"><button type="button" className="secondary" aria-label={`Ampliar foto de ${productName}`} onClick={() => setExpanded(true)}><img src={url} alt={`Foto de ${productName}`} /></button>
+    {expanded && <Modal labelledBy="shipment-photo-title" onClose={() => setExpanded(false)}><h2 id="shipment-photo-title">Foto de {productName}</h2><img className="camera-preview" src={url} alt={`Foto ampliada de ${productName}`} /><div className="dialog-actions"><button type="button" onClick={() => setExpanded(false)}>Fechar</button></div></Modal>}
+  </div>;
+}
+
 function ShipmentItems({ shipment }: { shipment: Shipment }) {
   return <ul className="movement-detail-items">{shipment.items.map((item) => <li key={item.id}>
     <strong>{item.productSnapshot.code} — {item.productSnapshot.name}</strong>
@@ -14,6 +34,7 @@ function ShipmentItems({ shipment }: { shipment: Shipment }) {
     {item.stockLocation && <span>Origem: {item.stockLocation.name}</span>}
     <b>{item.quantity} {item.productSnapshot.defaultUnit}</b>
     {item.observation && <span><strong>Observação do produto:</strong> {item.observation}</span>}
+    <ShipmentPhoto shipmentId={shipment.id} itemId={item.id} productName={item.productSnapshot.name} available={Boolean(item.photoMimeType)} />
   </li>)}</ul>;
 }
 
