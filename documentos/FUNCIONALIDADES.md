@@ -2,6 +2,12 @@
 
 Este documento descreve o comportamento disponível hoje. As regras completas e invariantes estão em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md).
 
+## Navegação experimental e Revisão operacional
+
+Na branch `experiment/ux-navegacao-simplificada`, perfis com até seis ações disponíveis veem essas ações diretamente na Home. Produção/Expedição mostram enviar, pendentes, acompanhamento e histórico; PCP mostra suas três consultas. Perfis com mais opções mantêm a navegação por área. Voltar retorna à Home quando a ação veio desse menu direto.
+
+O cadastro de usuários oferece `Revisão operacional` (`REVISAO`), no setor Revisão: solicitações, revisão, transferência e consultas, sem ADMIN. Entrada/saída direta, cancelamento de movimentações/revisões e ativação/inativação de cadastros são exclusivos do ADMIN e bloqueados pela API. Usuários existentes não são reclassificados automaticamente. Para atribuir acesso operacional, selecione esse perfil sem marcar Administrador.
+
 Todas as entradas, saídas, transferências e distribuições de revisão aceitam somente quantidades inteiras positivas. O frontend orienta o preenchimento e o backend aplica a validação definitiva antes de alterar saldos.
 
 ## Acesso e sessão

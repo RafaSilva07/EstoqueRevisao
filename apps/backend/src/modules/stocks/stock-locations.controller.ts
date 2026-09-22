@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req } from '@nestjs/common';
+import { AdminGuard } from '../users/admin.guard';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { StatusDto } from '../../shared/dto/status.dto';
 import { PaginatedResult } from '../../shared/pagination/paginated-result.interface';
@@ -50,6 +51,7 @@ export class StockLocationsController {
 
   @Patch(':id/status')
   @RequirePermissions('stocks.update')
+  @UseGuards(AdminGuard)
   setStatus(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: StatusDto,

@@ -29,6 +29,10 @@
 .login-field:focus-within > span:first-child, .login-field:focus-within svg { color: #155e75; }
 .login-field:focus-within svg { transform: translateY(-1px); }
 .login-page .login-field input:read-only { background: #f2f5f6; }
+.login-page .login-password-wrap input { padding-right: 3.5rem; }
+.login-password-toggle { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; background: transparent; color: #46707e; }
+.login-password-toggle:hover { background: #edf5f6; }
+.login-input-wrap .login-password-toggle svg { position: static; width: 1.3rem; height: 1.3rem; color: currentColor; transform: none; }
 .login-page .login-submit { display: flex; align-items: center; justify-content: center; gap: .75rem; width: 100%; min-height: 52px; padding: .8rem 1rem; border-radius: .6rem; background: #155e75; color: #fff; font-size: .95rem; font-weight: 650; transition: background 160ms ease, box-shadow 160ms ease; }
 .login-page .login-submit:hover:not(:disabled) { background: #104b5e; box-shadow: 0 4px 12px rgb(21 94 117 / 15%); }
 .login-submit > span:last-child:not(.login-spinner) { font-size: 1.2rem; line-height: 1; }

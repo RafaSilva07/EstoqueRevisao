@@ -5,6 +5,7 @@ import './login.css';
 export function Login({ onAuthenticated }: { onAuthenticated: (user: UserSession) => void }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [engaged, setEngaged] = useState(false);
@@ -51,7 +52,7 @@ export function Login({ onAuthenticated }: { onAuthenticated: (user: UserSession
               <span className="login-input-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><circle cx="12" cy="8" r="3.5" /><path d="M5 20v-2a7 7 0 0 1 14 0v2" /></svg><input id="username" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={(event) => setUsername(event.target.value)} required autoFocus readOnly={busy} aria-describedby={error ? 'login-error' : undefined} /></span>
             </label>
             <label className="login-field" htmlFor="password"><span>Senha <small>obrigatória</small></span>
-              <span className="login-input-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V6a4 4 0 0 1 8 0v4m-4 4v3" /></svg><input id="password" name="password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required readOnly={busy} aria-describedby={error ? 'login-error' : undefined} /></span>
+              <span className="login-input-wrap login-password-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V6a4 4 0 0 1 8 0v4m-4 4v3" /></svg><input id="password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required readOnly={busy} aria-describedby={error ? 'login-error' : undefined} /><button type="button" className="login-password-toggle" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} aria-controls="password" aria-pressed={showPassword} title={showPassword ? 'Ocultar senha' : 'Mostrar senha'} onClick={() => setShowPassword((visible) => !visible)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" />{showPassword && <path d="m3 3 18 18" />}</svg></button></span>
             </label>
           </div>
           {error && <div className="login-error" id="login-error" role="alert"><span className="login-error-mark" aria-hidden="true">!</span><div><strong>Não foi possível entrar</strong><p>{error}</p></div></div>}

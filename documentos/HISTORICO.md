@@ -4,6 +4,10 @@ Este documento registra a evolução relevante sem repetir as regras vigentes. P
 
 ## Etapas concluídas
 
+### Experimento de UX — refinamento de acesso
+
+Por solicitação posterior à proposta inicialmente restrita ao frontend, o experimento passou a incluir autorização: perfil `REVISAO` separado de ADMIN, migration aditiva de perfil/permissões, proteção administrativa nos endpoints de entrada/saída direta, cancelamentos e status de cadastros. Usuários existentes e dados operacionais foram preservados. Home expõe ações diretamente quando há até seis opções. Regras de saldo, aceite, revisão, estorno e preservação do histórico continuam iguais; não foi criada exclusão física. Sem merge ou deploy.
+
 | Etapa | Data | Entrega principal | Commit funcional |
 | --- | --- | --- | --- |
 | 01 | 2026-08-31 | Fundação: workspaces, NestJS/React, PostgreSQL, autenticação, autorização, logs, auditoria, erros e health check. | `66236dd` |

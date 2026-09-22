@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
+import { AdminGuard } from '../users/admin.guard';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { PaginatedResult } from '../../shared/pagination/paginated-result.interface';
 import { getAuditRequestMetadata } from '../audit/audit-request-metadata';
@@ -25,6 +26,7 @@ export class MovementsController {
 
   @Post('external-entries')
   @RequirePermissions('movements.create')
+  @UseGuards(AdminGuard)
   createExternalEntry(@Body() dto: CreateExternalEntryDto, @Req() request: Request): Promise<MovementEntity> {
     const user = request.user as AuthenticatedUser;
     return this.service.createExternalEntry(dto, user.id, getAuditRequestMetadata(request));
@@ -32,6 +34,7 @@ export class MovementsController {
 
   @Post('external-exits')
   @RequirePermissions('movements.create')
+  @UseGuards(AdminGuard)
   createExternalExit(
     @Body() dto: CreateEffectiveMovementDto,
     @Req() request: Request,
@@ -59,6 +62,7 @@ export class MovementsController {
 
   @Post(':id/cancellation')
   @RequirePermissions('movements.cancel')
+  @UseGuards(AdminGuard)
   cancel(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: CancelMovementDto,
