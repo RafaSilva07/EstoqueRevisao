@@ -44,6 +44,7 @@ export function UsersPage({ currentUserId, onOwnUpdate }: { currentUserId: strin
     const form = new FormData(event.currentTarget);
     const roleCodes = form.getAll('roleCodes').map(String);
     if (!roleCodes.length) { setError('Selecione ao menos um perfil.'); return; }
+    if (roleCodes.includes('REVISAO') && form.get('sector') !== 'REVISAO') { setError('O perfil Revisão operacional deve pertencer ao setor Revisão.'); return; }
     if (roleCodes.includes('PCP') && roleCodes.length > 1) { setError('O perfil PCP deve ser usado sozinho.'); return; }
     if (roleCodes.includes('PCP') !== (form.get('sector') === 'PCP')) { setError('O setor PCP deve utilizar exclusivamente o perfil PCP.'); return; }
     submitting.current = true; setBusy(true); setError('');
@@ -96,7 +97,7 @@ export function UsersPage({ currentUserId, onOwnUpdate }: { currentUserId: strin
         <label>Login<input name="username" required maxLength={100} defaultValue={editing?.username} autoComplete="off" disabled={busy} /></label>
         <label>{editing ? 'Nova senha (opcional)' : 'Senha'}<input name="password" type="password" required={!editing} minLength={8} maxLength={128} autoComplete="new-password" disabled={busy} /><small>De 8 a 128 caracteres.{editing && ' Deixe em branco para manter a atual.'}</small></label>
         <label>Setor<select name="sector" defaultValue={editing?.sector ?? 'REVISAO'} disabled={busy}>{Object.entries(sectorLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><small>Administradores pertencem à Revisão e podem alternar o modo operacional.</small></label>
-        <fieldset className="user-roles" disabled={busy}><legend>Perfis de acesso</legend>{roles.map((role) => <label key={role.code}><input type="checkbox" name="roleCodes" value={role.code} defaultChecked={editing?.roles.some((assigned) => assigned.code === role.code)} />{role.name}</label>)}<small>O setor PCP utiliza exclusivamente o perfil PCP, com leitura global e execução administrativa.</small></fieldset>
+        <fieldset className="user-roles" disabled={busy}><legend>Perfis de acesso</legend>{roles.map((role) => <label key={role.code}><input type="checkbox" name="roleCodes" value={role.code} defaultChecked={editing?.roles.some((assigned) => assigned.code === role.code)} />{role.name}</label>)}<small>Revisão operacional permite solicitações, revisão, transferência e consultas. Entrada/saída direta, cancelamentos, inativação de cadastros e usuários exigem Administrador. Para acesso operacional, não marque Administrador junto.</small><small>O setor PCP utiliza exclusivamente o perfil PCP, com leitura global e execução administrativa.</small></fieldset>
         {editing && <label>Status<select name="status" defaultValue={editing.status} disabled={busy}><option value="ACTIVE">Ativo</option><option value="INACTIVE">Inativo</option></select></label>}
         <div className="dialog-actions"><button type="button" className="secondary" disabled={busy} onClick={() => setEditing(undefined)}>Voltar</button><button disabled={busy}>{busy ? 'Salvando...' : 'Salvar usuário'}</button></div>
       </form>

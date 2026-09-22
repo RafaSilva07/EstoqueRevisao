@@ -31,6 +31,7 @@ import { ShipmentItemPhotos1789603200000 } from './migrations/1789603200000-ship
 import { PcpMovementExecution1789689600000 } from './migrations/1789689600000-pcp-movement-execution';
 import { ProductUnitWeight1789776000000 } from './migrations/1789776000000-product-unit-weight';
 import { PcpSector1789862400000 } from './migrations/1789862400000-pcp-sector';
+import { ReviewOperatorRole1789948800000 } from './migrations/1789948800000-review-operator-role';
 
 export const databaseEntities = [
   ShipmentEntity,
@@ -66,6 +67,7 @@ export const databaseMigrations = [
   PcpMovementExecution1789689600000,
   ProductUnitWeight1789776000000,
   PcpSector1789862400000,
+  ReviewOperatorRole1789948800000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {

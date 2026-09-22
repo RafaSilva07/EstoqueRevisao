@@ -1,5 +1,9 @@
 # Arquitetura
 
+## Acesso operacional da Revisão
+
+A migration `ReviewOperatorRole1789948800000` adiciona o perfil `REVISAO` reutilizando permissões existentes. O `AdminGuard`, além dos guards globais de sessão/permissões/setor, protege os endpoints de entrada/saída direta, cancelamento e alteração de status dos cadastros. Gerenciamento de usuários continua protegido pelo mesmo guard. Regras transacionais e contratos de operações não mudam. O frontend reflete essas restrições e mostra ações diretamente na Home quando o conjunto disponível tem até seis opções.
+
 ## Stack
 
 | Camada | Tecnologia |

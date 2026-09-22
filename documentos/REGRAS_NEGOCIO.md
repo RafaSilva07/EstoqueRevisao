@@ -15,6 +15,10 @@ Este documento consolida o comportamento funcional vigente. Regras históricas s
 
 ## Administração de usuários
 
+- O perfil `REVISAO` (Revisão operacional) pertence ao setor Revisão e permite solicitações, revisão, transferência interna e consultas de estoque, produtos, lotes e histórico. Não concede administração de usuários ou escrita em cadastros mestres.
+- Entrada e saída externas diretas, cancelamento/estorno de qualquer movimentação (inclusive revisão) e ativação/inativação de produtos, conversões e locais exigem `ADMIN`, além das permissões e restrições de setor existentes. Solicitações de envio/recebimento continuam disponíveis aos operadores autorizados.
+- Não há exclusão física de movimentações ou revisões. Administradores utilizam cancelamento com estorno, sujeito às validações já existentes; cadastros utilizam inativação. Vincular `ADMIN` a uma conta concede acesso administrativo mesmo se ela também possuir `REVISAO`.
+
 - Somente contas com perfil `ADMIN` podem consultar, criar, editar e excluir usuários, independentemente do modo operacional selecionado.
 - Login é único sem diferenciar maiúsculas/minúsculas. O cadastro usa setor e perfis já existentes; esta tela não cria perfis ou permissões.
 - Senhas têm entre 8 e 128 caracteres e são persistidas exclusivamente como Argon2id. Na edição, omitir a senha mantém a atual.

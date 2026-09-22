@@ -53,14 +53,14 @@ function ShipmentDecision({ shipment, refuse, onClose, onDone }: { shipment: Shi
   </Modal>;
 }
 
-export function ShipmentsPage({ user }: { user: UserSession }) {
-  const [view, setView] = useState<'pending' | 'sent' | 'history'>('pending');
+export function ShipmentsPage({ user, initialView = 'pending', initialCreating = false, showCreateAction = true }: { user: UserSession; initialView?: 'pending' | 'sent' | 'history'; initialCreating?: boolean; showCreateAction?: boolean }) {
+  const [view, setView] = useState(initialView);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<Paginated<Shipment> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(initialCreating && user.permissions.includes('shipments.create'));
   const [selected, setSelected] = useState<Shipment | null>(null);
   const [decision, setDecision] = useState<'confirm' | 'refuse' | null>(null);
   const canCreate = user.permissions.includes('shipments.create');
@@ -86,7 +86,7 @@ export function ShipmentsPage({ user }: { user: UserSession }) {
   if (creating) return <NewShipment sector={user.sector as ShipmentSector} onClose={() => setCreating(false)} onCreated={() => { setCreating(false); setSelected(null); setView('sent'); setPage(1); setSuccess('Envio criado. Aguardando confirmação do destinatário.'); void load(); }} />;
   return <>
     {user.sector !== 'REVISAO' && <ShipmentHomeNotice onOpen={() => { setView('pending'); setPage(1); }} />}
-    <PageHeader eyebrow={sectorLabel[user.sector as ShipmentSector]} title="Envios entre setores" description="Receba, acompanhe seus envios e consulte as decisões." action={canCreate && <button onClick={() => setCreating(true)}>{user.sector === 'REVISAO' ? 'Novo envio' : 'Novo envio para Revisão'}</button>} />
+    <PageHeader eyebrow={sectorLabel[user.sector as ShipmentSector]} title="Envios entre setores" description="Receba, acompanhe seus envios e consulte as decisões." action={showCreateAction && canCreate && <button onClick={() => setCreating(true)}>{user.sector === 'REVISAO' ? 'Novo envio' : 'Novo envio para Revisão'}</button>} />
     {success && <Notice kind="success" onClose={() => setSuccess('')}>{success}</Notice>}
     <nav className="shipment-tabs" aria-label="Consultas de envios">{([['pending','Aguardando minha ação'],['sent','Enviados por mim'],['history','Histórico']] as const).map(([key,label]) => <button key={key} className={view === key ? '' : 'secondary'} aria-pressed={view === key} onClick={() => { setView(key); setPage(1); setSelected(null); }}>{label}</button>)}</nav>
     {error ? <Notice kind="error">{error} <button className="secondary" onClick={() => void load()}>Tentar novamente</button></Notice> : loading ? <LoadingState label="Consultando envios" /> : !data?.items.length ? <EmptyState title="Nenhum envio nesta consulta" description="Novos recebimentos e decisões aparecerão aqui." /> : <>

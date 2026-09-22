@@ -12,8 +12,8 @@ const typeLabel: Record<PcpMovementSummary['type'], string> = {
 const initialFilters = { dateFrom: '', dateTo: '', operationalStatus: 'CONCLUIDA', pcpStatus: 'PENDENTE', type: '', originLocationId: '', destinationLocationId: '', search: '', sort: 'ASC' };
 const messageFrom = (error: unknown) => error instanceof Error ? error.message : 'Não foi possível concluir a operação.';
 
-export function PcpPage() {
-  const [filters, setFilters] = useState(initialFilters);
+export function PcpPage({ initialStatus = 'PENDENTE' }: { initialStatus?: '' | 'PENDENTE' | 'EXECUTADA' }) {
+  const [filters, setFilters] = useState<typeof initialFilters>({ ...initialFilters, pcpStatus: initialStatus, operationalStatus: initialStatus === '' ? '' : initialFilters.operationalStatus });
   const [page, setPage] = useState(1);
   const [result, setResult] = useState<Paginated<PcpMovementSummary> | null>(null);
   const [locations, setLocations] = useState<StockLocation[]>([]);
