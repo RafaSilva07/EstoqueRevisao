@@ -6,6 +6,7 @@ import { formatDate } from './format';
 import { OperationalLotFields } from './OperationalLotFields';
 import { emptyLot, OperationalLot } from './operational-lot';
 import { useMovementSubmission } from './useMovementSubmission';
+import { ProductAutocomplete } from './ProductAutocomplete';
 
 export interface TransferPrefill {
   originLocationId: string;
@@ -206,12 +207,7 @@ export function InternalTransferPage({
       <div className="panel-heading item-list-heading"><h2 id="add-product-title">Adicionar produto</h2><button type="button" className="secondary" onClick={closeItem}>Cancelar</button></div>
       {error && <Notice kind="error">{error}</Notice>}
       {!originId ? <p className="muted">Escolha a origem para consultar o saldo.</p> : loadingStock ? <LoadingState label="Consultando saldo da origem" /> : positions.length === 0 ? <EmptyState title="Origem sem saldo disponivel" description="Escolha outro local ou registre uma entrada antes da transferencia." /> : <form className="form-grid" onSubmit={addItem}>
-        <label><span>Produto <span className="required">*</span></span>
-          <select value={productId} onChange={(event) => { setProductId(event.target.value); changeSourceBatch(''); }} required>
-            <option value="">Selecione</option>
-            {products.map((product) => <option key={product.id} value={product.id}>{product.code} - {product.name}</option>)}
-          </select>
-        </label>
+        <ProductAutocomplete availableProducts={products} initialProduct={selectedProduct} onChange={(selected) => { setProductId(selected?.id ?? ''); changeSourceBatch(''); }} />
         <PositionSelect label="Lote de origem *" value={batchId} onChange={changeSourceBatch} disabled={!productId}
           options={sourcePositions.map((position) => ({ value: position.batchId, label: `Lote: ${position.batch.code} · val: ${formatDate(position.batch.expirationDate)} · saldo: ${position.quantity}` }))} />
         {selectedPosition && <div className="available-balance" role="status"><span>Disponivel em {locationFor(originId)?.name}</span><strong>{selectedPosition.quantity} {selectedPosition.product.defaultUnit}</strong><small>Validade {formatDate(selectedPosition.batch.expirationDate)}</small></div>}

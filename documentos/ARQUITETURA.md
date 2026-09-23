@@ -100,6 +100,7 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 - Listagens usam paginação e filtros definidos por DTO.
 - Relatórios aplicam os mesmos filtros nas linhas e totais; a exportação CSV remove apenas a paginação.
 - Erros seguem envelope padronizado com código, mensagem, request ID, timestamp e caminho.
+- Falhas reconhecidas de conexão com o PostgreSQL retornam `503/DATABASE_UNAVAILABLE`, mantendo detalhes técnicos apenas nos logs estruturados.
 - Erros internos não expõem stack trace, SQL ou detalhes de infraestrutura ao cliente.
 - A criação de envio usa `multipart/form-data`, com JSON em `payload` e um campo `photos` por item na mesma ordem. O backend limita quantidade/tamanho e revalida presença, MIME e conteúdo não vazio.
 - Criações de movimentação usam `request_key` UUID para idempotência.
@@ -113,9 +114,9 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 - O banco armazena somente SHA-256 do refresh token.
 - Sessões são consultadas e podem ser revogadas; logout invalida a sessão.
 - Guards globais exigem autenticação e permissões; rotas públicas usam declaração explícita.
-- A administração em `/users` exige adicionalmente `AdminGuard`, que verifica o perfil `ADMIN` autenticado no banco. É uma função administrativa independente do modo operacional, sem novas permissões ou tabelas. `UsersService` reutiliza o hash Argon2id, repositório, sessões e auditoria. Alterações são serializadas por advisory lock transacional; o autor é revalidado dentro da transação, e sessões da conta editada/inativada são revogadas atomicamente. Respostas usam projeção explícita sem credenciais.
+- A administração em `/users` exige adicionalmente `AdminGuard`, que verifica o perfil autenticado e o modo `ADMIN`. Não há novas permissões ou tabelas. `UsersService` reutiliza o hash Argon2id, repositório, sessões e auditoria. Alterações são serializadas por advisory lock transacional; o autor é revalidado dentro da transação, e sessões da conta editada/inativada são revogadas atomicamente. Respostas usam projeção explícita sem credenciais.
 - `users.sector` é consultado junto da sessão: REVISAO, PRODUCAO, EXPEDICAO ou PCP. `ADMIN` permanece cadastrado na Revisão; perfis PRODUCAO/EXPEDICAO recebem somente leitura de produtos e permissões de envios. PCP possui somente as leituras necessárias e a execução administrativa. O guard também bloqueia permissões incompatíveis mesmo se algum perfil for configurado indevidamente.
-- O frontend pode enviar `X-Operational-Sector` para alternância administrativa. O guard aceita `REVISAO`, `PRODUCAO`, `EXPEDICAO` ou `PCP` somente quando a sessão possui a função `ADMIN`; em seguida aplica as restrições normais do setor efetivo. A identidade autenticada e o setor persistido do usuário não são substituídos.
+- O frontend envia `X-Operational-Sector` para alternância administrativa. O guard aceita `ADMIN`, `REVISAO`, `PRODUCAO`, `EXPEDICAO` ou `PCP` somente quando a sessão possui a função `ADMIN`. `ADMIN` mantém o contexto físico da Revisão com permissões completas; os demais valores projetam as permissões do respectivo perfil e bloqueiam guards administrativos. A identidade autenticada e o setor persistido do usuário não são substituídos.
 - Locais externos dos setores possuem `stock_locations.sector` único. A migration associa os registros iniciais uma única vez pelo código; os serviços usam o vínculo persistido, não nomes exibidos.
 
 Permissões usadas pelas rotas atuais (as antigas `batches.create`/`batches.update` permanecem apenas nos registros de perfis existentes, sem endpoints associados):
@@ -144,7 +145,10 @@ pcp.movements.read / pcp.movements.execute
 - Variáveis públicas estão documentadas em `.env.example`; valores reais ficam no `.env`, fora do Git.
 - `STORAGE_DRIVER=local` grava em `FILE_STORAGE_PATH`; `supabase` usa bucket privado, `SUPABASE_URL` e `SUPABASE_SECRET_KEY` disponível exclusivamente no backend (com suporte à `SUPABASE_SERVICE_ROLE_KEY` legada). Fotos são lidas por rota autenticada da API.
 - O backend valida as variáveis ao iniciar.
-- PostgreSQL de desenvolvimento roda em `postgres:17-alpine` via Docker Compose, com health check, porta limitada ao loopback e volume persistente.
+- O banco operacional de desenvolvimento e publicação é o PostgreSQL do Supabase, acessado pela `DATABASE_URL` Session pooler com SSL obrigatório. Backend, migrations e bootstrap usam essa mesma variável. O PostgreSQL em Docker fica restrito a testes locais isolados.
+- A aplicação usa pool PostgreSQL pequeno e novas tentativas limitadas na inicialização para tolerar reinícios e resets transitórios do Session pooler, sem repetir operações de negócio já iniciadas.
+- `migration:show` e `migration:run` repetem somente falhas reconhecidas de conexão, no máximo cinco vezes; erros de schema ou da própria migration não são repetidos.
+- `DATABASE_HOST_OVERRIDE` permite contornar temporariamente um endereço IPv4 defeituoso retornado pelo DNS do pooler. A conexão continua usando as credenciais e o hostname TLS de `DATABASE_URL`; o override deve ser removido quando o provedor normalizar o nó.
 - API e frontend rodam diretamente pelo Node.js no desenvolvimento e podem ser containerizados futuramente sem alteração de domínio.
 
 ## Módulo PCP

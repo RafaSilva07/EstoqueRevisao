@@ -21,18 +21,22 @@ export class PermissionsGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
     const user = request.user as AuthenticatedUser | undefined;
     const requestedSector = request.headers[OPERATIONAL_SECTOR_HEADER];
+    let operationalMode = user?.roles.includes('ADMIN') ? 'ADMIN' : user?.sector;
     if (requestedSector !== undefined) {
       if (!user?.roles.includes('ADMIN')) {
         throw new ForbiddenException('Somente administradores podem alternar o setor operacional.');
       }
-      if (typeof requestedSector !== 'string' || !['REVISAO', 'PRODUCAO', 'EXPEDICAO', 'PCP'].includes(requestedSector)) {
-        throw new BadRequestException('Setor operacional inválido.');
+      if (typeof requestedSector !== 'string' || !['ADMIN', 'REVISAO', 'PRODUCAO', 'EXPEDICAO', 'PCP'].includes(requestedSector)) {
+        throw new BadRequestException('Modo operacional inválido.');
       }
-      user.sector = requestedSector;
+      operationalMode = requestedSector;
+      user.sector = requestedSector === 'ADMIN' ? 'REVISAO' : requestedSector;
     }
+    const reviewPermissions = ['products.read', 'product-conversions.read', 'batches.read', 'stocks.read', 'stock-positions.read', 'movements.read', 'movements.create', 'shipments.read', 'shipments.create', 'shipments.decide'];
     const pcpPermissions = ['pcp.movements.read', 'pcp.movements.execute', 'products.read', 'batches.read', 'stocks.read', 'stock-positions.read', 'shipments.read'];
-    if (user?.sector === 'PCP' && required.some((permission) => !pcpPermissions.includes(permission))) return false;
-    if (user?.sector && !['REVISAO', 'PCP'].includes(user.sector) && required.some((permission) => !permission.startsWith('shipments.') && permission !== 'products.read')) return false;
+    if (operationalMode === 'REVISAO' && required.some((permission) => !reviewPermissions.includes(permission))) return false;
+    if (operationalMode === 'PCP' && required.some((permission) => !pcpPermissions.includes(permission))) return false;
+    if (operationalMode && !['ADMIN', 'REVISAO', 'PCP'].includes(operationalMode) && required.some((permission) => !permission.startsWith('shipments.') && permission !== 'products.read')) return false;
     return Boolean(user && required.every((permission) => user.permissions.includes(permission)));
   }
 }

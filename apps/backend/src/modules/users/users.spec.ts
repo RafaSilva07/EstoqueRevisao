@@ -9,11 +9,22 @@ describe('Administração de usuários', () => {
     const context = { switchToHttp: (): unknown => ({ getRequest: (): unknown => ({ user: roles ? { roles } : undefined }) }) } as unknown as ExecutionContext;
     expect(new AdminGuard().canActivate(context)).toBe(false);
   });
-  it('permite ADMIN independentemente do modo operacional', () => {
+  it('permite ADMIN sem alternância operacional explícita', () => {
     for (const sector of ['REVISAO', 'PRODUCAO', 'EXPEDICAO', 'PCP']) {
       const context = { switchToHttp: (): unknown => ({ getRequest: (): unknown => ({ user: { roles: ['ADMIN'], sector } }) }) } as unknown as ExecutionContext;
       expect(new AdminGuard().canActivate(context)).toBe(true);
     }
+  });
+  it('libera ações administrativas somente no modo ADMIN ou sem alternância explícita', () => {
+    const check = (mode?: string): boolean => {
+      const context = { switchToHttp: (): unknown => ({ getRequest: (): unknown => ({
+        headers: mode ? { 'x-operational-sector': mode } : {}, user: { roles: ['ADMIN'], sector: 'REVISAO' },
+      }) }) } as unknown as ExecutionContext;
+      return new AdminGuard().canActivate(context);
+    };
+    expect(check()).toBe(true);
+    expect(check('ADMIN')).toBe(true);
+    for (const mode of ['REVISAO', 'PRODUCAO', 'EXPEDICAO', 'PCP']) expect(check(mode)).toBe(false);
   });
   it('valida login, senha, setor e perfis e rejeita null em edições', async () => {
     const valid = { username: ' operador ', password: 'senha-teste-segura', sector: 'PRODUCAO', roleCodes: ['PRODUCAO'] };

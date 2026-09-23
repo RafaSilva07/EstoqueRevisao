@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
+import { parseDatabaseConnection } from './database-connection';
 import { AuditLogEntity } from '../modules/audit/entities/audit-log.entity';
 import { AuthSessionEntity } from '../modules/auth/entities/auth-session.entity';
 import { PermissionEntity } from '../modules/users/entities/permission.entity';
@@ -72,17 +73,28 @@ export const databaseMigrations = [
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {
   const useSsl = configService.getOrThrow<boolean>('DATABASE_SSL');
+  const databaseUrl = configService.getOrThrow<string>('DATABASE_URL');
 
   return {
     type: 'postgres',
-    url: configService.getOrThrow<string>('DATABASE_URL'),
-    ssl: useSsl ? { rejectUnauthorized: false } : false,
+    ...parseDatabaseConnection(
+      databaseUrl,
+      useSsl,
+      configService.get<string>('DATABASE_HOST_OVERRIDE'),
+    ),
     entities: databaseEntities,
     migrations: databaseMigrations,
     synchronize: false,
     migrationsRun: false,
-    retryAttempts: 1,
-    retryDelay: 1000,
+    retryAttempts: 10,
+    retryDelay: 3000,
+    extra: {
+      max: 5,
+      connectionTimeoutMillis: 15000,
+      idleTimeoutMillis: 30000,
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10000,
+    },
     logging: false,
   };
 }

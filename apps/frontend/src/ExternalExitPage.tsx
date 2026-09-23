@@ -3,6 +3,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, Movement, Paginated, Product, StockLocation, StockPosition } from './api';
 import { EmptyState, LoadingState, Modal, Notice, OperationGuide, PageHeader } from './components';
 import { formatDate } from './format';
+import { ProductAutocomplete } from './ProductAutocomplete';
 
 export interface ExitPrefill {
   originLocationId: string;
@@ -86,6 +87,7 @@ export function ExternalExitPage({
     return [...unique.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [positions]);
   const productPositions = positions.filter((position) => position.productId === productId);
+  const selectedProduct = products.find((product) => product.id === productId);
   const selectedPosition = positions.find(
     (position) => position.productId === productId && position.batchId === batchId,
   );
@@ -184,12 +186,7 @@ export function ExternalExitPage({
       <div className="panel-heading item-list-heading"><h2 id="add-product-title">Adicionar produto</h2><button type="button" className="secondary" onClick={closeItem}>Cancelar</button></div>
       {error && <Notice kind="error">{error}</Notice>}
       {!originId ? <p className="muted">Escolha a origem para consultar o saldo.</p> : loadingStock ? <LoadingState label="Consultando saldo da origem" /> : positions.length === 0 ? <EmptyState title="Origem sem saldo disponivel" description="Escolha outro local ou registre uma entrada antes da saida." /> : <form className="form-grid" onSubmit={addItem}>
-        <label><span>Produto <span className="required">*</span></span>
-          <select value={productId} onChange={(event) => { setProductId(event.target.value); setBatchId(''); }} required>
-            <option value="">Selecione</option>
-            {products.map((product) => <option key={product.id} value={product.id}>{product.code} - {product.name}</option>)}
-          </select>
-        </label>
+        <ProductAutocomplete availableProducts={products} initialProduct={selectedProduct} onChange={(selected) => { setProductId(selected?.id ?? ''); setBatchId(''); }} />
         <PositionSelect label="Lote *" value={batchId} onChange={setBatchId} disabled={!productId}
           options={productPositions.map((position) => ({ value: position.batchId, label: `Lote: ${position.batch.code} · val: ${formatDate(position.batch.expirationDate)} · saldo: ${position.quantity}` }))} />
         {selectedPosition && <div className="available-balance" role="status"><span>Saldo disponivel</span><strong>{selectedPosition.quantity} {selectedPosition.product.defaultUnit}</strong><small>Validade {formatDate(selectedPosition.batch.expirationDate)}</small></div>}

@@ -45,13 +45,12 @@ Não invente campos ou fluxos ainda não definidos. Mudanças de regra devem ser
 
 ## Execução local
 
-Pré-requisitos: Node.js 22+, npm e Docker Desktop com Docker Compose.
+Pré-requisitos: Node.js 22+, npm e um projeto Supabase ativo.
 
 ```powershell
 Copy-Item .env.example .env
 npm install
-npm run docker:up
-npm run db:migration:run
+npm run db:setup
 npm run db:user:create
 ```
 
@@ -66,7 +65,7 @@ npm run dev:frontend
 - API: `http://localhost:3000/api/v1`
 - Health check: `http://localhost:3000/api/v1/health`
 
-O container PostgreSQL pode ser parado ou recriado; os dados continuam no volume nomeado enquanto ele não for removido explicitamente. `npm run docker:down` remove container e rede, mas preserva o volume.
+Backend, migrations e criação de usuário usam a mesma `DATABASE_URL` do Supabase. O PostgreSQL Docker permanece apenas para testes locais isolados e não participa do fluxo operacional padrão.
 
 ## Verificações usuais
 

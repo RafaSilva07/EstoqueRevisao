@@ -5,6 +5,7 @@ import { OperationalLotFields } from './OperationalLotFields';
 import { emptyLot, OperationalLot } from './operational-lot';
 import { useMovementSubmission } from './useMovementSubmission';
 import { formatDate } from './format';
+import { ProductAutocomplete } from './ProductAutocomplete';
 
 interface EntryItem { key: string; product: Product; lot: OperationalLot; quantity: number }
 
@@ -63,7 +64,7 @@ export function ExternalEntryPage({ onCreated }: { onCreated: (id: string) => vo
     </div></section>
     {adding && <Modal labelledBy="add-product-title" onClose={closeItem}><div className="panel-heading item-list-heading"><h2 id="add-product-title">Adicionar produto</h2><button type="button" className="secondary" onClick={closeItem}>Cancelar</button></div>
       {error && <Notice kind="error">{error}</Notice>}<form className="form-grid" onSubmit={addItem}>
-      <label className="wide">Produto *<select value={productId} onChange={(event) => { setProductId(event.target.value); resetLot(); }} required><option value="">Selecione</option>{products.map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</select></label>
+      <ProductAutocomplete availableProducts={products} initialProduct={product} onChange={(selected) => { setProductId(selected?.id ?? ''); resetLot(); }} />
       {product && <OperationalLotFields key={productId + ':' + lotKey} product={product} value={lot} onChange={setLot} onReady={setLotReady} />}
       <label>Quantidade {product ? '(' + product.defaultUnit + ')' : ''} *<input type="number" inputMode="numeric" min="1" step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} required /></label>
       <div className="form-actions"><button disabled={!product || !lotReady}>Adicionar item</button></div>

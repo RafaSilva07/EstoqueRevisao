@@ -68,8 +68,12 @@ describe('Operações administrativas (HTTP)', () => {
     expect(write).toHaveBeenCalledTimes(1);
   });
   it('preserva a restrição do modo operacional mesmo para ADMIN', async () => {
-    const response = await fetch(url + '/movements/external-entries', { method: 'POST', headers: { 'test-role': 'ADMIN', 'test-sector': 'PRODUCAO' } });
-    expect(response.status).toBe(403);
+    for (const mode of ['REVISAO', 'PRODUCAO', 'EXPEDICAO', 'PCP']) {
+      const response = await fetch(url + '/movements/external-entries', { method: 'POST', headers: { 'test-role': 'ADMIN', 'x-operational-sector': mode } });
+      expect(response.status).toBe(403);
+    }
     expect(write).not.toHaveBeenCalled();
+    const allowed = await fetch(url + '/movements/external-entries', { method: 'POST', headers: { 'test-role': 'ADMIN', 'x-operational-sector': 'ADMIN' } });
+    expect(allowed.ok).toBe(true);
   });
 });

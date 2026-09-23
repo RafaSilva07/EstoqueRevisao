@@ -22,11 +22,11 @@ Todas as entradas, saídas, transferências e distribuições de revisão aceita
 
 O frontend possui login, restauração da sessão pelo cookie HttpOnly e navegação condicionada às permissões.
 
-Usuários `ADMIN` possuem no cabeçalho da aplicação o seletor **Modo operacional**, que alterna entre Revisão, Produção, Expedição e PCP sem exigir outro login. Produção/Expedição abrem o portal restrito de envios; PCP abre sua fila administrativa; Revisão recupera o painel e as rotinas internas. O backend valida a função administrativa e aplica as restrições do setor escolhido em cada requisição, mantendo o administrador real como responsável e autor na auditoria.
+Usuários `ADMIN` possuem no cabeçalho da aplicação o seletor **Modo operacional**, com as opções Admin, Revisão, Produção, Expedição e PCP. O login administrativo inicia em **Admin**, modo completo que usa a Revisão como contexto físico e reúne as ações exclusivas de administração. Ao selecionar **Revisão**, a interface e a API passam a oferecer somente solicitações, revisão, transferência e consultas do perfil Revisão operacional; gestão de usuários, entrada/saída direta, estorno e escrita em cadastros deixam de estar disponíveis. Produção, Expedição e PCP preservam seus próprios escopos. A identidade real do administrador continua registrada no histórico e na auditoria.
 
 ## Gerenciar usuários (ADMIN)
 
-O menu **Administração > Gerenciar usuários** no desktop e **Menu > Gerenciar usuários** no celular permite buscar/listar com paginação, ver detalhes, criar, editar e excluir por inativação. Nos modos Produção/Expedição, o administrador também dispõe do botão **Gerenciar usuários** acima dos envios.
+No modo **Admin**, o menu **Menu > Gerenciar usuários** permite buscar/listar com paginação, ver detalhes, criar, editar e excluir por inativação. A gestão de usuários não aparece nem é autorizada nos modos operacionais Revisão, Produção, Expedição e PCP.
 
 O formulário reutiliza login, senha, setor e perfis existentes. Edição permite trocar a senha e reativar contas. Exclusão exige confirmação, bloqueia o acesso e preserva o histórico. Alterações encerram as sessões da conta; editar a própria conta retorna ao login. A API protege o acesso administrativo, a própria conta e o último administrador ativo. Regras em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#administração-de-usuários).
 
@@ -216,6 +216,8 @@ Antes dos indicadores, a Home destaca envios aguardando recebimento e decisões 
 ## Experiência de uso
 
 Seletores de lote/posição nos envios, saídas, transferências e revisões usam uma lista contida no formulário, com quebra de linha e rolagem vertical. Textos usam `prod:` e `val:` para fabricação e validade, preservando as datas completas e o saldo. A seleção funciona por toque, mouse e teclado; Escape fecha a lista antes de fechar o modal.
+
+Todos os modais de **Adicionar produto** reutilizam o seletor pesquisável por código e descrição usado nos envios externos. Ao abrir um dos campos, a lista mostra os produtos disponíveis e é filtrada enquanto o operador digita; escolher por código preenche a descrição e escolher por descrição preenche o código. Entrada mostra produtos ativos do cadastro, enquanto saída, transferência e revisão limitam a lista aos produtos com posição disponível na origem correspondente.
 
 Envios, entradas, saídas, transferências e revisões apresentam a lista e o botão **Adicionar produto**. Os campos ficam em modal central com rolagem interna: salvar inclui o item e fecha; cancelar descarta somente o rascunho. Na revisão, quantidade, código resultante e distribuições são preenchidos antes de salvar, com edição posterior do item ainda não confirmado. Observação geral e confirmação final permanecem na operação. Reutilizados os campos e validações existentes, sem alteração de saldos ou regras transacionais. Campos com texto de ajuda são alinhados pelo topo para não deslocar os controles vizinhos.
 

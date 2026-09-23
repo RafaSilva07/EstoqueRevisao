@@ -5,6 +5,7 @@ import { EmptyState, LoadingState, Modal, Notice, OperationGuide, PageHeader } f
 import { formatDate } from './format';
 import { calculateDistribution, isIntegerQuantity, quantityUnits } from './review';
 import { useMovementSubmission } from './useMovementSubmission';
+import { ProductAutocomplete } from './ProductAutocomplete';
 
 export interface ReviewPrefill {
   productId: string;
@@ -83,6 +84,7 @@ export function ReviewPage({
     return [...unique.values()].sort((left, right) => left.name.localeCompare(right.name));
   }, [positions]);
   const productPositions = positions.filter((position) => position.productId === productId);
+  const selectedProduct = products.find((product) => product.id === productId);
   const selectedPosition = positions.find(
     (position) => position.productId === productId && position.batchId === batchId,
   );
@@ -223,12 +225,7 @@ export function ReviewPage({
       <div className="panel-heading item-list-heading"><h2 id="review-item-title">{draft && items.some((item) => item.key === draft.key) ? 'Editar produto' : 'Adicionar produto'}</h2><button type="button" className="secondary" onClick={closeItem}>Cancelar</button></div>
       {error && <Notice kind="error">{error}</Notice>}
       {!draft ? <>      {positions.length === 0 ? <EmptyState title="Nenhum saldo em Revisar" description="Registre uma entrada em Revisar antes de iniciar esta operacao." /> : <div className="form-grid">
-        <label><span>Produto <span className="required">*</span></span>
-          <select value={productId} onChange={(event) => { setProductId(event.target.value); setBatchId(''); }}>
-            <option value="">Selecione</option>
-            {products.map((product) => <option key={product.id} value={product.id}>{product.code} - {product.name}</option>)}
-          </select>
-        </label>
+        <ProductAutocomplete availableProducts={products} initialProduct={selectedProduct} onChange={(selected) => { setProductId(selected?.id ?? ''); setBatchId(''); }} />
         <PositionSelect label="Lote *" value={batchId} onChange={setBatchId} disabled={!productId}
           options={productPositions.map((position) => ({ value: position.batchId, label: `Lote: ${position.batch.code} · val: ${formatDate(position.batch.expirationDate)} · saldo: ${position.quantity}` }))} />
         {selectedPosition && <div className="available-balance" role="status"><span>Disponivel em Revisar</span><strong>{selectedPosition.quantity} {selectedPosition.product.defaultUnit}</strong><small>Validade {formatDate(selectedPosition.batch.expirationDate)}</small></div>}

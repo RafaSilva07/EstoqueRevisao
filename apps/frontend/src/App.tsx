@@ -14,11 +14,12 @@ import { Login } from './Login';
 import { ShipmentsPage } from './ShipmentsPage';
 import { NavigationTrail, SectionMenu } from './Navigation';
 import { homeActions, Page, parentPage } from './navigation-model';
-import { Sector, sectorLabel } from './shipments';
+import { Sector } from './shipments';
 import { UsersPage } from './UsersPage';
 import { ProductForm } from './ProductForm';
 import { PcpPage } from './PcpPage';
 import { MovementDetailModal } from './MovementDetailModal';
+import { OperationalMode, operationalModeLabel, userForOperationalMode } from './operational-mode';
 
 type Navigate = (page: Page) => void;
 const messageFrom = (error: unknown) => error instanceof Error ? error.message : 'Ocorreu um erro inesperado.';
@@ -130,15 +131,15 @@ function RequiredField({ label, children }: { label: string; children: ReactNode
 function FormActions({ busy, saveLabel, onCancel }: { busy: boolean; saveLabel: string; onCancel: () => void }) { return <div className="form-actions"><button disabled={busy}>{busy ? 'Salvando...' : saveLabel}</button><button type="button" className="secondary" onClick={onCancel} disabled={busy}>Cancelar</button></div>; }
 function Status({ active }: { active: boolean }) { return <span className={`badge ${active ? 'active' : ''}`}>{active ? 'Ativo' : 'Inativo'}</span>; }
 function NavButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) { return <button className={active ? 'current' : ''} onClick={onClick} aria-current={active ? 'page' : undefined}>{children}</button>; }
-export function OperationalSectorSwitcher({ value, onChange }: { value: Sector; onChange: (sector: Sector) => void }) {
-  return <label className="sector-switcher"><span>Modo operacional</span><select aria-label="Modo operacional" value={value} onChange={(event) => onChange(event.target.value as Sector)}>
-    <option value="REVISAO">Revisão</option><option value="PRODUCAO">Produção</option><option value="EXPEDICAO">Expedição</option><option value="PCP">PCP</option>
+export function OperationalSectorSwitcher({ value, onChange }: { value: OperationalMode; onChange: (mode: OperationalMode) => void }) {
+  return <label className="sector-switcher"><span>Modo operacional</span><select aria-label="Modo operacional" value={value} onChange={(event) => onChange(event.target.value as OperationalMode)}>
+    <option value="ADMIN">Admin</option><option value="REVISAO">Revisão</option><option value="PRODUCAO">Produção</option><option value="EXPEDICAO">Expedição</option><option value="PCP">PCP</option>
   </select></label>;
 }
 
 export function App() {
   const [user, setUser] = useState<UserSession | null>(null);
-  const [operationalSector, setOperationalSector] = useState<Sector>('REVISAO');
+  const [operationalMode, setOperationalMode] = useState<OperationalMode>('REVISAO');
   const [checking, setChecking] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
   const [page, setPage] = useState<Page>('home');
@@ -149,19 +150,23 @@ export function App() {
   useEffect(() => { void api.refresh().then((result) => {
     const authenticated = result?.user ?? null;
     const sector = authenticated?.sector ?? 'REVISAO';
-    setUser(authenticated); setOperationalSector(sector);
-    api.setOperationalSector(authenticated?.roles.includes('ADMIN') ? sector : null);
+    const mode = authenticated?.roles.includes('ADMIN') ? 'ADMIN' : sector;
+    setUser(authenticated); setOperationalMode(mode);
+    api.setOperationalSector(authenticated?.roles.includes('ADMIN') ? mode : null);
   }).finally(() => setChecking(false)); }, []);
   if (checking) return <main className="splash"><span className="spinner" /><p>Preparando seu ambiente...</p></main>;
   if (!user) return <Login onAuthenticated={(authenticated) => {
     const sector = authenticated.sector ?? 'REVISAO';
-    setUser(authenticated); setOperationalSector(sector); setPage('home');
-    api.setOperationalSector(authenticated.roles.includes('ADMIN') ? sector : null);
+    const mode = authenticated.roles.includes('ADMIN') ? 'ADMIN' : sector;
+    setUser(authenticated); setOperationalMode(mode); setPage('home');
+    api.setOperationalSector(authenticated.roles.includes('ADMIN') ? mode : null);
   }} />;
   const isAdmin = user.roles.includes('ADMIN');
-  const activeSector = isAdmin ? operationalSector : user.sector ?? 'REVISAO';
-  const activeUser: UserSession = activeSector === user.sector ? user : { ...user, sector: activeSector };
-  const can = (permission: string) => user.permissions.includes(permission);
+  const activeMode: OperationalMode = isAdmin ? operationalMode : user.sector ?? 'REVISAO';
+  const activeUser = userForOperationalMode(user, activeMode);
+  const activeSector: Sector = activeUser.sector ?? 'REVISAO';
+  const adminMode = isAdmin && activeMode === 'ADMIN';
+  const can = (permission: string) => activeUser.permissions.includes(permission);
   const navigate: Navigate = (destination) => {
     if (destination !== 'new-transfer') setTransferPrefill(undefined);
     if (destination !== 'new-review') setReviewPrefill(undefined);
@@ -192,12 +197,12 @@ export function App() {
     setLoggingOut(true);
     void api.logout().finally(() => { setUser(null); setLoggingOut(false); });
   };
-  const switchSector = (sector: Sector) => {
-    api.setOperationalSector(sector); setOperationalSector(sector); setPage('home');
+  const switchSector = (mode: OperationalMode) => {
+    api.setOperationalSector(mode); setOperationalMode(mode); setPage('home');
     setSelectedMovementId(undefined); setMovementSuccess(undefined); setTransferPrefill(undefined); setReviewPrefill(undefined);
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
-  const switcher = isAdmin && <OperationalSectorSwitcher value={activeSector} onChange={switchSector} />;
+  const switcher = isAdmin && <OperationalSectorSwitcher value={activeMode} onChange={switchSector} />;
   const areas = homeActions(activeUser);
   const menus: Page[] = ['home', 'operations', 'requests', 'stock-menu', 'history-menu', 'pcp-menu', 'more'];
   const reviewSector = activeSector === 'REVISAO';
@@ -208,23 +213,23 @@ export function App() {
     else navigate(destination);
   };
   return <div className="app-shell"><a className="skip-link" href="#main-content">Ir para o conteúdo</a>
-    <header className="topbar"><button className="brand" onClick={() => go('home')} aria-label="Ir para o início"><span>ER</span><strong>Estoque Revisão</strong></button><div className="user-area">{switcher}<span className="user-name">{user.username} · {sectorLabel[activeSector]}</span><button className="secondary desktop-logout" onClick={logout} disabled={loggingOut}>Sair</button></div></header>
-    <aside className="sidebar"><nav aria-label="Navegação principal"><NavButton active={page === 'home'} onClick={() => go('home')}>Início</NavButton>{areas.map((area) => <NavButton key={area.page} active={page === area.page || parentPage(page, activeUser) === area.page} onClick={() => go(area.page)}>{area.title}</NavButton>)}<NavButton active={page === 'more' || page === 'users'} onClick={() => go('more')}>Menu e conta</NavButton></nav><p className="sidebar-note">{sectorLabel[activeSector]}</p></aside>
+    <header className="topbar"><button className="brand" onClick={() => go('home')} aria-label="Ir para o início"><span>ER</span><strong>Estoque Revisão</strong></button><div className="user-area">{switcher}<span className="user-name">{user.username} · {operationalModeLabel[activeMode]}</span><button className="secondary desktop-logout" onClick={logout} disabled={loggingOut}>Sair</button></div></header>
+    <aside className="sidebar"><nav aria-label="Navegação principal"><NavButton active={page === 'home'} onClick={() => go('home')}>Início</NavButton>{areas.map((area) => <NavButton key={area.page} active={page === area.page || parentPage(page, activeUser) === area.page} onClick={() => go(area.page)}>{area.title}</NavButton>)}<NavButton active={page === 'more' || page === 'users'} onClick={() => go('more')}>Menu e conta</NavButton></nav><p className="sidebar-note">{operationalModeLabel[activeMode]}</p></aside>
     <main className="workspace" id="main-content" tabIndex={-1}>
       <NavigationTrail page={page} user={activeUser} navigate={go} />
       {menus.includes(page) && <SectionMenu page={page} user={activeUser} navigate={go} />}
-      {page === 'more' && <section className="surface account-card"><h2>{user.username}</h2><p className="muted">{sectorLabel[activeSector]}</p><button className="secondary" onClick={logout} disabled={loggingOut}>{loggingOut ? 'Saindo…' : 'Sair do sistema'}</button></section>}
-      {page === 'users' && isAdmin && <UsersPage currentUserId={user.id} onOwnUpdate={logout} />}
+      {page === 'more' && <section className="surface account-card"><h2>{user.username}</h2><p className="muted">{operationalModeLabel[activeMode]}</p><button className="secondary" onClick={logout} disabled={loggingOut}>{loggingOut ? 'Saindo…' : 'Sair do sistema'}</button></section>}
+      {page === 'users' && adminMode && <UsersPage currentUserId={user.id} onOwnUpdate={logout} />}
       {activeSector !== 'PCP' && ['shipments', 'shipment-new', 'shipment-sent', 'shipment-history'].includes(page) && can('shipments.read') && <ShipmentsPage key={`${activeSector}:${page}`} user={activeUser} initialView={page === 'shipment-history' ? 'history' : page === 'shipment-sent' ? 'sent' : 'pending'} initialCreating={page === 'shipment-new'} showCreateAction={false} />}
       {activeSector === 'PCP' && ['pcp', 'pcp-all', 'pcp-executed'].includes(page) && can('pcp.movements.read') && <PcpPage key={page} initialStatus={page === 'pcp-all' ? '' : page === 'pcp-executed' ? 'EXECUTADA' : 'PENDENTE'} />}
       {reviewSector && <>
-        {page === 'new-entry' && isAdmin && can('movements.create') && <ExternalEntryPage onCreated={(id) => completeMovement(id, 'Entrada registrada com sucesso.')} />}
-        {page === 'new-exit' && isAdmin && can('movements.create') && <ExternalExitPage onCreated={(id) => completeMovement(id, 'Saida registrada com sucesso.')} />}
+        {page === 'new-entry' && adminMode && can('movements.create') && <ExternalEntryPage onCreated={(id) => completeMovement(id, 'Entrada registrada com sucesso.')} />}
+        {page === 'new-exit' && adminMode && can('movements.create') && <ExternalExitPage onCreated={(id) => completeMovement(id, 'Saida registrada com sucesso.')} />}
         {page === 'new-transfer' && can('movements.create') && <InternalTransferPage prefill={transferPrefill} onCreated={(id) => completeMovement(id, 'Transferencia realizada com sucesso.')} />}
         {page === 'new-review' && can('movements.create') && <ReviewPage prefill={reviewPrefill} onCreated={(id) => completeMovement(id, 'Revisao realizada com sucesso.')} />}
-        {page === 'movements' && can('movements.read') && <MovementsPage initialId={selectedMovementId} success={movementSuccess} canCancel={isAdmin && can('movements.cancel')} />}
-        {page === 'products' && can('products.read') && <ProductsPage canManageStatus={isAdmin} canWrite={can('products.create') || can('products.update')} />}
-        {page === 'stocks' && can('stocks.read') && <StocksPage canManageStatus={isAdmin} canWrite={can('stocks.create') || can('stocks.update')} />}
+        {page === 'movements' && can('movements.read') && <MovementsPage initialId={selectedMovementId} success={movementSuccess} canCancel={adminMode && can('movements.cancel')} />}
+        {page === 'products' && can('products.read') && <ProductsPage canManageStatus={adminMode} canWrite={can('products.create') || can('products.update')} />}
+        {page === 'stocks' && can('stocks.read') && <StocksPage canManageStatus={adminMode} canWrite={can('stocks.create') || can('stocks.update')} />}
         {page === 'inventory' && can('stock-positions.read') && <InventoryPage />}
         {page === 'reports' && can('movements.read') && <ReportsPage onReviews={() => navigate('reports-reviews')} onStock={can('stock-positions.read') ? () => navigate('reports-stock') : undefined} />}
         {page === 'reports-reviews' && can('movements.read') && <ReviewReportsPage onMovements={() => navigate('reports')} onStock={can('stock-positions.read') ? () => navigate('reports-stock') : undefined} />}

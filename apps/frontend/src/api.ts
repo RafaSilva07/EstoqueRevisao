@@ -6,6 +6,8 @@ export interface UserSession {
   permissions: string[];
 }
 
+export type OperationalMode = NonNullable<UserSession['sector']> | 'ADMIN';
+
 export interface AuthenticationResult {
   accessToken: string;
   user: UserSession;
@@ -270,9 +272,9 @@ const apiUrl = typeof configuredUrl === 'string'
 
 export class ApiClient {
   private accessToken: string | null = null;
-  private operationalSector: UserSession['sector'] | null = null;
+  private operationalSector: OperationalMode | null = null;
 
-  setOperationalSector(sector: UserSession['sector'] | null): void {
+  setOperationalSector(sector: OperationalMode | null): void {
     this.operationalSector = sector;
   }
 

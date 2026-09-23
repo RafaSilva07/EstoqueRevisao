@@ -1,25 +1,32 @@
 import { KeyboardEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { api, Paginated, Product } from './api';
+import { filterAvailableProducts, ProductSearchField } from './product-search';
 
-type SearchField = 'code' | 'name';
+type SearchField = ProductSearchField;
 
 export function ProductAutocomplete({
   onChange,
   defaultUnit,
+  availableProducts,
+  initialProduct,
 }: {
   onChange: (product: Product | null) => void;
   defaultUnit?: 'UN';
+  availableProducts?: Product[];
+  initialProduct?: Product | null;
 }) {
-  const [code, setCode] = useState('');
-  const [name, setName] = useState('');
+  const [code, setCode] = useState(initialProduct?.code ?? '');
+  const [name, setName] = useState(initialProduct?.name ?? '');
   const [field, setField] = useState<SearchField | null>(null);
   const [suggestions, setSuggestions] = useState<Product[]>([]);
   const [highlighted, setHighlighted] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const requestVersion = useRef(0);
+  const onChangeRef = useRef(onChange);
   const listId = useId();
   const query = field === 'code' ? code : name;
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
   const select = useCallback((product: Product) => {
     setCode(product.code);
@@ -27,14 +34,31 @@ export function ProductAutocomplete({
     setField(null);
     setSuggestions([]);
     setError('');
-    onChange(product);
-  }, [onChange]);
+    onChangeRef.current(product);
+  }, []);
 
   useEffect(() => {
     if (!field) return;
     const version = ++requestVersion.current;
     const timer = window.setTimeout(() => {
       setLoading(true);
+      if (availableProducts) {
+        const normalized = query.trim().toLocaleLowerCase('pt-BR');
+        const matches = filterAvailableProducts(availableProducts, field, query);
+        if (version !== requestVersion.current) return;
+        setSuggestions(matches);
+        setHighlighted(0);
+        setError('');
+        setLoading(false);
+        if (field === 'code') {
+          const exact = matches.find((product) => product.code.toLocaleLowerCase('pt-BR') === normalized);
+          if (exact) select(exact);
+        } else {
+          const exact = matches.filter((product) => product.name.toLocaleLowerCase('pt-BR') === normalized);
+          if (exact.length === 1) select(exact[0]);
+        }
+        return;
+      }
       const params = new URLSearchParams({ limit: '20', active: 'true', searchField: field });
       if (defaultUnit) params.set('defaultUnit', defaultUnit);
       if (query.trim()) params.set('search', query.trim());
@@ -61,7 +85,7 @@ export function ProductAutocomplete({
         .finally(() => { if (version === requestVersion.current) setLoading(false); });
     }, 220);
     return () => { window.clearTimeout(timer); requestVersion.current += 1; };
-  }, [field, query, select, defaultUnit]);
+  }, [availableProducts, field, query, select, defaultUnit]);
 
   function edit(nextField: SearchField, value: string) {
     if (nextField === 'code') {
@@ -117,13 +141,13 @@ export function ProductAutocomplete({
     <p className="muted">Digite no código ou na descrição e escolha uma sugestão. Ao selecionar, o outro campo será preenchido automaticamente.</p>
     <div className="form-grid">
       <label>Código *<span className="autocomplete-control">
-        <input value={code} autoComplete="off" aria-autocomplete="list" aria-controls={listId} aria-expanded={field === 'code'} role="combobox"
+        <input value={code} required autoComplete="off" aria-autocomplete="list" aria-controls={listId} aria-expanded={field === 'code'} role="combobox"
           onFocus={() => setField('code')} onChange={(event) => edit('code', event.target.value)} onKeyDown={keyDown} placeholder="Digite ou abra a lista" />
         <button type="button" className="autocomplete-toggle" aria-label="Abrir lista de códigos" onClick={() => browse('code')}>⌄</button>
         {field === 'code' && list}
       </span></label>
       <label>Descrição *<span className="autocomplete-control">
-        <input value={name} autoComplete="off" aria-autocomplete="list" aria-controls={listId} aria-expanded={field === 'name'} role="combobox"
+        <input value={name} required autoComplete="off" aria-autocomplete="list" aria-controls={listId} aria-expanded={field === 'name'} role="combobox"
           onFocus={() => setField('name')} onChange={(event) => edit('name', event.target.value)} onKeyDown={keyDown} placeholder="Digite o nome do produto" />
         <button type="button" className="autocomplete-toggle" aria-label="Abrir lista de descrições" onClick={() => browse('name')}>⌄</button>
         {field === 'name' && list}

@@ -15,13 +15,12 @@ A fonte principal para desenvolvimento está em [`documentos/README.md`](./docum
 
 ## Execução local
 
-Pré-requisitos: Node.js 22+, npm e Docker Desktop com Docker Compose.
+Pré-requisitos: Node.js 22+, npm e um projeto Supabase ativo.
 
 ```powershell
 Copy-Item .env.example .env
 npm install
-npm run docker:up
-npm run db:migration:run
+npm run db:setup
 npm run db:user:create
 ```
 
@@ -36,7 +35,7 @@ npm run dev:frontend
 - API: `http://localhost:3000/api/v1`
 - Health check: `http://localhost:3000/api/v1/health`
 
-O PostgreSQL roda em container. `npm run docker:down` remove container e rede, mas preserva o volume e os dados. Execute migrations após receber alterações de schema; um simples reinício do mesmo ambiente não exige reaplicar migrations já registradas.
+Backend, migrations e criação de usuário usam sempre `DATABASE_URL`, configurada com a URL **Session pooler** do Supabase e `DATABASE_SSL=true`. Execute migrations após receber alterações de schema; um simples reinício não reaplica migrations já registradas. O Docker permanece apenas como recurso opcional para bancos descartáveis de testes.
 
 ## Verificações
 

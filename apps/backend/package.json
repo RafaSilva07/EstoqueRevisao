@@ -8,9 +8,9 @@
     "start:dev": "nest start --watch",
     "test": "jest --runInBand --passWithNoTests",
     "test:watch": "jest --watch",
-    "migration:run": "typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts",
+    "migration:run": "node scripts/run-typeorm-with-retry.cjs migration:run -d src/database/data-source.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/database/data-source.ts",
-    "migration:show": "typeorm-ts-node-commonjs migration:show -d src/database/data-source.ts",
+    "migration:show": "node scripts/run-typeorm-with-retry.cjs migration:show -d src/database/data-source.ts",
     "user:create": "ts-node src/database/scripts/create-user.ts"
   },
   "dependencies": {

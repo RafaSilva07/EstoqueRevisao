@@ -14,6 +14,18 @@ interface ErrorPayload {
   details?: unknown;
 }
 
+const DATABASE_CONNECTION_ERROR_CODES = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ETIMEDOUT',
+  '57P01',
+  '57P02',
+  '57P03',
+  '53300',
+]);
+
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   constructor(private readonly logger: AppLogger) {
@@ -24,9 +36,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const http = host.switchToHttp();
     const request = http.getRequest<Request>();
     const response = http.getResponse<Response>();
+    const databaseUnavailable = !(exception instanceof HttpException)
+      && this.isDatabaseUnavailable(exception);
     const status = exception instanceof HttpException
       ? exception.getStatus()
-      : HttpStatus.INTERNAL_SERVER_ERROR;
+      : databaseUnavailable
+        ? HttpStatus.SERVICE_UNAVAILABLE
+        : HttpStatus.INTERNAL_SERVER_ERROR;
     const error = this.toErrorPayload(exception, status);
 
     if (status >= 500) {
@@ -50,6 +66,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
   private toErrorPayload(exception: unknown, status: number): ErrorPayload {
     if (!(exception instanceof HttpException)) {
+      if (status === 503) {
+        return {
+          code: 'DATABASE_UNAVAILABLE',
+          message: 'O banco de dados esta temporariamente indisponivel. Tente novamente em instantes.',
+        };
+      }
       return {
         code: 'INTERNAL_ERROR',
         message: 'Ocorreu um erro interno inesperado.',
@@ -87,5 +109,33 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       503: 'SERVICE_UNAVAILABLE',
     };
     return codes[status] ?? 'HTTP_ERROR';
+  }
+
+  private isDatabaseUnavailable(exception: unknown): boolean {
+    const pending: unknown[] = [exception];
+    const visited = new Set<object>();
+
+    while (pending.length > 0) {
+      const current = pending.shift();
+      if (!current || typeof current !== 'object' || visited.has(current)) continue;
+      visited.add(current);
+
+      const candidate = current as {
+        code?: unknown;
+        cause?: unknown;
+        driverError?: unknown;
+        originalError?: unknown;
+        errors?: unknown;
+      };
+      if (typeof candidate.code === 'string'
+        && (DATABASE_CONNECTION_ERROR_CODES.has(candidate.code) || candidate.code.startsWith('08'))) {
+        return true;
+      }
+
+      pending.push(candidate.cause, candidate.driverError, candidate.originalError);
+      if (Array.isArray(candidate.errors)) pending.push(...candidate.errors as unknown[]);
+    }
+
+    return false;
   }
 }

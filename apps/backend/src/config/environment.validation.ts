@@ -8,6 +8,7 @@ import {
   IsUrl,
   IsOptional,
   IsIn,
+  IsIP,
   Min,
   MinLength,
   validateSync,
@@ -46,6 +47,10 @@ export class EnvironmentVariables {
   @Transform(toBoolean)
   @IsBoolean()
   DATABASE_SSL = false;
+
+  @IsOptional()
+  @IsIP(4)
+  DATABASE_HOST_OVERRIDE?: string;
 
   @IsString()
   @MinLength(32)
@@ -117,6 +122,10 @@ export function validateEnvironment(config: Record<string, unknown>): Environmen
   }
   if (validated.STORAGE_DRIVER === 'supabase' && (!validated.SUPABASE_URL || (!validated.SUPABASE_SECRET_KEY && !validated.SUPABASE_SERVICE_ROLE_KEY))) {
     throw new Error('SUPABASE_URL e SUPABASE_SECRET_KEY são obrigatórias para STORAGE_DRIVER=supabase.');
+  }
+  const databaseHostname = new URL(validated.DATABASE_URL).hostname.toLowerCase();
+  if (databaseHostname.endsWith('.supabase.com') && !validated.DATABASE_SSL) {
+    throw new Error('DATABASE_SSL deve ser true para conexões PostgreSQL do Supabase.');
   }
 
   return validated;

@@ -18,7 +18,7 @@
     "docker:up": "docker compose up -d --wait postgres",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f postgres",
-    "db:setup": "npm run docker:up && npm run db:migration:run",
+    "db:setup": "npm run db:migration:run",
     "lint": "eslint . --max-warnings=0",
     "test": "npm run test --workspaces --if-present",
     "db:migration:run": "npm run migration:run --workspace @estoque-revisao/backend",

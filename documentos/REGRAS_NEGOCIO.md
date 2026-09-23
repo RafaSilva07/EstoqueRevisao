@@ -19,13 +19,13 @@ Este documento consolida o comportamento funcional vigente. Regras históricas s
 - Entrada e saída externas diretas, cancelamento/estorno de qualquer movimentação (inclusive revisão) e ativação/inativação de produtos, conversões e locais exigem `ADMIN`, além das permissões e restrições de setor existentes. Solicitações de envio/recebimento continuam disponíveis aos operadores autorizados.
 - Não há exclusão física de movimentações ou revisões. Administradores utilizam cancelamento com estorno, sujeito às validações já existentes; cadastros utilizam inativação. Vincular `ADMIN` a uma conta concede acesso administrativo mesmo se ela também possuir `REVISAO`.
 
-- Somente contas com perfil `ADMIN` podem consultar, criar, editar e excluir usuários, independentemente do modo operacional selecionado.
+- Somente contas com perfil `ADMIN` no modo `ADMIN` podem consultar, criar, editar e excluir usuários.
 - Login é único sem diferenciar maiúsculas/minúsculas. O cadastro usa setor e perfis já existentes; esta tela não cria perfis ou permissões.
 - Senhas têm entre 8 e 128 caracteres e são persistidas exclusivamente como Argon2id. Na edição, omitir a senha mantém a atual.
 - Excluir significa inativar a conta, encerrar suas sessões e preservar os vínculos com histórico/auditoria. Contas inativas permanecem consultáveis e podem ser reativadas.
 - Alterar uma conta encerra suas sessões anteriores. Ao editar a própria conta, o administrador precisa entrar novamente.
 - Não é permitido inativar a própria conta nem remover seu acesso administrativo. O último administrador ativo é preservado, inclusive sob alterações concorrentes.
-- Administradores pertencem ao setor Revisão e utilizam o modo operacional para atuar nos setores Produção, Expedição e PCP.
+- Administradores pertencem ao setor Revisão e iniciam no modo `ADMIN`, que concentra o acesso completo. Ao selecionar Revisão, Produção, Expedição ou PCP, passam a obedecer exatamente ao escopo operacional do perfil escolhido, sem carregar ações exclusivas de administrador.
 - Alterações e auditoria são atômicas e nunca registram senhas ou hashes.
 
 ## Produtos e conversões
@@ -94,7 +94,7 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 ## Envios entre setores
 
 - Usuários possuem setor `REVISAO`, `PRODUCAO`, `EXPEDICAO` ou `PCP`. O setor atribuído vem da sessão validada no banco, nunca de um campo operacional comum. PCP é um setor administrativo e não participa como origem ou destino de envios de mercadoria.
-- Somente usuários com função `ADMIN` podem alternar temporariamente o modo operacional entre Revisão, Produção, Expedição e PCP. O modo escolhido vale por requisição, aplica todas as restrições do setor selecionado e não altera o setor cadastrado nem a identidade registrada em histórico e auditoria. Cabeçalhos de alternância enviados por não administradores ou com valor inválido são rejeitados.
+- Somente usuários com função `ADMIN` podem alternar temporariamente entre o modo completo `ADMIN` e os modos Revisão, Produção, Expedição e PCP. O modo escolhido vale por requisição, aplica todas as restrições do perfil selecionado e não altera o setor cadastrado nem a identidade registrada em histórico e auditoria. Cabeçalhos de alternância enviados por não administradores ou com valor inválido são rejeitados.
 - Produção/Expedição enviam somente para Revisão e decidem somente recebimentos destinados ao próprio setor. Não acessam operações, saldos ou relatórios internos da Revisão.
 - Revisão envia para Produção/Expedição e decide os envios desses setores. Permissões `shipments.read/create/decide` complementam a validação do setor.
 - Um envio tem vários itens e nasce `AGUARDANDO_RECEBIMENTO`. Os itens não são editáveis depois do envio. Somente o destinatário pode decidir uma única vez: `CONFIRMADO` ou `RECUSADO`; recusa exige motivo de até 1000 caracteres.
