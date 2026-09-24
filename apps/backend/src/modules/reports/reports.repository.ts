@@ -79,8 +79,11 @@ export class ReportsRepository {
       )`, 'reviewDestinations')
       .addSelect('movement.canceledAt', 'canceledAt')
       .addSelect('canceledBy.username', 'canceledBy')
-      .addSelect('movement.cancellationReason', 'cancellationReason')
-      .orderBy('movement.occurredAt', 'DESC')
+      .addSelect('movement.cancellationReason', 'cancellationReason');
+    const movementSortField = query.sort === 'PRODUCT'
+      ? `COALESCE(item.product_snapshot->>'name', product.name)` : 'movement.occurredAt';
+    const movementSortDirection = query.sort === 'OLDEST' || query.sort === 'PRODUCT' ? 'ASC' : 'DESC';
+    rowsBuilder.orderBy(movementSortField, movementSortDirection)
       .addOrderBy('movement.id', 'ASC')
       .addOrderBy('item.id', 'ASC');
     if (paginated) {
@@ -143,8 +146,11 @@ export class ReportsRepository {
       .addSelect('destination.name', 'destination')
       .addSelect('distribution.quantity', 'quantity')
       .addSelect(`COALESCE(item.output_product_snapshot->>'defaultUnit', item.product_snapshot->>'defaultUnit', product.default_unit)`, 'unit')
-      .addSelect('responsible.username', 'responsible')
-      .orderBy('movement.occurredAt', 'DESC')
+      .addSelect('responsible.username', 'responsible');
+    const reviewSortField = query.sort === 'PRODUCT'
+      ? `COALESCE(item.output_product_snapshot->>'name', item.product_snapshot->>'name', product.name)` : 'movement.occurredAt';
+    const reviewSortDirection = query.sort === 'OLDEST' || query.sort === 'PRODUCT' ? 'ASC' : 'DESC';
+    rowsBuilder.orderBy(reviewSortField, reviewSortDirection)
       .addOrderBy('movement.id', 'ASC')
       .addOrderBy(`COALESCE(item.output_product_snapshot->>'name', item.product_snapshot->>'name', product.name)`, 'ASC')
       .addOrderBy('destination.name', 'ASC')
@@ -248,8 +254,9 @@ export class ReportsRepository {
       .setParameters({
         referenceDate,
         expiringWithinDays: query.expiringWithinDays,
-      })
-      .orderBy('batch.expirationDate', 'ASC')
+      });
+    const stockSortField = query.sort === 'PRODUCT' ? 'product.name' : query.sort === 'QUANTITY' ? 'position.quantity' : 'batch.expirationDate';
+    rowsBuilder.orderBy(stockSortField, query.sort === 'QUANTITY' ? 'DESC' : 'ASC')
       .addOrderBy('product.name', 'ASC')
       .addOrderBy('location.name', 'ASC')
       .addOrderBy('position.id', 'ASC');

@@ -32,6 +32,7 @@ export class UpdateUserDto extends PartialType(CreateUserDto, { skipNullProperti
 }
 
 export class UserQueryDto extends PaginationQueryDto {
+  @IsOptional() @IsIn(['NAME','RECENT','OLDEST']) sort?: 'NAME' | 'RECENT' | 'OLDEST' = 'NAME';
   @IsOptional()
   @IsString()
   @MaxLength(100)

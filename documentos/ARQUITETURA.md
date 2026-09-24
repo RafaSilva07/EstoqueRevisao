@@ -78,6 +78,9 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 
 ## Transações, concorrência e integridade
 
+- `MovementPublicCodes1790121600000` adiciona `movements.codigo_movimentacao`, UNIQUE e sequences PostgreSQL `seq_movimentacao_ent/sai/rev`. Um trigger gera o código no INSERT e bloqueia alteração de código/tipo no UPDATE. As sequences pertencem à coluna e são removidas no rollback da migration. Backfill transacional e cronológico. TypeORM mapeia o atributo sem escrita; o repositório recupera o código gerado antes da auditoria. Não se usa `MAX + 1`.
+- `ShipmentLifecyclePublicCodes1790208000000` transfere a identidade pública dos fluxos setoriais para `shipments`: o trigger gera ENT/SAI no INSERT do envio e a movimentação efetivada herda esse valor. `shipments.codigo_movimentacao` é único; movimentos sem envio mantêm índice único parcial. Vários registros técnicos originados pelo mesmo envio podem compartilhar o código da operação. O backfill reutiliza o código já ligado a envios confirmados e gera códigos para pendentes/recusados antigos.
+
 - `synchronize` é desativado; toda evolução do schema ocorre por migration versionada.
 - Operações críticas recebem um único `EntityManager` e confirmam documento, saldo e auditoria juntos.
 - Resolução/criação de lotes usa `OperationalLotsService` dentro do `EntityManager` da movimentação. Locks `FOR NO KEY UPDATE` de produtos são adquiridos em ordem antes dos locks de saldo, compatíveis com os locks de FK usados por revisão/estorno; índice único evita variantes duplicadas. A identidade dos lotes também é protegida por trigger contra edição.
@@ -85,7 +88,7 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 - Adição de saldo usa UPSERT atômico.
 - Remoção usa `UPDATE` condicionado a `quantity >= requested`.
 - Transferências e distribuições bloqueiam posições com `pessimistic_write` em ordem determinística.
-- `ShipmentsService` reutiliza lotes, saldo, repositório de movimentações e auditoria com o mesmo manager. Criação serializa retries via advisory lock transacional da chave; decisão bloqueia a linha do envio. Triggers impedem edição/exclusão de envios e itens. Retorno da reserva usa a mesma operação de crédito atômico, sem exigir produto ainda ativo.
+- `ShipmentsService` reutiliza lotes, saldo, repositório de movimentações e auditoria com o mesmo manager. Criação serializa retries via advisory lock transacional da chave; decisão e cancelamento pelo autor bloqueiam a mesma linha do envio, de modo que apenas uma transição concorrente prevalece. Triggers impedem edição/exclusão de envios e itens. Retorno da reserva usa a mesma operação de crédito atômico, sem exigir produto ainda ativo.
 - Fotos são gravadas antes da transação do envio pelo `StorageService`; qualquer rejeição, conflito ou rollback executa exclusão compensatória. O item imutável recebe a chave somente na criação. Uma interrupção abrupta entre storage e compensação pode deixar objeto órfão e deverá ser tratada por limpeza operacional futura.
 - Cancelamento bloqueia primeiro a movimentação original e depois as posições necessárias.
 - Revisões e estornos bloqueiam o conjunto completo de posições em ordem de produto/lote/local antes das alterações, inclusive quando várias embalagens convergem no mesmo código unitário. O serviço central de saldos mantém os débitos condicionais e créditos atômicos.

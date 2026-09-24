@@ -18,9 +18,10 @@ import { MovementType } from '../movements/domain/movement-type.enum';
 import { MovementStatus } from '../movements/domain/movement-status.enum';
 import { PaginatedResult, paginate } from '../../shared/pagination/paginated-result.interface';
 import { AvailableShipmentPositionsQueryDto, CompleteSeparationDto, CreateShipmentDto, ExpirationConfirmationDto, SeparationDraftDto, ShipmentQueryDto } from './shipment.dto';
-import { Sector, ShipmentEntity, ShipmentItemEntity, ShipmentSeparationDraftEntity, ShipmentStatus } from './shipment.entity';
+import { Sector, ShipmentEntity, ShipmentItemEntity, ShipmentSeparationDraftEntity } from './shipment.entity';
 import { StoredImage, StorageService, UploadedImage } from '../storage/storage.service';
 import { SettingsService } from '../settings/settings.service';
+import { AuditLogEntity } from '../audit/entities/audit-log.entity';
 
 @Injectable()
 export class ShipmentsService {
@@ -36,6 +37,7 @@ export class ShipmentsService {
 
   private details(manager = this.dataSource.manager): SelectQueryBuilder<ShipmentEntity> {
     return manager.getRepository(ShipmentEntity).createQueryBuilder('shipment')
+      .leftJoinAndMapMany('shipment.movements', MovementEntity, 'linkedMovement', 'linkedMovement.shipmentId = shipment.id')
       .innerJoinAndSelect('shipment.createdBy', 'creator')
       .leftJoinAndSelect('shipment.decidedBy', 'decider')
       .leftJoinAndSelect('shipment.receivedBy', 'receiver')
@@ -64,8 +66,12 @@ export class ShipmentsService {
     if (query.view === 'open') builder.andWhere("shipment.status IN ('AGUARDANDO_RECEBIMENTO','EM_SEPARACAO')");
     if (query.view === 'sent' || query.view === 'updates') builder.andWhere('shipment.createdById = :userId', { userId: user.id });
     if (query.view === 'history' || query.view === 'updates') builder.andWhere("shipment.status NOT IN ('AGUARDANDO_RECEBIMENTO','EM_SEPARACAO')");
+    if (query.codigoMovimentacao) builder.andWhere('shipment.codigoMovimentacao = :publicCode', { publicCode: query.codigoMovimentacao.trim().toUpperCase() });
     if (query.status) builder.andWhere('shipment.status = :status', { status: query.status });
-    const [items, total] = await builder.orderBy(query.view === 'updates' ? 'shipment.decidedAt' : 'shipment.createdAt','DESC').addOrderBy('shipment.id','DESC')
+    const dateField = query.view === 'updates' ? 'shipment.decidedAt' : 'shipment.createdAt';
+    const primary = query.sort === 'STATUS' ? 'shipment.status' : dateField;
+    const direction = query.sort === 'OLDEST' || query.sort === 'STATUS' ? 'ASC' : 'DESC';
+    const [items, total] = await builder.orderBy(primary, direction).addOrderBy(dateField, direction).addOrderBy('shipment.id', direction)
       .skip((query.page - 1) * query.limit).take(query.limit).getManyAndCount();
     return paginate(items, total, query.page, query.limit);
   }
@@ -194,7 +200,7 @@ export class ShipmentsService {
         keys.add(key);
         if (sector === 'REVISAO') await this.stock.removeQuantity(this.stockKey(item), item.quantity, manager);
       }
-      await manager.save(shipment);
+      await this.saveNewShipment(shipment, manager);
       await manager.save(items);
       await this.record(shipment, user.id, 'SHIPMENT_CREATE', manager, metadata, {
         items: items.map((item) => ({ productId: item.productId, batchId: item.batchId, stockLocationId: item.stockLocationId,
@@ -214,7 +220,7 @@ export class ShipmentsService {
     return { data: await this.storage.readImage(item.photoStorageKey), mimeType: item.photoMimeType };
   }
 
-  async decide(id: string, status: Exclude<ShipmentStatus, 'AGUARDANDO_RECEBIMENTO' | 'EM_SEPARACAO'>,
+  async decide(id: string, status: 'CONFIRMADO' | 'RECUSADO',
     reason: string | null, dto: ExpirationConfirmationDto, user: AuthenticatedUser, metadata: AuditRequestMetadata): Promise<ShipmentEntity> {
     const sector = this.sector(user);
     if (status === 'RECUSADO' && (!reason?.trim() || reason.trim().length > 1000)) throw new BadRequestException('Informe o motivo da recusa (até 1000 caracteres).');
@@ -283,6 +289,49 @@ export class ShipmentsService {
     return this.get(id, user);
   }
 
+  async cancel(id: string, reason: string, user: AuthenticatedUser, metadata: AuditRequestMetadata): Promise<ShipmentEntity> {
+    const normalizedReason = reason.trim();
+    if (!normalizedReason || normalizedReason.length > 1000) {
+      throw new BadRequestException('Informe o motivo do cancelamento (até 1000 caracteres).');
+    }
+    await this.dataSource.transaction(async (manager) => {
+      const locked = await manager.getRepository(ShipmentEntity).createQueryBuilder('shipment')
+        .where('shipment.id = :id', { id }).setLock('pessimistic_write').getOne();
+      if (!locked) throw new NotFoundException('Envio não encontrado.');
+      if (locked.createdById !== user.id) throw new ForbiddenException('Somente o autor pode cancelar este envio.');
+      if (locked.status !== 'AGUARDANDO_RECEBIMENTO') {
+        throw new ConflictException('Somente envios ainda não recebidos podem ser cancelados.');
+      }
+      const shipment = await this.details(manager).where('shipment.id = :id', { id }).getOneOrFail();
+      if (shipment.originSector === 'REVISAO' && shipment.shipmentKind !== 'RETORNO_IMEDIATO') {
+        for (const item of this.ordered(shipment.items)) {
+          await this.stock.restoreQuantity(this.stockKey(item), item.quantity, manager);
+        }
+      }
+      const canceledAt = new Date();
+      shipment.status = 'CANCELADO';
+      shipment.decidedById = user.id;
+      shipment.decidedAt = canceledAt;
+      shipment.refusalReason = normalizedReason;
+      await manager.getRepository(ShipmentEntity).update(id, {
+        status: 'CANCELADO', decidedById: user.id, decidedAt: canceledAt, refusalReason: normalizedReason,
+      });
+      await this.record(shipment, user.id, 'SHIPMENT_CANCEL', manager, metadata, {
+        previousStatus: 'AGUARDANDO_RECEBIMENTO', cancellationReason: normalizedReason, canceledAt,
+      });
+    });
+    return this.get(id, user);
+  }
+
+  async auditHistory(id: string, user: AuthenticatedUser): Promise<AuditLogEntity[]> {
+    if (!user.roles.includes('ADMIN')) throw new ForbiddenException('Somente administradores consultam a auditoria.');
+    await this.get(id, user, this.dataSource.manager, false);
+    return this.dataSource.getRepository(AuditLogEntity).createQueryBuilder('audit')
+      .leftJoinAndSelect('audit.user', 'user')
+      .where('audit.entityType = :entityType AND audit.entityId = :id', { entityType: 'SHIPMENT', id })
+      .orderBy('audit.createdAt', 'ASC').addOrderBy('audit.id', 'ASC').getMany();
+  }
+
   async saveSeparationDraft(id: string, dto: SeparationDraftDto, user: AuthenticatedUser,
     metadata: AuditRequestMetadata): Promise<ShipmentEntity> {
     await this.expireDueSeparations();
@@ -349,7 +398,7 @@ export class ShipmentsService {
             createdById: user.id, originLocationId: null, destinationLocationId: shipment.originLocationId!,
             observation: `Retorno imediato do recebimento ${shipment.id}.`, shipmentKind: 'RETORNO_IMEDIATO', sourceShipmentId: shipment.id,
           });
-          await manager.save(derived);
+          await this.saveNewShipment(derived, manager);
           const byId = new Map(shipment.items.map((item) => [item.id, item]));
           let photoIndex = 0;
           const returnedItems = positive.map((input) => {
@@ -399,6 +448,12 @@ export class ShipmentsService {
     });
   }
 
+  private async saveNewShipment(shipment: ShipmentEntity, manager: EntityManager): Promise<void> {
+    await manager.save(shipment);
+    const persisted = await manager.findOneByOrFail(ShipmentEntity, { id: shipment.id });
+    shipment.codigoMovimentacao = persisted.codigoMovimentacao;
+  }
+
   private async expireDueSeparations(): Promise<void> {
     const due = await this.dataSource.getRepository(ShipmentEntity).createQueryBuilder('shipment').select('shipment.id', 'id')
       .where("shipment.status = 'EM_SEPARACAO' AND shipment.separationExpiresAt <= CURRENT_TIMESTAMP")
@@ -409,7 +464,7 @@ export class ShipmentsService {
           .where('shipment.id = :id', { id: row.id }).setLock('pessimistic_write').getOne();
         if (!locked || locked.status !== 'EM_SEPARACAO' || !locked.separationExpiresAt || locked.separationExpiresAt.getTime() > Date.now()) return;
         const shipment = await this.details(manager).where('shipment.id = :id', { id: row.id }).getOneOrFail();
-        await this.finalizeExpiredShipment(shipment, manager, { requestId: `expiration-${shipment.id}`, ipAddress: null, userAgent: null });
+        await this.finalizeExpiredShipment(shipment, manager, { requestId: crypto.randomUUID(), ipAddress: null, userAgent: 'system:shipment-expiration' });
       });
     }
   }
@@ -458,12 +513,12 @@ export class ShipmentsService {
         destinationBatchId: null, quantity: item.quantity, productSnapshot: item.productSnapshot,
       })), manager);
       await this.audit.record({ ...metadata, manager, userId: shipment.decidedById, action: 'SHIPMENT_MOVEMENT_CREATE', entityType: 'MOVEMENT',
-        entityId: movement.id, result: 'SUCCESS', newValues: { shipmentId: shipment.id, type: movement.type, items } });
+        entityId: movement.id, result: 'SUCCESS', newValues: { codigoMovimentacao: movement.codigoMovimentacao, shipmentId: shipment.id, type: movement.type, items } });
     }
   }
   private record(shipment: ShipmentEntity, userId: string, action: string, manager: EntityManager, metadata: AuditRequestMetadata, extra: Record<string, unknown>): ReturnType<AuditService['record']> {
     return this.audit.record({ ...metadata, manager, userId, action, entityType: 'SHIPMENT', entityId: shipment.id, result: 'SUCCESS',
-      newValues: { originSector: shipment.originSector, destinationSector: shipment.destinationSector, observation: shipment.observation, status: shipment.status,
+      newValues: { codigoMovimentacao: shipment.codigoMovimentacao, originSector: shipment.originSector, destinationSector: shipment.destinationSector, observation: shipment.observation, status: shipment.status,
         decidedAt: shipment.decidedAt, refusalReason: shipment.refusalReason, ...extra } });
   }
 }

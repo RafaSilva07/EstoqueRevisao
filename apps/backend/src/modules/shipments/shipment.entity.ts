@@ -5,10 +5,13 @@ import { BatchEntity } from '../batches/entities/batch.entity';
 import { StockLocationEntity } from '../stocks/entities/stock-location.entity';
 
 export type Sector = 'REVISAO' | 'PRODUCAO' | 'EXPEDICAO';
-export type ShipmentStatus = 'AGUARDANDO_RECEBIMENTO' | 'EM_SEPARACAO' | 'CONFIRMADO' | 'RECUSADO';
+export type ShipmentStatus = 'AGUARDANDO_RECEBIMENTO' | 'EM_SEPARACAO' | 'CONFIRMADO' | 'RECUSADO' | 'CANCELADO';
 
 @Entity('shipments')
 export class ShipmentEntity {
+  @Column({ name: 'codigo_movimentacao', type: 'varchar', length: 30, unique: true, insert: false, update: false })
+  codigoMovimentacao!: string;
+
   @PrimaryColumn('uuid') id: string = randomUUID();
   @Column({ name: 'request_key', type: 'uuid' }) requestKey!: string;
   @Column({ name: 'origin_sector', type: 'varchar' }) originSector!: Sector;

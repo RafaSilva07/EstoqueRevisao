@@ -38,10 +38,12 @@ export class StockPositionsRepository {
       });
     }
 
+    const primary = query.sort === 'QUANTITY' ? 'position.quantity' : query.sort === 'EXPIRATION' ? 'batch.expirationDate' : 'product.name';
     return builder
-      .orderBy('product.name', 'ASC')
+      .orderBy(primary, query.sort === 'QUANTITY' ? 'DESC' : 'ASC')
       .addOrderBy('batch.manufacturingDate', 'ASC')
       .addOrderBy('stockLocation.name', 'ASC')
+      .addOrderBy('position.id', 'ASC')
       .skip((query.page - 1) * query.limit)
       .take(query.limit)
       .getManyAndCount();

@@ -40,16 +40,19 @@ export class PcpMovementsRepository {
         INNER JOIN movement_item_distributions pcp_distribution ON pcp_distribution.movement_item_id = pcp_item.id
         WHERE pcp_item.movement_id = movement.id AND pcp_distribution.destination_location_id = :destinationLocationId
       ))`, { destinationLocationId: query.destinationLocationId });
-    if (query.search) builder.andWhere(`EXISTS (
+    if (query.search) builder.andWhere(`(movement.codigo_movimentacao = :publicCode OR EXISTS (
       SELECT 1 FROM movement_items searched_item
       INNER JOIN products searched_product ON searched_product.id IN (searched_item.product_id, searched_item.output_product_id)
       INNER JOIN batches searched_batch ON searched_batch.id IN (searched_item.batch_id, searched_item.destination_batch_id, searched_item.output_batch_id)
       WHERE searched_item.movement_id = movement.id AND (
         searched_product.code ILIKE :search OR searched_product.name ILIKE :search OR searched_batch.code ILIKE :search
-      ))`, { search: `%${query.search}%` });
+      )))`, { search: `%${query.search}%`, publicCode: query.search.trim().toUpperCase() });
 
-    return builder.orderBy('movement.occurredAt', query.sort)
-      .addOrderBy('movement.createdAt', query.sort)
+    const direction = query.sort === 'DESC' ? 'DESC' : 'ASC';
+    const primary = query.sort === 'PCP_STATUS' ? 'movement.pcpExecutionStatus' : 'movement.occurredAt';
+    return builder.orderBy(primary, direction)
+      .addOrderBy('movement.occurredAt', direction)
+      .addOrderBy('movement.id', direction)
       .skip((query.page - 1) * query.limit).take(query.limit).getManyAndCount();
   }
 

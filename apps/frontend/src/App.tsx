@@ -73,7 +73,7 @@ function MovementsPage({ initialId, success, canCancel }: { initialId?: string; 
   const [selected, setSelected] = useState<Movement | null>(null);
   const [locations, setLocations] = useState<StockLocation[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [filters, setFilters] = useState({ type: '', dateFrom: '', dateTo: '', originLocationId: '', destinationLocationId: '', productId: '' });
+  const [filters, setFilters] = useState({ codigoMovimentacao: '', type: '', dateFrom: '', dateTo: '', originLocationId: '', destinationLocationId: '', productId: '', sort: 'RECENT' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [cancellationTarget, setCancellationTarget] = useState<Movement | null>(null);
@@ -114,15 +114,17 @@ function MovementsPage({ initialId, success, canCancel }: { initialId?: string; 
     {success && <Notice kind="success">{success}</Notice>}
     {cancellationSuccess && <Notice kind="success">{cancellationSuccess}</Notice>}
     {error && <Notice kind="error">{error}</Notice>}
-    <FilterPanel count={Object.values(filters).filter(Boolean).length}><div className="filter-grid">
+    <FilterPanel count={Object.entries(filters).filter(([key, value]) => value && !(key === 'sort' && value === 'RECENT')).length}><div className="filter-grid">
+      <label>Código da movimentação<input type="search" maxLength={30} placeholder="ENT-000153" value={filters.codigoMovimentacao} onChange={(event) => setFilters({ ...filters, codigoMovimentacao: event.target.value })} /></label>
       <label>Tipo<select value={filters.type} onChange={(event) => setFilters({ ...filters, type: event.target.value })}><option value="">Todos</option><option value="ENTRADA_EXTERNA">Entrada externa</option><option value="SAIDA_EXTERNA">Saida externa</option><option value="TRANSFERENCIA_INTERNA">Transferencia interna</option><option value="REVISAO">Revisao</option></select></label>
       <label>De<input type="date" value={filters.dateFrom} onChange={(event) => setFilters({ ...filters, dateFrom: event.target.value })} /></label>
       <label>Ate<input type="date" value={filters.dateTo} onChange={(event) => setFilters({ ...filters, dateTo: event.target.value })} /></label>
       <label>Origem<select value={filters.originLocationId} onChange={(event) => setFilters({ ...filters, originLocationId: event.target.value })}><option value="">Todas</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
       <label>Destino<select value={filters.destinationLocationId} onChange={(event) => setFilters({ ...filters, destinationLocationId: event.target.value })}><option value="">Todos</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
       <label>Produto<select value={filters.productId} onChange={(event) => setFilters({ ...filters, productId: event.target.value })}><option value="">Todos</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
+      <label>Ordenar por<select value={filters.sort} onChange={(event) => setFilters({ ...filters, sort: event.target.value })}><option value="RECENT">Mais recentes</option><option value="OLDEST">Mais antigas</option><option value="TYPE">Tipo de movimentação</option></select></label>
     </div></FilterPanel>
-    <section className="surface list-panel">{loading ? <LoadingState label="Carregando historico" /> : movements.length === 0 ? <EmptyState title="Nenhuma movimentacao encontrada" description="Ajuste os filtros ou registre uma operacao de estoque." /> : <div className="responsive-table"><table><thead><tr><th>Data</th><th>Tipo</th><th>Origem</th><th>Destino</th><th>Itens/quantidade</th></tr></thead><tbody>{movements.map((movement) => <tr key={movement.id} className="clickable-row" tabIndex={0} role="button" onClick={() => setSelected(movement)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(movement); } }}><td data-label="Data">{formatDateTime(movement.occurredAt)}</td><td data-label="Tipo">{label(movement.type)}</td><td data-label="Origem">{movement.originLocation.name}</td><td data-label="Destino">{movement.destinationLocation?.name ?? 'Varios destinos'}</td><td data-label="Itens/quantidade">{movement.items.length} / {movement.items.reduce((total, item) => total + item.quantity, 0)}</td></tr>)}</tbody></table></div>}</section>
+    <section className="surface list-panel">{loading ? <LoadingState label="Carregando historico" /> : movements.length === 0 ? <EmptyState title="Nenhuma movimentacao encontrada" description="Ajuste os filtros ou registre uma operacao de estoque." /> : <div className="responsive-table"><table><thead><tr><th>Data</th><th>Tipo</th><th>Origem</th><th>Destino</th><th>Itens/quantidade</th></tr></thead><tbody>{movements.map((movement) => <tr key={movement.id} className="clickable-row" tabIndex={0} role="button" onClick={() => setSelected(movement)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(movement); } }}><td data-label="Data">{formatDateTime(movement.occurredAt)}</td><td data-label="Tipo"><strong>{movement.codigoMovimentacao ?? 'Sem código público'}</strong><br />{label(movement.type)}</td><td data-label="Origem">{movement.originLocation.name}</td><td data-label="Destino">{movement.destinationLocation?.name ?? 'Varios destinos'}</td><td data-label="Itens/quantidade">{movement.items.length} / {movement.items.reduce((total, item) => total + item.quantity, 0)}</td></tr>)}</tbody></table></div>}</section>
     {selected && <MovementDetailModal movementId={selected.id} initialMovement={selected} onClose={() => setSelected(null)}>{(movement) => canCancel && !movement.shipmentId && movement.status === 'EFETIVADA' ? <><div className="divider" /><button className="danger button-wide" onClick={() => setCancellationTarget(movement)}>Cancelar movimentação</button></> : null}</MovementDetailModal>}
     {cancellationTarget && <MovementCancellationDialog movement={cancellationTarget} onClose={() => setCancellationTarget(null)} onCanceled={(canceled) => { setMovements((current) => current.map((movement) => movement.id === canceled.id ? canceled : movement)); setSelected(canceled); setCancellationTarget(null); setCancellationSuccess('Movimentacao cancelada e estoque estornado com sucesso.'); }} />}
   </>;
@@ -146,6 +148,7 @@ export function App() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [page, setPage] = useState<Page>('home');
   const [selectedMovementId, setSelectedMovementId] = useState<string>();
+  const [selectedRecordId, setSelectedRecordId] = useState<string>();
   const [movementSuccess, setMovementSuccess] = useState<string>();
   const [transferPrefill, setTransferPrefill] = useState<TransferPrefill>();
   const [reviewPrefill, setReviewPrefill] = useState<ReviewPrefill>();
@@ -170,6 +173,7 @@ export function App() {
   const adminMode = isAdmin && activeMode === 'ADMIN';
   const can = (permission: string) => activeUser.permissions.includes(permission);
   const navigate: Navigate = (destination) => {
+    setSelectedRecordId(undefined);
     if (destination !== 'new-transfer') setTransferPrefill(undefined);
     if (destination !== 'new-review') setReviewPrefill(undefined);
     if (destination === 'shipment-new' && !can('shipments.create')) return;
@@ -219,13 +223,13 @@ export function App() {
     <aside className="sidebar"><nav aria-label="Navegação principal"><NavButton active={page === 'home'} onClick={() => go('home')}>Início</NavButton>{areas.map((area) => <NavButton key={area.page} active={page === area.page || parentPage(page, activeUser) === area.page} onClick={() => go(area.page)}>{area.title}</NavButton>)}<NavButton active={page === 'more' || page === 'users' || page === 'settings'} onClick={() => go('more')}>Menu e conta</NavButton></nav><p className="sidebar-note">{operationalModeLabel[activeMode]}</p></aside>
     <main className="workspace" id="main-content" tabIndex={-1}>
       <NavigationTrail page={page} user={activeUser} navigate={go} />
-      {page === 'home' && <OperationalHomePage key={activeMode} user={activeUser} navigate={go} />}
+      {page === 'home' && <OperationalHomePage key={activeMode} user={activeUser} navigate={go} onOpenRecord={(destination, id) => { navigate(destination); setSelectedRecordId(id); setSelectedMovementId(id); setMovementSuccess(undefined); }} />}
       {page !== 'home' && menus.includes(page) && <SectionMenu page={page} user={activeUser} navigate={go} />}
       {page === 'more' && <section className="surface account-card"><h2>{user.username}</h2><p className="muted">{operationalModeLabel[activeMode]}</p><button className="secondary" onClick={logout} disabled={loggingOut}>{loggingOut ? 'Saindo…' : 'Sair do sistema'}</button></section>}
       {page === 'users' && adminMode && <UsersPage currentUserId={user.id} onOwnUpdate={logout} />}
       {page === 'settings' && adminMode && <SettingsPage />}
-      {activeSector !== 'PCP' && ['shipments', 'shipment-new', 'shipment-sent', 'shipment-history'].includes(page) && can('shipments.read') && <ShipmentsPage key={`${activeSector}:${page}`} user={activeUser} initialView={page === 'shipment-history' ? 'history' : page === 'shipment-sent' ? 'sent' : 'pending'} initialCreating={page === 'shipment-new'} showCreateAction={false} />}
-      {activeSector === 'PCP' && ['pcp', 'pcp-all', 'pcp-executed'].includes(page) && can('pcp.movements.read') && <PcpPage key={page} initialStatus={page === 'pcp-all' ? '' : page === 'pcp-executed' ? 'EXECUTADA' : 'PENDENTE'} />}
+      {activeSector !== 'PCP' && ['shipments', 'shipment-new', 'shipment-sent', 'shipment-history'].includes(page) && can('shipments.read') && <ShipmentsPage key={`${activeSector}:${page}`} user={activeUser} initialId={selectedRecordId} initialView={page === 'shipment-history' ? 'history' : page === 'shipment-sent' ? 'sent' : 'pending'} initialCreating={page === 'shipment-new'} showCreateAction={false} />}
+      {activeSector === 'PCP' && ['pcp', 'pcp-all', 'pcp-executed'].includes(page) && can('pcp.movements.read') && <PcpPage key={page} initialId={selectedRecordId} initialStatus={page === 'pcp-all' ? '' : page === 'pcp-executed' ? 'EXECUTADA' : 'PENDENTE'} />}
       {reviewSector && <>
         {page === 'new-entry' && adminMode && can('movements.create') && <ExternalEntryPage onCreated={(id) => completeMovement(id, 'Entrada registrada com sucesso.')} />}
         {page === 'new-exit' && adminMode && can('movements.create') && <ExternalExitPage onCreated={(id) => completeMovement(id, 'Saida registrada com sucesso.')} />}

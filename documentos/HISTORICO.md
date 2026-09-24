@@ -1,5 +1,13 @@
 # Histórico de desenvolvimento
 
+## Cancelamento de envio, ordenações e correção de expiração
+
+Migration `ShipmentSenderCancellation1790294400000`: envios aguardando recebimento podem ser cancelados integralmente pelo próprio autor, com motivo, preservação histórica, auditoria e restauração atômica das reservas da Revisão. Consultas filtráveis de movimentações, envios, PCP, usuários e relatórios receberam ordenação. A consolidação automática de separações vencidas passou a gerar UUID válido para a auditoria, corrigindo o erro 500 que bloqueava Home e envios. Ver [relatório da etapa 45](./relatorios/RELATORIO_ETAPA_45_CANCELAMENTO_ENVIOS_ORDENACAO.md).
+
+## Códigos públicos e resumos da Home
+
+Migrations `MovementPublicCodes1790121600000` e `ShipmentLifecyclePublicCodes1790208000000`: códigos ENT/SAI/REV independentes e imutáveis, com o código de envio preservado durante todo o ciclo setorial. A identificação pública não substitui UUIDs nas relações. Home abre resumos de movimentações/envios e encaminha ações aos registros específicos. Ver [relatório da etapa 44](./relatorios/RELATORIO_ETAPA_44_CODIGOS_PUBLICOS_RESUMOS.md).
+
 Este documento registra a evolução relevante sem repetir as regras vigentes. Para implementar, use [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md), [ARQUITETURA.md](./ARQUITETURA.md) e [FUNCIONALIDADES.md](./FUNCIONALIDADES.md).
 
 ## Etapas concluídas

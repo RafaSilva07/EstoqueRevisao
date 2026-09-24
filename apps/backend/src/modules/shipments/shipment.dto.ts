@@ -42,9 +42,15 @@ export class RefuseShipmentDto extends ExpirationConfirmationDto {
   @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
   @IsString() @MinLength(1) @MaxLength(1000) reason!: string;
 }
+export class CancelShipmentDto {
+  @Transform(trimString)
+  @IsString() @MinLength(1) @MaxLength(1000) reason!: string;
+}
 export class ShipmentQueryDto extends PaginationQueryDto {
+  @IsOptional() @IsIn(['RECENT','OLDEST','STATUS']) sort?: 'RECENT' | 'OLDEST' | 'STATUS' = 'RECENT';
+  @IsOptional() @IsString() @MaxLength(30) codigoMovimentacao?: string;
   @IsOptional() @IsIn(['pending','sent','history','updates','open']) view: 'pending' | 'sent' | 'history' | 'updates' | 'open' = 'pending';
-  @IsOptional() @IsIn(['AGUARDANDO_RECEBIMENTO','EM_SEPARACAO','CONFIRMADO','RECUSADO']) status?: ShipmentStatus;
+  @IsOptional() @IsIn(['AGUARDANDO_RECEBIMENTO','EM_SEPARACAO','CONFIRMADO','RECUSADO','CANCELADO']) status?: ShipmentStatus;
 }
 
 export class AvailableShipmentPositionsQueryDto extends PaginationQueryDto {

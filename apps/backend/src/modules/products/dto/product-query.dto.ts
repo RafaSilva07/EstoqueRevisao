@@ -4,6 +4,7 @@ import { PaginationQueryDto } from '../../../shared/pagination/pagination-query.
 import { optionalBoolean, trimString } from '../../../shared/validation/transforms';
 
 export class ProductQueryDto extends PaginationQueryDto {
+  @IsOptional() @IsIn(['NAME','CODE','RECENT']) sort?: 'NAME' | 'CODE' | 'RECENT' = 'NAME';
   @IsOptional()
   @Transform(trimString)
   @IsString()

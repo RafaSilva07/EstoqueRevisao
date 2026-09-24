@@ -13,10 +13,11 @@ interface MovementFilters extends ReportFilters {
   product: string;
   batch: string;
   status: string;
+  sort: string;
 }
 
 const initialFilters: MovementFilters = {
-  dateFrom: '', dateTo: '', type: '', product: '', batch: '', status: '',
+  dateFrom: '', dateTo: '', type: '', product: '', batch: '', status: '', sort: 'RECENT',
 };
 
 const movementLabels: Record<MovementReportItem['type'], string> = {
@@ -35,7 +36,7 @@ export function ReportsPage({ onReviews, onStock }: { onReviews: () => void; onS
   const [error, setError] = useState('');
   const [selectedMovementId, setSelectedMovementId] = useState<string>();
 
-  const activeFilters = useMemo(() => Object.values(applied).filter(Boolean).length, [applied]);
+  const activeFilters = useMemo(() => Object.entries(applied).filter(([key, value]) => value && !(key === 'sort' && value === 'RECENT')).length, [applied]);
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -84,6 +85,7 @@ export function ReportsPage({ onReviews, onStock }: { onReviews: () => void; onS
         <label>Produto<input value={draft.product} onChange={(event) => setDraft({ ...draft, product: event.target.value })} maxLength={200} placeholder="Codigo ou nome" /></label>
         <label>Lote<input value={draft.batch} onChange={(event) => setDraft({ ...draft, batch: event.target.value.toUpperCase() })} maxLength={6} placeholder="Codigo do lote" /></label>
         <label>Status<select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}><option value="">Todos</option><option value="EFETIVADA">Efetivada</option><option value="CANCELADA">Cancelada</option></select></label>
+        <label>Ordenar por<select value={draft.sort} onChange={(event) => setDraft({ ...draft, sort: event.target.value })}><option value="RECENT">Mais recentes</option><option value="OLDEST">Mais antigas</option><option value="PRODUCT">Produto</option></select></label>
         <div className="form-actions report-filter-actions"><button>Aplicar filtros</button></div>
       </form>
     </FilterPanel>

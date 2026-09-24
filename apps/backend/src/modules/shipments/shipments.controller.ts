@@ -1,15 +1,16 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res, StreamableFile, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res, StreamableFile, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AuthenticatedUser } from '../auth/authenticated-user.interface';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { getAuditRequestMetadata } from '../audit/audit-request-metadata';
 import { OperationalLotsService } from '../batches/operational-lots.service';
 import { ResolveOperationalLotDto } from '../batches/dto/operational-lot.dto';
-import { AvailableShipmentPositionsQueryDto, CreateShipmentDto, ExpirationConfirmationDto, RefuseShipmentDto, SeparationDraftDto, ShipmentQueryDto } from './shipment.dto';
+import { AvailableShipmentPositionsQueryDto, CancelShipmentDto, CreateShipmentDto, ExpirationConfirmationDto, RefuseShipmentDto, SeparationDraftDto, ShipmentQueryDto } from './shipment.dto';
 import { ShipmentsService } from './shipments.service';
 import { CreateShipmentMultipartPipe } from './create-shipment-multipart.pipe';
 import { UploadedImage } from '../storage/storage.service';
 import { ShipmentPhotosInterceptor } from './shipment-photos.interceptor';
+import { AdminGuard } from '../users/admin.guard';
 
 @Controller('shipments')
 export class ShipmentsController {
@@ -32,6 +33,10 @@ export class ShipmentsController {
   availablePositions(@Query() query: AvailableShipmentPositionsQueryDto, @Req() req: Request): ReturnType<ShipmentsService['availablePositions']> {
     return this.service.availablePositions(query, req.user as AuthenticatedUser);
   }
+  @Get(':id/audit-history') @RequirePermissions('shipments.read') @UseGuards(AdminGuard)
+  auditHistory(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request): ReturnType<ShipmentsService['auditHistory']> {
+    return this.service.auditHistory(id, req.user as AuthenticatedUser);
+  }
   @Get(':id') @RequirePermissions('shipments.read')
   get(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request): ReturnType<ShipmentsService['get']> { return this.service.get(id, req.user as AuthenticatedUser); }
   @Get(':id/items/:itemId/photo') @RequirePermissions('shipments.read')
@@ -48,6 +53,10 @@ export class ShipmentsController {
   @Post(':id/refusal') @RequirePermissions('shipments.decide')
   refuse(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: RefuseShipmentDto, @Req() req: Request): ReturnType<ShipmentsService['decide']> {
     return this.service.decide(id, 'RECUSADO', dto.reason, {}, req.user as AuthenticatedUser, getAuditRequestMetadata(req));
+  }
+  @Post(':id/cancellation') @RequirePermissions('shipments.read')
+  cancel(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: CancelShipmentDto, @Req() req: Request): ReturnType<ShipmentsService['cancel']> {
+    return this.service.cancel(id, dto.reason, req.user as AuthenticatedUser, getAuditRequestMetadata(req));
   }
   @Patch(':id/separation-draft') @RequirePermissions('shipments.decide')
   draft(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: SeparationDraftDto, @Req() req: Request): ReturnType<ShipmentsService['saveSeparationDraft']> {

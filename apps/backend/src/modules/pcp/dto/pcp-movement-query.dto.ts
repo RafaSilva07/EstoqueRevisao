@@ -14,5 +14,5 @@ export class PcpMovementQueryDto extends PaginationQueryDto {
   @IsOptional() @IsUUID() destinationLocationId?: string;
   @IsOptional() @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
   @IsString() @MaxLength(100) search?: string;
-  @IsOptional() @IsIn(['ASC', 'DESC']) sort: 'ASC' | 'DESC' = 'ASC';
+  @IsOptional() @IsIn(['ASC', 'DESC', 'PCP_STATUS']) sort: 'ASC' | 'DESC' | 'PCP_STATUS' = 'ASC';
 }

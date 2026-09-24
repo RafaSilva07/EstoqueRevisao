@@ -15,6 +15,7 @@ export function UsersPage({ currentUserId, onOwnUpdate }: { currentUserId: strin
   const [result, setResult] = useState<Paginated<ManagedUser>>();
   const [roles, setRoles] = useState<Role[]>([]);
   const [search, setSearch] = useState('');
+  const [sort, setSort] = useState('NAME');
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -30,13 +31,13 @@ export function UsersPage({ currentUserId, onOwnUpdate }: { currentUserId: strin
     let active = true;
     const timer = window.setTimeout(() => {
       setLoading(true); setError('');
-      void Promise.all([api.get<Paginated<ManagedUser>>(`/users?page=${page}&limit=20&search=${encodeURIComponent(search)}`), api.get<Role[]>('/users/roles')])
+      void Promise.all([api.get<Paginated<ManagedUser>>(`/users?page=${page}&limit=20&search=${encodeURIComponent(search)}&sort=${sort}`), api.get<Role[]>('/users/roles')])
         .then(([users, availableRoles]) => { if (active) { setResult(users); setRoles(availableRoles); } })
         .catch((caught: unknown) => { if (active) setError(messageFrom(caught)); })
         .finally(() => { if (active) setLoading(false); });
     }, 200);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [page, search, reload]);
+  }, [page, search, sort, reload]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -77,6 +78,7 @@ export function UsersPage({ currentUserId, onOwnUpdate }: { currentUserId: strin
     {error && editing === undefined && <Notice kind="error">{error}</Notice>}
     <section className="surface list-panel">
       <label>Buscar usuário<input type="search" value={search} maxLength={100} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></label>
+      <label>Ordenar por<select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}><option value="NAME">Nome</option><option value="RECENT">Mais recentes</option><option value="OLDEST">Mais antigos</option></select></label>
       {loading ? <LoadingState /> : error ? <button className="secondary" onClick={() => setReload((value) => value + 1)}>Tentar novamente</button> : !result?.items.length ? <EmptyState title="Nenhum usuário encontrado" description="Revise a busca ou cadastre um usuário." /> : <>
         <div className="responsive-table"><table><thead><tr><th>Login</th><th>Setor</th><th>Perfis</th><th>Status</th><th>Ações</th></tr></thead><tbody>
           {result.items.map((user) => <tr key={user.id}>

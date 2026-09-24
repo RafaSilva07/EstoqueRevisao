@@ -14,8 +14,12 @@ export class MovementsRepository {
     @InjectRepository(MovementEntity) private readonly repository: Repository<MovementEntity>,
   ) {}
 
-  save(movement: MovementEntity, manager: EntityManager): Promise<MovementEntity> {
-    return manager.getRepository(MovementEntity).save(movement);
+  async save(movement: MovementEntity, manager: EntityManager): Promise<MovementEntity> {
+    const repository = manager.getRepository(MovementEntity);
+    await repository.save(movement);
+    const persisted = await repository.findOneByOrFail({ id: movement.id });
+    movement.codigoMovimentacao = persisted.codigoMovimentacao;
+    return movement;
   }
 
   async saveItems(items: MovementItemEntity[], manager: EntityManager): Promise<MovementItemEntity[]> {
@@ -74,6 +78,7 @@ export class MovementsRepository {
     if (query.dateFrom) builder.andWhere('movement.occurredAt >= :dateFrom', { dateFrom: query.dateFrom });
     if (query.dateTo) builder.andWhere('movement.occurredAt <= :dateTo', { dateTo: query.dateTo });
     if (query.type) builder.andWhere('movement.type = :type', { type: query.type });
+    if (query.codigoMovimentacao) builder.andWhere('movement.codigoMovimentacao = :codigo', { codigo: query.codigoMovimentacao.trim().toUpperCase() });
     if (query.status) builder.andWhere('movement.status = :status', { status: query.status });
     if (query.pcpStatus) builder.andWhere('movement.pcpExecutionStatus = :pcpStatus', { pcpStatus: query.pcpStatus });
     if (query.pcpStatus === PcpExecutionStatus.Pending) builder.andWhere('movement.requiresPcpExecution = true');
@@ -106,8 +111,11 @@ export class MovementsRepository {
       );
     }
 
-    return builder.orderBy('movement.occurredAt', 'DESC')
-      .addOrderBy('movement.createdAt', 'DESC')
+    const primary = query.sort === 'TYPE' ? 'movement.type' : 'movement.occurredAt';
+    const direction = query.sort === 'OLDEST' || query.sort === 'TYPE' ? 'ASC' : 'DESC';
+    return builder.orderBy(primary, direction)
+      .addOrderBy('movement.createdAt', direction)
+      .addOrderBy('movement.id', direction)
       .skip((query.page - 1) * query.limit)
       .take(query.limit)
       .getManyAndCount();

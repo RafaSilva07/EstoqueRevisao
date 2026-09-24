@@ -19,7 +19,9 @@ export class UsersRepository {
   findAndCount(query: UserQueryDto): Promise<[UserEntity[], number]> {
     const builder = this.repository.createQueryBuilder('user').leftJoinAndSelect('user.roles', 'role');
     if (query.search?.trim()) builder.where('user.username ILIKE :search', { search: `%${query.search.trim().replace(/[\\%_]/g, '\\$&')}%` });
-    return builder.orderBy('user.username', 'ASC').addOrderBy('user.id', 'ASC')
+    const field = query.sort === 'NAME' ? 'user.username' : 'user.createdAt';
+    const direction = query.sort === 'RECENT' ? 'DESC' : 'ASC';
+    return builder.orderBy(field, direction).addOrderBy('user.id', direction)
       .skip((query.page - 1) * query.limit).take(query.limit).getManyAndCount();
   }
 

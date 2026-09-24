@@ -1,9 +1,10 @@
 import { Transform } from 'class-transformer';
-import { IsISO8601, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsIn, IsISO8601, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { PaginationQueryDto } from '../../../shared/pagination/pagination-query.dto';
 import { trimString } from '../../../shared/validation/transforms';
 
 export class ReviewReportQueryDto extends PaginationQueryDto {
+  @IsOptional() @IsIn(['RECENT','OLDEST','PRODUCT']) sort?: 'RECENT' | 'OLDEST' | 'PRODUCT' = 'RECENT';
   @IsOptional()
   @IsISO8601({ strict: true })
   dateFrom?: string;

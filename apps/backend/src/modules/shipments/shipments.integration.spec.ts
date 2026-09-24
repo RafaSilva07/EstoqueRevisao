@@ -26,7 +26,7 @@ import { MovementsRepository } from '../movements/movements.repository';
 import { MovementsService } from '../movements/movements.service';
 import { Sector, ShipmentEntity, ShipmentItemEntity } from './shipment.entity';
 import { ShipmentsService } from './shipments.service';
-import { CreateShipmentDto } from './shipment.dto';
+import { CreateShipmentDto, ShipmentQueryDto } from './shipment.dto';
 import { StorageService, UploadedImage } from '../storage/storage.service';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -90,6 +90,17 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     expect(movement.type).toBe('ENTRADA_EXTERNA'); expect(movement.destinationLocationId).toBe(sourceId);
     expect(await db.getRepository(AuditLogEntity).countBy({ entityId: shipment.id })).toBe(2);
   });
+  it('consolida separação vencida com request UUID válido sem derrubar as consultas', async () => {
+    const shipment = await incoming('EXPEDICAO');
+    await db.query(`UPDATE shipments SET status='EM_SEPARACAO', received_by_id=$1, received_at=now()-interval '2 hours',
+      separation_started_at=now()-interval '2 hours', separation_expires_at=now()-interval '1 hour' WHERE id=$2`,
+    [users.REVISAO.id, shipment.id]);
+    await expect(service.list(Object.assign(new ShipmentQueryDto(), { view: 'history' }), users.REVISAO)).resolves.toMatchObject({ meta: { total: 1 } });
+    expect((await service.get(shipment.id, users.REVISAO)).status).toBe('CONFIRMADO');
+    expect(await balance()).toBe(10);
+    const expirationAudit = await db.getRepository(AuditLogEntity).findOneByOrFail({ entityId: shipment.id, action: 'SHIPMENT_SEPARATION_EXPIRE' });
+    expect(expirationAudit.requestId).toMatch(/^[0-9a-f-]{36}$/);
+  });
 
   it('exige uma foto por item e preserva a evidência após confirmação ou recusa', async () => {
     const dto: CreateShipmentDto = { requestKey: randomUUID(), destinationSector: 'REVISAO', items: [{ productId, batchId, quantity: 2 }] };
@@ -126,6 +137,40 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     const correction = await incoming('EXPEDICAO'); expect(correction.id).not.toBe(shipment.id);
     expect((await service.get(shipment.id, users.EXPEDICAO)).status).toBe('RECUSADO');
     await expect(decide(shipment.id, 'REVISAO')).rejects.toBeInstanceOf(ConflictException);
+  });
+  it('autor cancela antes do recebimento, preserva histórico e restaura eventual reserva', async () => {
+    const incomingShipment = await incoming();
+    await expect(service.cancel(incomingShipment.id, 'Não sou o autor', users.REVISAO, metadata())).rejects.toBeInstanceOf(ForbiddenException);
+    const canceledIncoming = await service.cancel(incomingShipment.id, 'Carga não será mais enviada', users.PRODUCAO, metadata());
+    expect(canceledIncoming).toMatchObject({ status: 'CANCELADO', decidedById: users.PRODUCAO.id, refusalReason: 'Carga não será mais enviada' });
+    expect(await balance()).toBe(0);
+    expect(await db.getRepository(MovementEntity).countBy({ shipmentId: incomingShipment.id })).toBe(0);
+    await expect(service.cancel(incomingShipment.id, 'Novo cancelamento', users.PRODUCAO, metadata())).rejects.toBeInstanceOf(ConflictException);
+    await expect(decide(incomingShipment.id, 'REVISAO')).rejects.toBeInstanceOf(ConflictException);
+
+    await seed();
+    const outbound = await reserve('EXPEDICAO', 6);
+    expect(await balance()).toBe(4);
+    await service.cancel(outbound.id, 'Pedido retirado pelo remetente', users.REVISAO, metadata());
+    expect(await balance()).toBe(10);
+    const cancelAudit = await db.getRepository(AuditLogEntity).findOneByOrFail({ entityId: outbound.id, action: 'SHIPMENT_CANCEL' });
+    expect(cancelAudit.newValues).toMatchObject({ cancellationReason: 'Pedido retirado pelo remetente', previousStatus: 'AGUARDANDO_RECEBIMENTO' });
+    const administrator = { ...users.REVISAO, roles: ['ADMIN'] };
+    expect((await service.auditHistory(outbound.id, administrator)).some((event) => event.action === 'SHIPMENT_CANCEL')).toBe(true);
+    await expect(service.auditHistory(outbound.id, users.REVISAO)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+  it('serializa cancelamento e recebimento concorrentes sem efeito duplo', async () => {
+    await seed();
+    const shipment = await reserve('PRODUCAO', 6);
+    const outcomes = await Promise.allSettled([
+      service.cancel(shipment.id, 'Cancelado durante conferência', users.REVISAO, metadata()),
+      decide(shipment.id, 'PRODUCAO'),
+    ]);
+    expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
+    const persisted = await service.get(shipment.id, users.REVISAO);
+    expect(['CANCELADO', 'CONFIRMADO']).toContain(persisted.status);
+    expect(await balance()).toBe(persisted.status === 'CANCELADO' ? 10 : 4);
+    expect(await db.getRepository(MovementEntity).countBy({ shipmentId: shipment.id })).toBe(persisted.status === 'CONFIRMADO' ? 1 : 0);
   });
   it('Revisão → Produção: reserva e confirmação sem dupla baixa', async () => {
     await seed(); const shipment = await reserve(); expect(await balance()).toBe(4);
@@ -185,6 +230,9 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     const outbound = await reserve('EXPEDICAO');
     spy.mockRejectedValueOnce(new Error('audit failed'));
     await expect(decide(outbound.id,'EXPEDICAO',true)).rejects.toThrow('audit failed');
+    expect(await balance()).toBe(4); expect((await service.get(outbound.id,users.REVISAO)).status).toBe('AGUARDANDO_RECEBIMENTO');
+    spy.mockRejectedValueOnce(new Error('audit failed'));
+    await expect(service.cancel(outbound.id, 'Cancelamento com auditoria indisponível', users.REVISAO, metadata())).rejects.toThrow('audit failed');
     expect(await balance()).toBe(4); expect((await service.get(outbound.id,users.REVISAO)).status).toBe('AGUARDANDO_RECEBIMENTO');
     const inbound = await incoming();
     spy.mockRejectedValueOnce(new Error('audit failed'));

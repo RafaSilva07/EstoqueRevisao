@@ -12,10 +12,11 @@ interface ReviewFilters extends ReportFilters {
   product: string;
   batch: string;
   destination: string;
+  sort: string;
 }
 
 const initialFilters: ReviewFilters = {
-  dateFrom: '', dateTo: '', product: '', batch: '', destination: '',
+  dateFrom: '', dateTo: '', product: '', batch: '', destination: '', sort: 'RECENT',
 };
 
 export function ReviewReportsPage({ onMovements, onStock }: { onMovements: () => void; onStock?: () => void }) {
@@ -27,7 +28,7 @@ export function ReviewReportsPage({ onMovements, onStock }: { onMovements: () =>
   const [error, setError] = useState('');
   const [selectedMovementId, setSelectedMovementId] = useState<string>();
 
-  const activeFilters = useMemo(() => Object.values(applied).filter(Boolean).length, [applied]);
+  const activeFilters = useMemo(() => Object.entries(applied).filter(([key, value]) => value && !(key === 'sort' && value === 'RECENT')).length, [applied]);
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -75,6 +76,7 @@ export function ReviewReportsPage({ onMovements, onStock }: { onMovements: () =>
         <label>Produto<input value={draft.product} onChange={(event) => setDraft({ ...draft, product: event.target.value })} maxLength={200} placeholder="Codigo ou nome" /></label>
         <label>Lote<input value={draft.batch} onChange={(event) => setDraft({ ...draft, batch: event.target.value.toUpperCase() })} maxLength={6} placeholder="Codigo do lote" /></label>
         <label>Classificacao/destino<input value={draft.destination} onChange={(event) => setDraft({ ...draft, destination: event.target.value })} maxLength={150} placeholder="Lata Boa, Varejo ou TUF" /></label>
+        <label>Ordenar por<select value={draft.sort} onChange={(event) => setDraft({ ...draft, sort: event.target.value })}><option value="RECENT">Mais recentes</option><option value="OLDEST">Mais antigas</option><option value="PRODUCT">Produto</option></select></label>
         <div className="form-actions report-filter-actions"><button>Aplicar filtros</button></div>
       </form>
     </FilterPanel>

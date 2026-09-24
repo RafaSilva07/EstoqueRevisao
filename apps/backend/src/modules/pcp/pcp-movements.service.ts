@@ -67,7 +67,7 @@ export class PcpMovementsService {
       await this.audit.record({
         ...metadata, manager, userId, action: 'PCP_MOVEMENT_EXECUTE', entityType: 'MOVEMENT', entityId: id, result: 'SUCCESS',
         oldValues: { pcpExecutionStatus: PcpExecutionStatus.Pending },
-        newValues: { pcpExecutionStatus: PcpExecutionStatus.Executed, pcpExecutedByUserId: userId, pcpExecutedAt: executedAt, observation: dto.observation ?? null },
+        newValues: { codigoMovimentacao: movement.codigoMovimentacao, pcpExecutionStatus: PcpExecutionStatus.Executed, pcpExecutedByUserId: userId, pcpExecutedAt: executedAt, observation: dto.observation ?? null },
       });
     });
     return this.get(id);

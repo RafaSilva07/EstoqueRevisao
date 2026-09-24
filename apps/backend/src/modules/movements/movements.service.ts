@@ -133,7 +133,7 @@ export class MovementsService {
         entityId: movement.id,
         result: 'SUCCESS',
         oldValues: { status: MovementStatus.Effective },
-        newValues: {
+        newValues: { codigoMovimentacao: movement.codigoMovimentacao,
           status: MovementStatus.Canceled,
           canceledByUserId: userId,
           canceledAt: canceledAt.toISOString(),
@@ -374,7 +374,7 @@ export class MovementsService {
           entityType: 'MOVEMENT',
           entityId: movement.id,
           result: 'SUCCESS',
-          newValues: {
+          newValues: { codigoMovimentacao: movement.codigoMovimentacao,
             type: movement.type,
             status: movement.status,
             originLocationId: movement.originLocationId,
@@ -505,7 +505,7 @@ export class MovementsService {
           entityType: 'MOVEMENT',
           entityId: movement.id,
           result: 'SUCCESS',
-          newValues: {
+          newValues: { codigoMovimentacao: movement.codigoMovimentacao,
             type: movement.type,
             status: movement.status,
             originLocationId: movement.originLocationId,

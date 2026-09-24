@@ -35,6 +35,9 @@ import { PcpSector1789862400000 } from './migrations/1789862400000-pcp-sector';
 import { ReviewOperatorRole1789948800000 } from './migrations/1789948800000-review-operator-role';
 import { SeparationAndSettings1790035200000 } from './migrations/1790035200000-separation-and-settings';
 import { SystemSettingEntity } from '../modules/settings/system-setting.entity';
+import { MovementPublicCodes1790121600000 } from './migrations/1790121600000-movement-public-codes';
+import { ShipmentLifecyclePublicCodes1790208000000 } from './migrations/1790208000000-shipment-lifecycle-public-codes';
+import { ShipmentSenderCancellation1790294400000 } from './migrations/1790294400000-shipment-sender-cancellation';
 import { ReviewDestinationEntity } from '../modules/settings/review-destination.entity';
 
 export const databaseEntities = [
@@ -76,6 +79,9 @@ export const databaseMigrations = [
   PcpSector1789862400000,
   ReviewOperatorRole1789948800000,
   SeparationAndSettings1790035200000,
+  MovementPublicCodes1790121600000,
+  ShipmentLifecyclePublicCodes1790208000000,
+  ShipmentSenderCancellation1790294400000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {

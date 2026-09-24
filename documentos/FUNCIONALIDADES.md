@@ -69,7 +69,7 @@ POST            /api/v1/shipments/:id/refusal
 
 Listagem: `view=pending|sent|history|updates|open`, `status`, `page` e `limit`; `open` reúne envios ainda aguardando recebimento ou em separação dos quais o setor participa, enquanto `updates` retorna decisões recentes dos próprios envios. Consultas respeitam o setor. `available-positions` é exclusivo da Revisão, exige `productId` e ao menos `batchCode` ou `manufacturingDate`, e retorna somente saldo positivo de produto/local ativos. Criação recebe multipart com `payload` contendo `requestKey`, `destinationSector` e `items`, além de um arquivo `photos` por item na mesma ordem; origem é inferida do usuário. Itens externos recebem `productId/lot/quantity` (ou variante existente via `batchId`); itens da Revisão recebem `productId/batchId/stockLocationId/quantity`. Confirmação aceita `confirmedExpirationKeys` quando houver divergência apresentada; recusa exige `reason`.
 
-Somente a confirmação gera entradas/saídas nos relatórios existentes. Nas saídas da Revisão, o saldo já fica indisponível desde a criação e aparece como **em trânsito** nos envios pendentes; recusa restaura o disponível. Estoque/Home/relatório de validades mostram saldo disponível. Movimentos vinculados exibem o identificador do envio na observação e não oferecem cancelamento isolado; devoluções são novos envios. Regras completas em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#envios-entre-setores).
+Somente a confirmação gera entradas/saídas nos relatórios existentes. Nas saídas da Revisão, o saldo já fica indisponível desde a criação e aparece como **em trânsito** nos envios pendentes; recusa ou cancelamento pré-recebimento restaura o disponível. O autor pode cancelar enquanto o envio estiver aguardando recebimento, com motivo obrigatório; o envio permanece no histórico como `CANCELADO`, e administradores visualizam a auditoria no detalhe. Estoque/Home/relatório de validades mostram saldo disponível. Movimentos vinculados exibem o identificador do envio na observação e não oferecem cancelamento isolado; devoluções são novos envios. Regras completas em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#envios-entre-setores).
 
 ## Produtos e conversões
 
@@ -186,7 +186,7 @@ GET             /api/v1/movements
 GET             /api/v1/movements/:id
 ```
 
-A listagem filtra por período, tipo, origem, destino e produto. Cards/linhas de movimentações e históricos são clicáveis e abrem um modal central ampliado. O detalhe apresenta identificador, tipo, estados operacional e PCP, data/hora, responsável, rota, observação, itens, lotes, fabricação, validade, quantidades e distribuições. Os dados do produto confirmados em novos itens são preservados por snapshot; datas são preservadas nas variantes imutáveis. Relatórios históricos e CSVs existentes também mostram as datas de origem/destino. Registros efetivados e cancelados permanecem no mesmo histórico.
+A listagem filtra por período, tipo, origem, destino e produto e permite ordenar por registros mais recentes, mais antigos ou tipo. Cards/linhas de movimentações e históricos são clicáveis e abrem um modal central ampliado. O detalhe apresenta identificador, tipo, estados operacional e PCP, data/hora, responsável, rota, observação, itens, lotes, fabricação, validade, quantidades e distribuições. Os dados do produto confirmados em novos itens são preservados por snapshot; datas são preservadas nas variantes imutáveis. Relatórios históricos e CSVs existentes também mostram as datas de origem/destino. Registros efetivados e cancelados permanecem no mesmo histórico.
 
 ## Cancelamento e estorno
 
@@ -226,9 +226,13 @@ A interface `Relatórios > Estoque e validades` apresenta saldo, lote, fabricaç
 
 ## Dashboard operacional
 
+Todos os cards das listas da Home abrem um resumo sem navegação imediata. Reutiliza Modal acessível, itens e visualizador privado de fotos; mostra código, rota, responsável, estados, datas, observações e, para envios, separação e vínculos de retorno. Fechar/ESC retornam à Home. Ações encaminham ao registro específico na página existente: confirmar recebimento/retorno, continuar separação, ver retorno, executar PCP ou ver detalhes completos. O resumo não executa operações.
+
+`codigoMovimentacao` aparece desde a criação do envio e permanece igual no recebimento, separação, confirmação/recusa, movimentação de estoque, PCP e histórico. Busque o código completo em **Histórico > Movimentações**, na busca geral do PCP ou nos envios, respeitando os outros filtros. `GET /movements` e `GET /shipments` aceitam `codigoMovimentacao`; `GET /pcp/movements` aceita o código no `search`. Transferências não recebem código nem usam UUID como substituto público.
+
 A Home exibe, antes dos atalhos, um ponto de atenção quando o setor ativo possui solicitações aguardando seu aceite ou envios em separação. Os totais vêm das consultas de envios, com escopo do setor e atualização ao entrar ou alternar o modo operacional.
 
-Abaixo dos menus e botões existentes ficam, conforme as permissões do perfil: movimentações abertas das quais o setor participa; movimentações concluídas aguardando execução do PCP; e as últimas movimentações finalizadas. Revisão/Admin abrem o detalhe de uma movimentação sem sair da Home; PCP segue para sua fila; Produção e Expedição consultam os envios abertos e o histórico dos próprios setores. A apresentação é mobile-first em cards clicáveis e não recalcula estados no navegador.
+Abaixo dos menus e botões existentes ficam, conforme as permissões do perfil: movimentações abertas das quais o setor participa; movimentações concluídas aguardando execução do PCP; e as últimas movimentações finalizadas. Todos os perfis consultam o resumo sem sair da Home; somente as ações encaminham às telas operacionais. A apresentação é mobile-first em cards clicáveis e não recalcula estados no navegador.
 
 ## Experiência de uso
 

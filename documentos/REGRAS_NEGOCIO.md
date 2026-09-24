@@ -81,6 +81,10 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 
 ## Regras comuns das movimentações
 
+- O UUID permanece técnico nas relações e rotas. `codigoMovimentacao` é público, único e imutável: `ENT-000001` para entrada externa, `SAI-000001` para saída externa e `REV-000001` para revisão. Cada prefixo tem sequência independente; transferências internas permanecem sem código.
+- Nos envios entre setores, o código nasce no backend/banco junto com o envio e permanece igual durante `AGUARDANDO_RECEBIMENTO`, separação, confirmação, recusa e histórico. A movimentação de estoque criada na confirmação herda esse mesmo código; se um envio com várias origens gerar mais de um registro técnico de movimentação, todos pertencem ao mesmo código público. Cancelamentos preservam o código original. Entradas/saídas diretas e revisões recebem o código quando são criadas.
+- Lacunas por rollback são aceitáveis. Utilizam-se no mínimo seis dígitos, crescendo sem truncamento. Legados recebem códigos por ocorrência, criação e UUID como desempate, sem alterar seus dados operacionais.
+
 - Tipos implementados: `ENTRADA_EXTERNA`, `SAIDA_EXTERNA`, `TRANSFERENCIA_INTERNA` e `REVISAO`.
 - Estados atuais: `EFETIVADA` e `CANCELADA`.
 - Uma movimentação aceita um ou mais itens e é confirmada sempre como uma unidade.
@@ -116,6 +120,9 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 - Produção/Expedição enviam somente para Revisão e decidem somente recebimentos destinados ao próprio setor. Não acessam operações, saldos ou relatórios internos da Revisão.
 - Revisão envia para Produção/Expedição e decide os envios desses setores. Permissões `shipments.read/create/decide` complementam a validação do setor.
 - Um envio tem vários itens e nasce `AGUARDANDO_RECEBIMENTO`. Os itens não são editáveis depois do envio. Somente o destinatário pode decidir uma única vez: `CONFIRMADO` ou `RECUSADO`; recusa exige motivo de até 1000 caracteres.
+- Enquanto permanecer `AGUARDANDO_RECEBIMENTO`, somente o usuário autor pode cancelar o envio inteiro, informando motivo obrigatório de até 1000 caracteres. O registro passa a `CANCELADO`, permanece no histórico e não pode ser cancelado novamente. Depois de confirmação, recusa ou início da separação, o cancelamento pelo remetente é bloqueado.
+- O cancelamento de envio originado na Revisão restaura atomicamente todas as reservas nas posições originais; envios originados em Produção/Expedição ainda não possuem saldo a estornar. Aceite e cancelamento concorrentes são serializados e apenas uma transição prevalece.
+- A autoria, data/hora e o motivo do cancelamento são preservados no envio e em evento `SHIPMENT_CANCEL` da auditoria. Administradores podem consultar os eventos no detalhe do envio.
 - O remetente pode registrar uma observação geral no envio e uma observação específica em cada item/produto. Ambas são opcionais, possuem até 1000 caracteres, são preservadas no histórico e tornam-se imutáveis junto com o envio.
 - Cada item de um novo envio deve possuir exatamente uma foto JPEG, PNG ou WebP, não vazia e com até 5 MB. A foto é evidência daquele item, não do cadastro mestre nem do lote, e permanece vinculada após confirmação ou recusa.
 - O envio só nasce `AGUARDANDO_RECEBIMENTO` quando todos os itens e fotos válidas são recebidos. Fotos não podem ser substituídas depois do envio. Registros históricos anteriores à regra permanecem consultáveis sem foto.

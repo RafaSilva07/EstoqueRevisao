@@ -6,7 +6,7 @@ import { canExecutePcp } from './pcp';
 describe('Fila PCP', () => {
   it('renderiza filtros obrigatorios e a fila padrao', () => {
     const html = renderToStaticMarkup(<PcpPage />);
-    for (const text of ['Data inicial', 'Data final', 'Status operacional', 'Status PCP', 'Tipo', 'Origem', 'Destino', 'Produto ou lote', 'Ordenação', 'Limpar filtros']) expect(html).toContain(text);
+    for (const text of ['Data inicial', 'Data final', 'Status operacional', 'Status PCP', 'Tipo', 'Origem', 'Destino', 'Código da movimentação, produto ou lote', 'Ordenação', 'Limpar filtros']) expect(html).toContain(text);
     expect(html).toContain('value="CONCLUIDA" selected=""');
     expect(html).toContain('value="PENDENTE" selected=""');
     expect(html).toContain('value="ASC" selected=""');

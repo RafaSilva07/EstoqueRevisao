@@ -33,9 +33,11 @@ export class ProductsRepository {
       builder.andWhere('product.active = :active', { active: query.active });
     }
 
+    const sort = query.searchField === 'code' ? 'CODE' : query.sort;
+    const primary = sort === 'RECENT' ? 'product.createdAt' : sort === 'CODE' ? 'product.code' : 'product.name';
     return builder
-      .orderBy(query.searchField === 'code' ? 'product.code' : 'product.name', 'ASC')
-      .addOrderBy(query.searchField === 'code' ? 'product.name' : 'product.code', 'ASC')
+      .orderBy(primary, sort === 'RECENT' ? 'DESC' : 'ASC')
+      .addOrderBy('product.id', 'ASC')
       .skip((query.page - 1) * query.limit)
       .take(query.limit)
       .getManyAndCount();

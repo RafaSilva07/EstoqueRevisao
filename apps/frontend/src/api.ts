@@ -117,6 +117,7 @@ export interface MovementItemDistribution {
 }
 
 export interface Movement {
+  codigoMovimentacao?: string | null;
   shipmentId?: string | null;
   id: string;
   requestKey: string;

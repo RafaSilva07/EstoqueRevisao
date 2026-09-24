@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { IsDateString, IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { PaginationQueryDto } from '../../../shared/pagination/pagination-query.dto';
 import { trimString } from '../../../shared/validation/transforms';
 
@@ -10,6 +10,7 @@ export enum ExpirationStatus {
 }
 
 export class StockReportQueryDto extends PaginationQueryDto {
+  @IsOptional() @IsIn(['EXPIRATION','PRODUCT','QUANTITY']) sort?: 'EXPIRATION' | 'PRODUCT' | 'QUANTITY' = 'EXPIRATION';
   @IsOptional()
   @IsUUID()
   productId?: string;

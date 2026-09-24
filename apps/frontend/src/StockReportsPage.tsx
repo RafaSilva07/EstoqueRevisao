@@ -10,10 +10,11 @@ interface StockFilters extends ReportFilters {
   batch: string;
   location: string;
   expirationStatus: string;
+  sort: string;
 }
 
 const initialFilters: StockFilters = {
-  product: '', batch: '', location: '', expirationStatus: '',
+  product: '', batch: '', location: '', expirationStatus: '', sort: 'EXPIRATION',
 };
 
 const expirationLabels: Record<StockReportItem['expirationStatus'], string> = {
@@ -36,7 +37,7 @@ export function StockReportsPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const activeFilters = useMemo(() => Object.values(applied).filter(Boolean).length, [applied]);
+  const activeFilters = useMemo(() => Object.entries(applied).filter(([key, value]) => value && !(key === 'sort' && value === 'EXPIRATION')).length, [applied]);
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -83,6 +84,7 @@ export function StockReportsPage({
         <label>Lote<input value={draft.batch} onChange={(event) => setDraft({ ...draft, batch: event.target.value.toUpperCase() })} maxLength={6} placeholder="Codigo do lote" /></label>
         <label>Local/classificacao<input value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} maxLength={150} /></label>
         <label>Situacao da validade<select value={draft.expirationStatus} onChange={(event) => setDraft({ ...draft, expirationStatus: event.target.value })}><option value="">Todas</option><option value="VALIDO">Valido</option><option value="PROXIMO_VENCIMENTO">Proximo do vencimento</option><option value="VENCIDO">Vencido</option></select></label>
+        <label>Ordenar por<select value={draft.sort} onChange={(event) => setDraft({ ...draft, sort: event.target.value })}><option value="EXPIRATION">Validade mais próxima</option><option value="PRODUCT">Produto</option><option value="QUANTITY">Maior saldo</option></select></label>
         <div className="form-actions report-filter-actions"><button>Aplicar filtros</button></div>
       </form>
     </FilterPanel>

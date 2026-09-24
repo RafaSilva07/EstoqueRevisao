@@ -9,6 +9,9 @@ import { PcpExecutionStatus } from '../../pcp/domain/pcp-execution-status.enum';
 
 @Entity({ name: 'movements' })
 export class MovementEntity {
+  @Column({ name: 'codigo_movimentacao', type: 'varchar', length: 30, nullable: true, unique: true, insert: false, update: false })
+  codigoMovimentacao!: string | null;
+
   @Column({ name: 'shipment_id', type: 'uuid', nullable: true })
   shipmentId!: string | null;
 

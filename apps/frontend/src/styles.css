@@ -511,6 +511,9 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
 .movement-detail-dialog { width: min(100%, 62rem); }
 .shipment-detail-dialog { width: min(100%, 60rem); }
 .movement-detail-dialog h2 small { color: var(--muted); font-size: .8rem; }
+.movement-detail-dialog, .shipment-detail-dialog { overflow-x: hidden; min-width: 0; }
+.movement-detail-dialog h2 small { display: block; color: var(--primary-dark); font-size: 1rem; margin-top: .3rem; }
+.home-operation-card small { overflow-wrap: anywhere; }
 .pcp-detail-dialog h2 small { color: var(--muted); font-size: .8rem; }
 .pcp-evidence-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 1rem; }
 .pcp-audit-list { display: grid; gap: .5rem; padding: 0; list-style: none; }

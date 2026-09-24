@@ -1,7 +1,9 @@
 import { ReactNode, useEffect, useState } from 'react';
-import { api, Movement } from './api';
+import { api, Movement, PcpMovementDetail } from './api';
 import { LoadingState, Modal, Notice } from './components';
 import { formatDate, formatDateTime } from './format';
+import { ShipmentPhoto } from './ShipmentsPage';
+import { Shipment } from './shipments';
 
 const typeLabel: Record<Movement['type'], string> = {
   ENTRADA_EXTERNA: 'Entrada externa',
@@ -10,34 +12,45 @@ const typeLabel: Record<Movement['type'], string> = {
   REVISAO: 'Revisão',
 };
 
-export function MovementDetailModal({ movementId, initialMovement, onClose, children }: {
+export function MovementDetailModal({ movementId, initialMovement, onClose, children, pcp = false }: {
   movementId: string;
+  pcp?: boolean;
   initialMovement?: Movement;
   onClose: () => void;
   children?: (movement: Movement) => ReactNode;
 }) {
   const [loadedMovement, setLoadedMovement] = useState<Movement | null>(null);
   const [error, setError] = useState('');
+  const [shipment, setShipment] = useState<Shipment | null>(null);
   const movement = initialMovement?.id === movementId ? initialMovement : loadedMovement?.id === movementId ? loadedMovement : null;
 
   useEffect(() => {
     if (initialMovement?.id === movementId) return;
     let active = true;
-    void api.get<Movement>(`/movements/${movementId}`)
+    void api.get<Movement>(`${pcp ? '/pcp' : ''}/movements/${movementId}`)
       .then((result) => { if (active) setLoadedMovement(result); })
       .catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível carregar os detalhes.'); });
     return () => { active = false; };
-  }, [initialMovement, movementId]);
+  }, [initialMovement, movementId, pcp]);
+
+  useEffect(() => {
+    if (!movement?.shipmentId || pcp) return;
+    let active = true;
+    void api.get<Shipment>(`/shipments/${movement.shipmentId}`).then((value) => { if (active) setShipment(value); })
+      .catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível consultar as evidências.'); });
+    return () => { active = false; };
+  }, [movement?.shipmentId, pcp]);
 
   return <Modal labelledBy="movement-detail-title" className="movement-detail-dialog" onClose={onClose}>
+    {!movement && <div className="panel-heading"><h2 id="movement-detail-title">Resumo da movimentação</h2><button className="secondary" onClick={onClose}>Fechar</button></div>}
     {!movement && !error && <LoadingState label="Carregando detalhes" />}
     {error && <Notice kind="error">{error}</Notice>}
     {movement && <>
-      <div className="panel-heading"><div><p className="eyebrow">Detalhes da movimentação</p><h2 id="movement-detail-title">{typeLabel[movement.type]} <small>#{movement.id.slice(0, 8)}</small></h2></div><button className="secondary" onClick={onClose}>Fechar</button></div>
+      <div className="panel-heading"><div><p className="eyebrow">Detalhes da movimentação</p><h2 id="movement-detail-title">{typeLabel[movement.type]} <small>{movement.codigoMovimentacao ?? 'Sem código público'}</small></h2></div><button className="secondary" onClick={onClose}>Fechar</button></div>
       <dl>
-        <dt>Identificador</dt><dd className="shipment-id">{movement.id}</dd>
+        <dt>Código</dt><dd>{movement.codigoMovimentacao ?? 'Não se aplica'}</dd>
         <dt>Status operacional</dt><dd><span className={`badge ${movement.status === 'EFETIVADA' ? 'active' : 'canceled'}`}>{movement.status === 'EFETIVADA' ? 'Efetivada' : 'Cancelada'}</span></dd>
-        <dt>Status PCP</dt><dd><span className={`badge ${movement.pcpExecutionStatus === 'EXECUTADA' ? 'active' : 'pending'}`}>{movement.pcpExecutionStatus === 'EXECUTADA' ? 'Executada' : 'Pendente'}</span></dd>
+        <dt>Status PCP</dt><dd><span className={`badge ${movement.pcpExecutionStatus === 'EXECUTADA' ? 'active' : 'pending'}`}>{movement.requiresPcpExecution === false ? 'Não necessária' : movement.pcpExecutionStatus === 'EXECUTADA' ? 'Executada' : 'Pendente'}</span></dd>
         <dt>Data/hora</dt><dd>{formatDateTime(movement.occurredAt)}</dd>
         <dt>Responsável</dt><dd>{movement.responsibleUser.username}</dd>
         <dt>Origem</dt><dd>{movement.originLocation.name}</dd>
@@ -58,6 +71,8 @@ export function MovementDetailModal({ movementId, initialMovement, onClose, chil
         {item.outputProductSnapshot && <span>Desmontagem: {item.quantity} {(item.productSnapshot ?? item.product).defaultUnit} × {item.unitsPerPackage} → {item.outputQuantity} UN de {item.outputProductSnapshot.code} — {item.outputProductSnapshot.name}</span>}
         {item.distributions?.length > 0 && <ul className="distribution-detail">{item.distributions.map((distribution) => <li key={distribution.id}>{distribution.destinationLocation.name}: <strong>{distribution.quantity} {(item.outputProductSnapshot ?? item.productSnapshot ?? item.product).defaultUnit}</strong></li>)}</ul>}
       </li>)}</ul>
+      {shipment && <div className="pcp-evidence-grid">{shipment.items.filter((item) => !item.stockLocation || item.stockLocation.id === movement.originLocationId).map((item) => <ShipmentPhoto key={item.id} shipmentId={shipment.id} itemId={item.id} productName={item.productSnapshot.name} available={Boolean(item.photoMimeType)} />)}</div>}
+      {pcp && <div className="pcp-evidence-grid">{(movement as PcpMovementDetail).shipmentEvidence?.map((item) => <ShipmentPhoto key={item.itemId} shipmentId={item.shipmentId} itemId={item.itemId} productName={movement.items.find((candidate) => candidate.productId === item.productId)?.product.name ?? 'produto'} available={Boolean(item.photoMimeType)} />)}</div>}
       {children?.(movement)}
     </>}
   </Modal>;
