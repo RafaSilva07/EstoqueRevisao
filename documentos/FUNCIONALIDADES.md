@@ -67,7 +67,7 @@ POST            /api/v1/shipments/:id/confirmation
 POST            /api/v1/shipments/:id/refusal
 ```
 
-Listagem: `view=pending|sent|history|updates`, `page` e `limit`; `updates` retorna decisões recentes dos próprios envios para a indicação da Home. Consultas respeitam o setor. `available-positions` é exclusivo da Revisão, exige `productId` e ao menos `batchCode` ou `manufacturingDate`, e retorna somente saldo positivo de produto/local ativos. Criação recebe multipart com `payload` contendo `requestKey`, `destinationSector` e `items`, além de um arquivo `photos` por item na mesma ordem; origem é inferida do usuário. Itens externos recebem `productId/lot/quantity` (ou variante existente via `batchId`); itens da Revisão recebem `productId/batchId/stockLocationId/quantity`. Confirmação aceita `confirmedExpirationKeys` quando houver divergência apresentada; recusa exige `reason`.
+Listagem: `view=pending|sent|history|updates|open`, `status`, `page` e `limit`; `open` reúne envios ainda aguardando recebimento ou em separação dos quais o setor participa, enquanto `updates` retorna decisões recentes dos próprios envios. Consultas respeitam o setor. `available-positions` é exclusivo da Revisão, exige `productId` e ao menos `batchCode` ou `manufacturingDate`, e retorna somente saldo positivo de produto/local ativos. Criação recebe multipart com `payload` contendo `requestKey`, `destinationSector` e `items`, além de um arquivo `photos` por item na mesma ordem; origem é inferida do usuário. Itens externos recebem `productId/lot/quantity` (ou variante existente via `batchId`); itens da Revisão recebem `productId/batchId/stockLocationId/quantity`. Confirmação aceita `confirmedExpirationKeys` quando houver divergência apresentada; recusa exige `reason`.
 
 Somente a confirmação gera entradas/saídas nos relatórios existentes. Nas saídas da Revisão, o saldo já fica indisponível desde a criação e aparece como **em trânsito** nos envios pendentes; recusa restaura o disponível. Estoque/Home/relatório de validades mostram saldo disponível. Movimentos vinculados exibem o identificador do envio na observação e não oferecem cancelamento isolado; devoluções são novos envios. Regras completas em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#envios-entre-setores).
 
@@ -226,9 +226,9 @@ A interface `Relatórios > Estoque e validades` apresenta saldo, lote, fabricaç
 
 ## Dashboard operacional
 
-A Home apresenta os saldos atuais de Revisar, Lata Boa, Varejo e TUF, a quantidade de posições vencidas e próximas do vencimento e as cinco movimentações mais recentes. Os dados são obtidos dos relatórios de estoque e do histórico de movimentações, respeitando as permissões existentes e sem recalcular regras de validade ou saldo no navegador.
+A Home exibe, antes dos atalhos, um ponto de atenção quando o setor ativo possui solicitações aguardando seu aceite ou envios em separação. Os totais vêm das consultas de envios, com escopo do setor e atualização ao entrar ou alternar o modo operacional.
 
-Antes dos indicadores, a Home destaca envios aguardando recebimento e decisões recentes. Os atalhos operacionais levam diretamente a Entrada, Saída, Revisão, Transferência e consulta de Estoque. A visualização usa cards no mobile e tabela responsiva para a atividade recente, sem gráficos, exportações ou indicadores de BI.
+Abaixo dos menus e botões existentes ficam, conforme as permissões do perfil: movimentações abertas das quais o setor participa; movimentações concluídas aguardando execução do PCP; e as últimas movimentações finalizadas. Revisão/Admin abrem o detalhe de uma movimentação sem sair da Home; PCP segue para sua fila; Produção e Expedição consultam os envios abertos e o histórico dos próprios setores. A apresentação é mobile-first em cards clicáveis e não recalcula estados no navegador.
 
 ## Experiência de uso
 

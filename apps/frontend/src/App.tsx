@@ -21,6 +21,7 @@ import { ProductForm } from './ProductForm';
 import { PcpPage } from './PcpPage';
 import { MovementDetailModal } from './MovementDetailModal';
 import { OperationalMode, operationalModeLabel, userForOperationalMode } from './operational-mode';
+import { OperationalHomePage } from './OperationalHomePage';
 
 type Navigate = (page: Page) => void;
 const messageFrom = (error: unknown) => error instanceof Error ? error.message : 'Ocorreu um erro inesperado.';
@@ -218,7 +219,8 @@ export function App() {
     <aside className="sidebar"><nav aria-label="Navegação principal"><NavButton active={page === 'home'} onClick={() => go('home')}>Início</NavButton>{areas.map((area) => <NavButton key={area.page} active={page === area.page || parentPage(page, activeUser) === area.page} onClick={() => go(area.page)}>{area.title}</NavButton>)}<NavButton active={page === 'more' || page === 'users' || page === 'settings'} onClick={() => go('more')}>Menu e conta</NavButton></nav><p className="sidebar-note">{operationalModeLabel[activeMode]}</p></aside>
     <main className="workspace" id="main-content" tabIndex={-1}>
       <NavigationTrail page={page} user={activeUser} navigate={go} />
-      {menus.includes(page) && <SectionMenu page={page} user={activeUser} navigate={go} />}
+      {page === 'home' && <OperationalHomePage key={activeMode} user={activeUser} navigate={go} />}
+      {page !== 'home' && menus.includes(page) && <SectionMenu page={page} user={activeUser} navigate={go} />}
       {page === 'more' && <section className="surface account-card"><h2>{user.username}</h2><p className="muted">{operationalModeLabel[activeMode]}</p><button className="secondary" onClick={logout} disabled={loggingOut}>{loggingOut ? 'Saindo…' : 'Sair do sistema'}</button></section>}
       {page === 'users' && adminMode && <UsersPage currentUserId={user.id} onOwnUpdate={logout} />}
       {page === 'settings' && adminMode && <SettingsPage />}

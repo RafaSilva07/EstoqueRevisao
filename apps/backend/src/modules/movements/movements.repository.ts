@@ -6,6 +6,7 @@ import { MovementQueryDto } from './dto/movement-query.dto';
 import { MovementItemEntity } from './entities/movement-item.entity';
 import { MovementEntity } from './entities/movement.entity';
 import { MovementItemDistributionEntity } from './entities/movement-item-distribution.entity';
+import { PcpExecutionStatus } from '../pcp/domain/pcp-execution-status.enum';
 
 @Injectable()
 export class MovementsRepository {
@@ -73,6 +74,9 @@ export class MovementsRepository {
     if (query.dateFrom) builder.andWhere('movement.occurredAt >= :dateFrom', { dateFrom: query.dateFrom });
     if (query.dateTo) builder.andWhere('movement.occurredAt <= :dateTo', { dateTo: query.dateTo });
     if (query.type) builder.andWhere('movement.type = :type', { type: query.type });
+    if (query.status) builder.andWhere('movement.status = :status', { status: query.status });
+    if (query.pcpStatus) builder.andWhere('movement.pcpExecutionStatus = :pcpStatus', { pcpStatus: query.pcpStatus });
+    if (query.pcpStatus === PcpExecutionStatus.Pending) builder.andWhere('movement.requiresPcpExecution = true');
     if (query.originLocationId) builder.andWhere('movement.originLocationId = :originLocationId', { originLocationId: query.originLocationId });
     if (query.destinationLocationId) {
       builder.andWhere(

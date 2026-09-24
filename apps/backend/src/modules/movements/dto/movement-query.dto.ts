@@ -1,6 +1,8 @@
 import { IsEnum, IsISO8601, IsOptional, IsUUID } from 'class-validator';
 import { PaginationQueryDto } from '../../../shared/pagination/pagination-query.dto';
 import { MovementType } from '../domain/movement-type.enum';
+import { MovementStatus } from '../domain/movement-status.enum';
+import { PcpExecutionStatus } from '../../pcp/domain/pcp-execution-status.enum';
 
 export class MovementQueryDto extends PaginationQueryDto {
   @IsOptional()
@@ -14,6 +16,14 @@ export class MovementQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(MovementType)
   type?: MovementType;
+
+  @IsOptional()
+  @IsEnum(MovementStatus)
+  status?: MovementStatus;
+
+  @IsOptional()
+  @IsEnum(PcpExecutionStatus)
+  pcpStatus?: PcpExecutionStatus;
 
   @IsOptional()
   @IsUUID()

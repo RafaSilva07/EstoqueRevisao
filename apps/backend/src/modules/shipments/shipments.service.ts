@@ -61,8 +61,10 @@ export class ShipmentsService {
     const sector = this.sector(user);
     const builder = this.details().where('(shipment.originSector = :sector OR shipment.destinationSector = :sector)', { sector });
     if (query.view === 'pending') builder.andWhere("shipment.destinationSector = :sector AND shipment.status IN ('AGUARDANDO_RECEBIMENTO','EM_SEPARACAO')");
+    if (query.view === 'open') builder.andWhere("shipment.status IN ('AGUARDANDO_RECEBIMENTO','EM_SEPARACAO')");
     if (query.view === 'sent' || query.view === 'updates') builder.andWhere('shipment.createdById = :userId', { userId: user.id });
     if (query.view === 'history' || query.view === 'updates') builder.andWhere("shipment.status NOT IN ('AGUARDANDO_RECEBIMENTO','EM_SEPARACAO')");
+    if (query.status) builder.andWhere('shipment.status = :status', { status: query.status });
     const [items, total] = await builder.orderBy(query.view === 'updates' ? 'shipment.decidedAt' : 'shipment.createdAt','DESC').addOrderBy('shipment.id','DESC')
       .skip((query.page - 1) * query.limit).take(query.limit).getManyAndCount();
     return paginate(items, total, query.page, query.limit);

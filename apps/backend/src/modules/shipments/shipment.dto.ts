@@ -3,7 +3,7 @@ import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsIn, IsI
 import { OperationalLotDto } from '../batches/dto/operational-lot.dto';
 import { PaginationQueryDto } from '../../shared/pagination/pagination-query.dto';
 import { trimString } from '../../shared/validation/transforms';
-import { Sector } from './shipment.entity';
+import { Sector, ShipmentStatus } from './shipment.entity';
 
 export class ShipmentItemDto {
   @IsUUID() productId!: string;
@@ -43,7 +43,8 @@ export class RefuseShipmentDto extends ExpirationConfirmationDto {
   @IsString() @MinLength(1) @MaxLength(1000) reason!: string;
 }
 export class ShipmentQueryDto extends PaginationQueryDto {
-  @IsOptional() @IsIn(['pending','sent','history','updates']) view: 'pending' | 'sent' | 'history' | 'updates' = 'pending';
+  @IsOptional() @IsIn(['pending','sent','history','updates','open']) view: 'pending' | 'sent' | 'history' | 'updates' | 'open' = 'pending';
+  @IsOptional() @IsIn(['AGUARDANDO_RECEBIMENTO','EM_SEPARACAO','CONFIRMADO','RECUSADO']) status?: ShipmentStatus;
 }
 
 export class AvailableShipmentPositionsQueryDto extends PaginationQueryDto {
