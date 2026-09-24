@@ -44,7 +44,7 @@ export function menuActions(page: Page, user: UserSession): MenuAction[] {
     add(sector !== 'PCP' && can('shipments.read'), 'shipments', 'Enviar, receber e acompanhar entre setores.', 'Envios e recebimentos');
     add((review || sector === 'PCP') && can('stock-positions.read'), 'inventory', 'Ver saldos, lotes e validades.');
     add(can('movements.read') || can('pcp.movements.read') || (sector !== 'PCP' && can('shipments.read')), 'history', 'Encontrar envios e operações pelo status.', 'Histórico');
-    add(can('products.read'), 'products', 'Buscar códigos e consultar produtos.');
+    add(can('products.read'), 'products', 'Buscar, cadastrar e manter produtos.');
     add(sector === 'PCP' && can('pcp.movements.read'), 'pcp', 'Executar movimentações pendentes.', 'Fila do PCP');
   } else if (page === 'more') {
     add(review && can('movements.read'), 'reports', 'Totais e exportação de movimentações.', 'Relatórios de movimentações');

@@ -9,6 +9,8 @@ import { ProductQueryDto } from './dto/product-query.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductEntity } from './entities/product.entity';
 import { ProductsRepository } from './products.repository';
+import { AuditLogEntity } from '../audit/entities/audit-log.entity';
+import { ProductAuditEntry, ProductAuditQueryDto } from './dto/product-audit-query.dto';
 
 @Injectable()
 export class ProductsService {
@@ -21,6 +23,26 @@ export class ProductsService {
   async list(query: ProductQueryDto): Promise<PaginatedResult<ProductEntity>> {
     const [items, total] = await this.productsRepository.findAndCount(query);
     return paginate(items, total, query.page, query.limit);
+  }
+
+  async auditHistory(query: ProductAuditQueryDto): Promise<PaginatedResult<ProductAuditEntry>> {
+    const qb = this.dataSource.getRepository(AuditLogEntity).createQueryBuilder('audit')
+      .leftJoinAndSelect('audit.user', 'author')
+      .select(['audit.id', 'audit.entityId', 'audit.action', 'audit.createdAt', 'audit.oldValues', 'audit.newValues', 'author.id', 'author.username'])
+      .where('audit.entityType = :entityType', { entityType: 'PRODUCT' })
+      .andWhere('audit.result = :result', { result: 'SUCCESS' });
+    if (query.productId) qb.andWhere('audit.entityId = :productId', { productId: query.productId });
+    const [events, total] = await qb.orderBy('audit.createdAt', 'DESC').addOrderBy('audit.id', 'DESC')
+      .skip((query.page - 1) * query.limit).take(query.limit).getManyAndCount();
+    return paginate(events.map((event) => ({
+      id: event.id,
+      productId: event.entityId!,
+      action: event.action,
+      username: event.user?.username ?? null,
+      createdAt: event.createdAt,
+      oldValues: event.oldValues,
+      newValues: event.newValues,
+    })), total, query.page, query.limit);
   }
 
   async getById(id: string): Promise<ProductEntity> {

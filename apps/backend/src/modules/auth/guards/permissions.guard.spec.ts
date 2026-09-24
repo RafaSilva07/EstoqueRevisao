@@ -13,12 +13,14 @@ describe('Permissões por setor', () => {
     return new PermissionsGuard(reflector).canActivate(context);
   };
   it.each(['PRODUCAO','EXPEDICAO'])('bloqueia operações internas mesmo com permissão indevida: %s', (sector) => {
-    for (const permission of ['movements.create','movements.cancel','stocks.update','stock-positions.read','products.update']) {
+    for (const permission of ['movements.create','movements.cancel','stocks.update','stock-positions.read']) {
       expect(check(sector,[permission],[permission])).toBe(false);
     }
     expect(check(sector,['shipments.decide'],['shipments.decide'])).toBe(true);
     expect(check(sector,['shipments.decide'],[])).toBe(false);
     expect(check(sector,['products.read'],['products.read'])).toBe(true);
+    expect(check(sector,['products.create'],['products.create'])).toBe(true);
+    expect(check(sector,['products.update'],['products.update'])).toBe(true);
   });
   it('preserva permissões internas da Revisão', () => {
     expect(check('REVISAO',['movements.create'],['movements.create'])).toBe(true);
@@ -29,11 +31,13 @@ describe('Permissões por setor', () => {
     expect(check('REVISAO', ['movements.create'], ['movements.create'], ['ADMIN'], 'PRODUCAO')).toBe(false);
     expect(check('REVISAO', ['movements.create'], ['movements.create'], ['ADMIN'], 'REVISAO')).toBe(true);
     expect(check('REVISAO', ['movements.cancel'], ['movements.cancel'], ['ADMIN'], 'REVISAO')).toBe(false);
-    expect(check('REVISAO', ['products.update'], ['products.update'], ['ADMIN'], 'REVISAO')).toBe(false);
+    expect(check('REVISAO', ['products.update'], ['products.update'], ['ADMIN'], 'REVISAO')).toBe(true);
     expect(check('REVISAO', ['pcp.movements.execute'], ['pcp.movements.execute'], ['ADMIN'], 'PCP')).toBe(true);
     expect(check('REVISAO', ['movements.create'], ['movements.create'], ['ADMIN'], 'PCP')).toBe(false);
     expect(check('REVISAO', ['movements.cancel'], ['movements.cancel'], ['ADMIN'], 'ADMIN')).toBe(true);
     expect(check('REVISAO', ['products.update'], ['products.update'], ['ADMIN'], 'ADMIN')).toBe(true);
+    expect(check('REVISAO', ['products.create'], ['products.create'], ['ADMIN'], 'PCP')).toBe(true);
+    expect(check('REVISAO', ['product-conversions.create'], ['product-conversions.create'], ['ADMIN'], 'PCP')).toBe(false);
   });
   it('rejeita troca por não administrador ou para setor inválido', () => {
     expect(() => check('PRODUCAO', ['shipments.read'], ['shipments.read'], ['PRODUCAO'], 'REVISAO')).toThrow(ForbiddenException);

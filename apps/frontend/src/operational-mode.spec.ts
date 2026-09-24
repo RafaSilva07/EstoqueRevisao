@@ -16,10 +16,10 @@ describe('escopo do modo operacional administrativo', () => {
   it('projeta exatamente o perfil operacional ao alternar de modo', () => {
     const review = userForOperationalMode(administrator, 'REVISAO');
     expect(review).toMatchObject({
-      sector: 'REVISAO', roles: ['REVISAO'], permissions: ['movements.read', 'movements.create', 'products.read', 'shipments.read'],
+      sector: 'REVISAO', roles: ['REVISAO'], permissions: ['movements.read', 'movements.create', 'products.read', 'products.update', 'shipments.read'],
     });
     expect(userForOperationalMode(administrator, 'PCP')).toMatchObject({
-      sector: 'PCP', roles: ['PCP'], permissions: ['products.read', 'shipments.read', 'pcp.movements.execute'],
+      sector: 'PCP', roles: ['PCP'], permissions: ['products.read', 'products.update', 'shipments.read', 'pcp.movements.execute'],
     });
     expect(menuActions('operations', review).map((action) => action.page)).toEqual(['new-transfer', 'new-review']);
     expect(menuActions('more', review).some((action) => action.page === 'users')).toBe(false);

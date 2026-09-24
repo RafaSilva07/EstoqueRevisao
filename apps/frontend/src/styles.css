@@ -460,7 +460,7 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
 
 .shipment-tabs, .shipment-pagination { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin: 1rem 0; }
 .shipment-tabs > button { flex: 1 1 10rem; }
-.shipment-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1rem; }
+.shipment-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; }
 .history-list { display: grid; gap: .75rem; margin: 1rem 0; }
 .history-card { display: grid; width: 100%; min-width: 0; gap: .35rem; text-align: left; overflow-wrap: anywhere; color: var(--text); }
 .history-card .badge { justify-self: start; }
@@ -468,7 +468,18 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
 .history-card small { color: var(--muted); }
 .history-card-action { color: var(--primary-dark); font-weight: 700; }
 .history-card:hover, .history-card:focus-visible { border-color: var(--primary); background: var(--primary-soft); }
-.shipment-card { padding: 1rem; min-width: 0; overflow-wrap: anywhere; margin-bottom: 1rem; }
+.shipment-card { padding: 1rem; min-width: 0; overflow-wrap: anywhere; }
+.shipment-list .shipment-card { display: grid; align-content: start; gap: .4rem; }
+.shipment-list .shipment-card > p, .shipment-list .shipment-card > h2 { margin: 0; }
+.shipment-list .shipment-card > .button-wide { margin-top: .45rem; }
+.product-audit-dialog { width: min(100%, 48rem); }
+.product-audit-list { display: grid; gap: .65rem; padding: 0; list-style: none; }
+.product-audit-list li { display: grid; gap: .2rem; min-width: 0; border: 1px solid var(--line); border-radius: .6rem; padding: .7rem; }
+.product-audit-list small { color: var(--muted); }
+.product-audit-list pre { max-width: 100%; overflow-x: auto; font-size: .75rem; }
+@media (min-width: 760px) {
+  .shipment-list, .history-list { grid-template-columns: repeat(auto-fill, minmax(17rem, 22rem)); }
+}
 .shipment-card h2 { font-size: 1.2rem; }
 .shipment-items { width: 100%; margin: .75rem 0 1rem; }
 .movement-detail-items .shipment-item-card { min-width: 0; gap: .7rem; border: 1px solid var(--line); border-radius: .7rem; background: #f6f9fa; padding: .85rem; }

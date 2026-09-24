@@ -28,7 +28,7 @@ describe('Operações administrativas (HTTP)', () => {
       providers: [
         { provide: MovementsService, useValue: { createExternalEntry: write, createExternalExit: write, cancel: write, createInternalTransfer: write, createReview: write } },
         { provide: OperationalLotsService, useValue: { preview: write } },
-        { provide: ProductsService, useValue: { setStatus: write } },
+        { provide: ProductsService, useValue: { setStatus: write, auditHistory: write } },
         { provide: ProductUnitConversionsService, useValue: { setStatus: write } },
         { provide: StockLocationsService, useValue: { setStatus: write } },
         { provide: UsersService, useValue: { list: write, create: write, update: write, remove: write, roles: write } },
@@ -36,7 +36,7 @@ describe('Operações administrativas (HTTP)', () => {
     }).compile();
     app = module.createNestApplication();
     app.use((req: Request, _res: Response, next: NextFunction) => {
-      req.user = { id, roles: [req.headers['test-role'] ?? 'REVISAO'], sector: req.headers['test-sector'] ?? 'REVISAO', permissions: ['movements.create', 'movements.cancel', 'products.update', 'product-conversions.update', 'stocks.update'] };
+      req.user = { id, roles: [req.headers['test-role'] ?? 'REVISAO'], sector: req.headers['test-sector'] ?? 'REVISAO', permissions: ['movements.create', 'movements.cancel', 'products.read', 'products.update', 'product-conversions.update', 'stocks.update'] };
       next();
     });
     app.useGlobalGuards(new PermissionsGuard(app.get(Reflector)));
@@ -48,7 +48,7 @@ describe('Operações administrativas (HTTP)', () => {
 
   it.each([
     ['POST', '/movements/external-entries'], ['POST', '/movements/external-exits'],
-    ['POST', `/movements/${id}/cancellation`], ['PATCH', `/products/${id}/status`],
+    ['POST', `/movements/${id}/cancellation`], ['GET', '/products/audit-history'],
     ['PATCH', `/product-conversions/${id}/status`], ['PATCH', `/stocks/${id}/status`],
     ['GET', '/users'], ['GET', '/users/roles'], ['POST', '/users'], ['PATCH', `/users/${id}`], ['DELETE', `/users/${id}`],
   ])('%s %s exige ADMIN além das permissões', async (method, route) => {
@@ -66,6 +66,13 @@ describe('Operações administrativas (HTTP)', () => {
     const response = await fetch(url + route, { method: 'POST', headers: { 'test-role': 'REVISAO' } });
     expect(response.ok).toBe(true);
     expect(write).toHaveBeenCalledTimes(1);
+  });
+  it('permite inativar produtos em todos os perfis sem exigir ADMIN', async () => {
+    for (const role of ['REVISAO', 'PRODUCAO', 'EXPEDICAO', 'PCP']) {
+      const response = await fetch(url + `/products/${id}/status`, { method: 'PATCH', body: JSON.stringify({ active: false }), headers: { 'test-role': role, 'Content-Type': 'application/json' } });
+      expect(response.ok).toBe(true);
+    }
+    expect(write).toHaveBeenCalledTimes(4);
   });
   it('preserva a restrição do modo operacional mesmo para ADMIN', async () => {
     for (const mode of ['REVISAO', 'PRODUCAO', 'EXPEDICAO', 'PCP']) {

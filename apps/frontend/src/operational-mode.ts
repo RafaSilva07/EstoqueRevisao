@@ -13,13 +13,13 @@ export const operationalModeLabel: Record<OperationalMode, string> = {
 
 const permissionsByMode: Record<Sector, readonly string[]> = {
   REVISAO: [
-    'products.read', 'product-conversions.read', 'batches.read',
+    'products.read', 'products.create', 'products.update', 'product-conversions.read', 'batches.read',
     'stocks.read', 'stock-positions.read', 'movements.read', 'movements.create',
     'shipments.read', 'shipments.create', 'shipments.decide',
   ],
-  PRODUCAO: ['products.read', 'shipments.read', 'shipments.create', 'shipments.decide'],
-  EXPEDICAO: ['products.read', 'shipments.read', 'shipments.create', 'shipments.decide'],
-  PCP: ['pcp.movements.read', 'pcp.movements.execute', 'products.read', 'batches.read', 'stocks.read', 'stock-positions.read', 'shipments.read'],
+  PRODUCAO: ['products.read', 'products.create', 'products.update', 'shipments.read', 'shipments.create', 'shipments.decide'],
+  EXPEDICAO: ['products.read', 'products.create', 'products.update', 'shipments.read', 'shipments.create', 'shipments.decide'],
+  PCP: ['pcp.movements.read', 'pcp.movements.execute', 'products.read', 'products.create', 'products.update', 'batches.read', 'stocks.read', 'stock-positions.read', 'shipments.read'],
 };
 
 export function userForOperationalMode(user: UserSession, mode: OperationalMode): UserSession {

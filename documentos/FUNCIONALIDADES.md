@@ -6,7 +6,7 @@ Este documento descreve o comportamento disponível hoje. As regras completas e 
 
 Na branch `feat/navegacao-simplificada`, a Home e o menu lateral mostram destinos diretos conforme o perfil: **Movimentar produtos**, **Envios e recebimentos**, **Estoque e validades**, **Histórico**, **Produtos** e, no PCP, **Fila do PCP**. Ações administrativas e relatórios de totais ficam em **Menu e conta**. Os menus intermediários de estoque, histórico, solicitações e PCP não aparecem mais.
 
-O cadastro de usuários oferece `Revisão operacional` (`REVISAO`), no setor Revisão: solicitações, revisão, transferência e consultas, sem ADMIN. Entrada/saída direta, cancelamento de movimentações/revisões e ativação/inativação de cadastros são exclusivos do ADMIN e bloqueados pela API. Usuários existentes não são reclassificados automaticamente. Para atribuir acesso operacional, selecione esse perfil sem marcar Administrador.
+O cadastro de usuários oferece `Revisão operacional` (`REVISAO`), no setor Revisão: solicitações, revisão, transferência, consultas e gestão de produtos, sem ADMIN. Entrada/saída direta, cancelamento de movimentações/revisões e alteração dos demais cadastros continuam exclusivos do ADMIN e bloqueados pela API. Usuários existentes não são reclassificados automaticamente. Para atribuir acesso operacional, selecione esse perfil sem marcar Administrador.
 
 Todas as entradas, saídas, transferências e distribuições de revisão aceitam somente quantidades inteiras positivas. O frontend orienta o preenchimento e o backend aplica a validação definitiva antes de alterar saldos.
 
@@ -22,7 +22,7 @@ Todas as entradas, saídas, transferências e distribuições de revisão aceita
 
 O frontend possui login, restauração da sessão pelo cookie HttpOnly e navegação condicionada às permissões.
 
-Usuários `ADMIN` possuem no cabeçalho da aplicação o seletor **Modo operacional**, com as opções Admin, Revisão, Produção, Expedição e PCP. O login administrativo inicia em **Admin**, modo completo que usa a Revisão como contexto físico e reúne as ações exclusivas de administração. Ao selecionar **Revisão**, a interface e a API passam a oferecer somente solicitações, revisão, transferência e consultas do perfil Revisão operacional; gestão de usuários, entrada/saída direta, estorno e escrita em cadastros deixam de estar disponíveis. Produção, Expedição e PCP preservam seus próprios escopos. A identidade real do administrador continua registrada no histórico e na auditoria.
+Usuários `ADMIN` possuem no cabeçalho da aplicação o seletor **Modo operacional**, com as opções Admin, Revisão, Produção, Expedição e PCP. O login administrativo inicia em **Admin**, modo completo que usa a Revisão como contexto físico e reúne as ações exclusivas de administração. Ao selecionar um modo operacional, a interface e a API aplicam o escopo desse perfil: gestão de produtos continua disponível, enquanto gestão de usuários, entrada/saída direta, estorno e alteração dos demais cadastros ficam restritos ao modo Admin. A identidade real do administrador continua registrada no histórico e na auditoria.
 
 ## Gerenciar usuários (ADMIN)
 
@@ -41,6 +41,8 @@ Listagem aceita `search`, `page` e `limit`. `DELETE` inativa, sem excluir fisica
 ## Cadastro de produtos
 
 O cadastro mantém código, descrição, unidade, prazo de validade e, para fardos/caixas, quantidade e alternativas unitárias. Produtos do tipo `UN` também exigem **Gramatura da unidade (g)**, em gramas inteiras e positivas. O campo aparece somente para `UN`, é retornado nas consultas e registrado na auditoria; `FD` e `CX` mantêm a gramatura nula e não recebem cálculo de peso total. Cadastros unitários anteriores permanecem sem valor inventado e precisam ter a gramatura preenchida ao serem editados.
+
+Todos os perfis podem cadastrar, editar, excluir por inativação e reativar produtos. O administrador pode abrir o **Log de produtos** para consultar autor, data e valores anteriores/novos das alterações. No desktop, os cards de envios e histórico ocupam colunas compactas em vez de esticar um único registro por toda a largura.
 
 ## Envios entre setores
 
@@ -73,7 +75,7 @@ Somente a confirmação gera entradas/saídas nos relatórios existentes. Nas sa
 
 ## Produtos e conversões
 
-Produtos possuem listagem, busca, filtros, detalhe, criação, edição e ativação/inativação. O formulário identifica código, descrição, tipo de unidade e prazo padrão em anos; o prazo apenas sugere a validade de novas operações. O detalhe permite listar, criar, editar e ativar/inativar conversões de unidade.
+Produtos possuem listagem, busca, detalhe, criação, edição e exclusão por inativação em todos os perfis; cadastros inativos podem ser reativados. O formulário identifica código, descrição, tipo de unidade e prazo padrão em anos; o prazo apenas sugere a validade de novas operações. Conversões de unidade conservam suas permissões próprias. A auditoria de produtos pode ser consultada pelo administrador em `GET /api/v1/products/audit-history`.
 
 O tipo de unidade é uma seleção: Unidade (UN), Fardo (FD) ou Caixa (CX). Embalagens exigem **unidades por embalagem** e a vinculação de um ou mais códigos unitários existentes, pesquisáveis por código/descrição. A API recebe `unitsPerPackage` e `unitProductIds`; o filtro `defaultUnit=UN` restringe a busca às opções unitárias. As opções e o fator também aparecem nos detalhes. Valores antigos são preservados; configurações ausentes não são presumidas.
 

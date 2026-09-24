@@ -303,7 +303,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
   it('unifica o histórico sem duplicar envio confirmado e só finaliza após PCP', async () => {
     const history = new HistoryService(db);
     const review = { ...users.REVISAO, permissions: [...users.REVISAO.permissions, 'movements.read'] };
-    const query = { page: 1, limit: 20, scope: 'ALL' as const, kind: 'ALL' as const, sort: 'RECENT' as const };
+    const query = { page: 1, limit: 20, scope: 'ALL' as const, kind: 'ALL' as const, sort: 'RECENT' as const, type: 'ALL' as const };
     const shipment = await incoming();
     expect((await history.list(query, review)).items).toEqual(expect.arrayContaining([expect.objectContaining({ id: shipment.id, scope: 'OPEN' })]));
     expect((await history.list(query, users.EXPEDICAO)).items).toHaveLength(0);

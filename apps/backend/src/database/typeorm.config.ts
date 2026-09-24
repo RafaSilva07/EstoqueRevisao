@@ -38,6 +38,7 @@ import { SystemSettingEntity } from '../modules/settings/system-setting.entity';
 import { MovementPublicCodes1790121600000 } from './migrations/1790121600000-movement-public-codes';
 import { ShipmentLifecyclePublicCodes1790208000000 } from './migrations/1790208000000-shipment-lifecycle-public-codes';
 import { ShipmentSenderCancellation1790294400000 } from './migrations/1790294400000-shipment-sender-cancellation';
+import { ProductManagementAllRoles1790380800000 } from './migrations/1790380800000-product-management-all-roles';
 import { ReviewDestinationEntity } from '../modules/settings/review-destination.entity';
 
 export const databaseEntities = [
@@ -82,6 +83,7 @@ export const databaseMigrations = [
   MovementPublicCodes1790121600000,
   ShipmentLifecyclePublicCodes1790208000000,
   ShipmentSenderCancellation1790294400000,
+  ProductManagementAllRoles1790380800000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {

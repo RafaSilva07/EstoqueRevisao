@@ -15,8 +15,9 @@ Este documento consolida o comportamento funcional vigente. Regras históricas s
 
 ## Administração de usuários
 
-- O perfil `REVISAO` (Revisão operacional) pertence ao setor Revisão e permite solicitações, revisão, transferência interna e consultas de estoque, produtos, lotes e histórico. Não concede administração de usuários ou escrita em cadastros mestres.
-- Entrada e saída externas diretas, cancelamento/estorno de qualquer movimentação (inclusive revisão) e ativação/inativação de produtos, conversões e locais exigem `ADMIN`, além das permissões e restrições de setor existentes. Solicitações de envio/recebimento continuam disponíveis aos operadores autorizados.
+- O perfil `REVISAO` (Revisão operacional) pertence ao setor Revisão e permite solicitações, revisão, transferência interna, consultas e gestão de produtos. Não concede administração de usuários nem escrita nos demais cadastros mestres.
+- Todos os perfis podem cadastrar, editar, inativar e reativar produtos. Excluir um produto significa inativá-lo, preservando saldos, vínculos, histórico e auditoria. O log de alterações dos produtos é consultável somente por `ADMIN` no modo `ADMIN`.
+- Entrada e saída externas diretas, cancelamento/estorno de qualquer movimentação (inclusive revisão) e ativação/inativação de conversões e locais exigem `ADMIN`, além das permissões e restrições de setor existentes. Solicitações de envio/recebimento continuam disponíveis aos operadores autorizados.
 - Não há exclusão física de movimentações ou revisões. Administradores utilizam cancelamento com estorno, sujeito às validações já existentes; cadastros utilizam inativação. Vincular `ADMIN` a uma conta concede acesso administrativo mesmo se ela também possuir `REVISAO`.
 
 - Somente contas com perfil `ADMIN` no modo `ADMIN` podem consultar, criar, editar e excluir usuários.

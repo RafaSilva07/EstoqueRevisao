@@ -16,6 +16,7 @@ describe('ProductsService', () => {
   const audit = { record: jest.fn<Promise<void>, [AuditRecordInput]>() };
   const dataSource = {
     transaction: jest.fn((operation: (entityManager: EntityManager) => unknown) => operation(manager)),
+    getRepository: jest.fn(),
   };
   const service = new ProductsService(
     repository as unknown as ProductsRepository,
@@ -24,6 +25,22 @@ describe('ProductsService', () => {
   );
 
   beforeEach(() => jest.clearAllMocks());
+
+  it('pagina o log de produtos com filtro e sem metadados sensíveis', async () => {
+    const event = { id: 'event-1', entityId: 'product-1', action: 'PRODUCT_UPDATE', createdAt: new Date('2026-09-24T12:00:00Z'), oldValues: { name: 'Antes' }, newValues: { name: 'Depois' }, user: { username: 'operador' } };
+    const qb = {
+      leftJoinAndSelect: jest.fn(), select: jest.fn(), where: jest.fn(), andWhere: jest.fn(),
+      orderBy: jest.fn(), addOrderBy: jest.fn(), skip: jest.fn(), take: jest.fn(),
+      getManyAndCount: jest.fn().mockResolvedValue([[event], 1]),
+    };
+    for (const key of ['leftJoinAndSelect', 'select', 'where', 'andWhere', 'orderBy', 'addOrderBy', 'skip', 'take'] as const) qb[key].mockReturnValue(qb);
+    dataSource.getRepository.mockReturnValue({ createQueryBuilder: () => qb });
+    const result = await service.auditHistory({ productId: 'product-1', page: 2, limit: 1 });
+    expect(result.meta).toMatchObject({ page: 2, limit: 1, total: 1 });
+    expect(qb.andWhere).toHaveBeenCalledWith('audit.entityId = :productId', { productId: 'product-1' });
+    expect(qb.skip).toHaveBeenCalledWith(1);
+    expect(result.items[0]).toEqual({ id: 'event-1', productId: 'product-1', action: 'PRODUCT_UPDATE', createdAt: event.createdAt, username: 'operador', oldValues: event.oldValues, newValues: event.newValues });
+  });
 
   it('cria produto ativo e registra auditoria na mesma transacao', async () => {
     repository.existsByCode.mockResolvedValue(false);

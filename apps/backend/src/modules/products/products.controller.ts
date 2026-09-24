@@ -15,6 +15,7 @@ import { ProductUnitConversionsService } from './product-unit-conversions.servic
 import { ProductsService } from './products.service';
 import { ProductEntity } from './entities/product.entity';
 import { ProductUnitConversionEntity } from './entities/product-unit-conversion.entity';
+import { ProductAuditEntry, ProductAuditQueryDto } from './dto/product-audit-query.dto';
 
 @Controller()
 export class ProductsController {
@@ -27,6 +28,13 @@ export class ProductsController {
   @RequirePermissions('products.read')
   list(@Query() query: ProductQueryDto): Promise<PaginatedResult<ProductEntity>> {
     return this.productsService.list(query);
+  }
+
+  @Get('products/audit-history')
+  @RequirePermissions('products.read')
+  @UseGuards(AdminGuard)
+  auditHistory(@Query() query: ProductAuditQueryDto): Promise<PaginatedResult<ProductAuditEntry>> {
+    return this.productsService.auditHistory(query);
   }
 
   @Get('products/:id')
@@ -53,7 +61,6 @@ export class ProductsController {
 
   @Patch('products/:id/status')
   @RequirePermissions('products.update')
-  @UseGuards(AdminGuard)
   setStatus(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: StatusDto,
