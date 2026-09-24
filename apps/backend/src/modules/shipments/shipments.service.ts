@@ -1,5 +1,5 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { DataSource, EntityManager, SelectQueryBuilder } from 'typeorm';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { DataSource, EntityManager, In, SelectQueryBuilder } from 'typeorm';
 import { AuthenticatedUser } from '../auth/authenticated-user.interface';
 import { AuditService } from '../audit/audit.service';
 import { AuditRequestMetadata } from '../audit/audit.types';
@@ -17,15 +17,17 @@ import { MovementItemEntity } from '../movements/entities/movement-item.entity';
 import { MovementType } from '../movements/domain/movement-type.enum';
 import { MovementStatus } from '../movements/domain/movement-status.enum';
 import { PaginatedResult, paginate } from '../../shared/pagination/paginated-result.interface';
-import { AvailableShipmentPositionsQueryDto, CreateShipmentDto, ExpirationConfirmationDto, ShipmentQueryDto } from './shipment.dto';
-import { Sector, ShipmentEntity, ShipmentItemEntity, ShipmentStatus } from './shipment.entity';
+import { AvailableShipmentPositionsQueryDto, CompleteSeparationDto, CreateShipmentDto, ExpirationConfirmationDto, SeparationDraftDto, ShipmentQueryDto } from './shipment.dto';
+import { Sector, ShipmentEntity, ShipmentItemEntity, ShipmentSeparationDraftEntity, ShipmentStatus } from './shipment.entity';
 import { StoredImage, StorageService, UploadedImage } from '../storage/storage.service';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class ShipmentsService {
   constructor(private readonly dataSource: DataSource, private readonly lots: OperationalLotsService,
     private readonly stock: StockPositionsService, private readonly movements: MovementsRepository,
-    private readonly audit: AuditService, private readonly storage: StorageService) {}
+    private readonly audit: AuditService, private readonly storage: StorageService,
+    @Optional() private readonly settings?: SettingsService) {}
 
   private sector(user: AuthenticatedUser): Sector {
     if (!['REVISAO','PRODUCAO','EXPEDICAO'].includes(user.sector ?? '')) throw new ForbiddenException('Usuário sem setor válido.');
@@ -36,12 +38,17 @@ export class ShipmentsService {
     return manager.getRepository(ShipmentEntity).createQueryBuilder('shipment')
       .innerJoinAndSelect('shipment.createdBy', 'creator')
       .leftJoinAndSelect('shipment.decidedBy', 'decider')
+      .leftJoinAndSelect('shipment.receivedBy', 'receiver')
+      .leftJoinAndSelect('shipment.sourceShipment', 'sourceShipment')
+      .leftJoinAndSelect('shipment.derivedShipments', 'derivedShipment')
       .leftJoinAndSelect('shipment.items', 'item')
+      .leftJoinAndSelect('item.separationDraft', 'separationDraft')
       .leftJoinAndSelect('item.batch', 'batch')
       .leftJoinAndSelect('item.stockLocation', 'location');
   }
 
-  async get(id: string, user: AuthenticatedUser, manager = this.dataSource.manager): Promise<ShipmentEntity> {
+  async get(id: string, user: AuthenticatedUser, manager = this.dataSource.manager, processExpiration = true): Promise<ShipmentEntity> {
+    if (processExpiration) await this.expireDueSeparations();
     const sector = this.sector(user);
     const shipment = await this.details(manager).where('shipment.id = :id', { id })
       .andWhere('(shipment.originSector = :sector OR shipment.destinationSector = :sector)', { sector }).getOne();
@@ -50,11 +57,12 @@ export class ShipmentsService {
   }
 
   async list(query: ShipmentQueryDto, user: AuthenticatedUser): Promise<PaginatedResult<ShipmentEntity>> {
+    await this.expireDueSeparations();
     const sector = this.sector(user);
     const builder = this.details().where('(shipment.originSector = :sector OR shipment.destinationSector = :sector)', { sector });
-    if (query.view === 'pending') builder.andWhere('shipment.destinationSector = :sector AND shipment.status = :pending', { pending: 'AGUARDANDO_RECEBIMENTO' });
+    if (query.view === 'pending') builder.andWhere("shipment.destinationSector = :sector AND shipment.status IN ('AGUARDANDO_RECEBIMENTO','EM_SEPARACAO')");
     if (query.view === 'sent' || query.view === 'updates') builder.andWhere('shipment.createdById = :userId', { userId: user.id });
-    if (query.view === 'history' || query.view === 'updates') builder.andWhere('shipment.status <> :pending', { pending: 'AGUARDANDO_RECEBIMENTO' });
+    if (query.view === 'history' || query.view === 'updates') builder.andWhere("shipment.status NOT IN ('AGUARDANDO_RECEBIMENTO','EM_SEPARACAO')");
     const [items, total] = await builder.orderBy(query.view === 'updates' ? 'shipment.decidedAt' : 'shipment.createdAt','DESC').addOrderBy('shipment.id','DESC')
       .skip((query.page - 1) * query.limit).take(query.limit).getManyAndCount();
     return paginate(items, total, query.page, query.limit);
@@ -204,7 +212,7 @@ export class ShipmentsService {
     return { data: await this.storage.readImage(item.photoStorageKey), mimeType: item.photoMimeType };
   }
 
-  async decide(id: string, status: Exclude<ShipmentStatus, 'AGUARDANDO_RECEBIMENTO'>,
+  async decide(id: string, status: Exclude<ShipmentStatus, 'AGUARDANDO_RECEBIMENTO' | 'EM_SEPARACAO'>,
     reason: string | null, dto: ExpirationConfirmationDto, user: AuthenticatedUser, metadata: AuditRequestMetadata): Promise<ShipmentEntity> {
     const sector = this.sector(user);
     if (status === 'RECUSADO' && (!reason?.trim() || reason.trim().length > 1000)) throw new BadRequestException('Informe o motivo da recusa (até 1000 caracteres).');
@@ -215,8 +223,37 @@ export class ShipmentsService {
       if (locked.destinationSector !== sector) throw new ForbiddenException('Somente o setor destinatário pode decidir o recebimento.');
       if (locked.status === status) return; // Replay never moves stock again.
       if (locked.status !== 'AGUARDANDO_RECEBIMENTO') throw new ConflictException('Este envio já foi concluído. Crie um novo envio para correções.');
-      const shipment = await this.get(id, user, manager);
+      const shipment = await this.get(id, user, manager, false);
       const items = this.ordered(shipment.items);
+      if (status === 'CONFIRMADO' && dto.immediateSeparation) {
+        if (sector !== 'REVISAO' || shipment.originSector !== 'EXPEDICAO' || shipment.shipmentKind !== 'NORMAL') {
+          throw new BadRequestException('A separacao imediata esta disponivel apenas para recebimentos da Expedicao pela Revisao.');
+        }
+        for (const item of items) {
+          await this.lots.resolveExistingInTransaction(item.productId, item.batchId, user.id, dto.confirmedExpirationKeys ?? [], manager);
+        }
+        const startedAt = new Date();
+        if (!this.settings) throw new ConflictException('A configuracao da separacao imediata nao esta disponivel.');
+        const minutes = await this.settings.separationMinutes(manager);
+        const expiresAt = new Date(startedAt.getTime() + minutes * 60_000);
+        shipment.status = 'EM_SEPARACAO';
+        shipment.receivedById = user.id;
+        shipment.receivedAt = startedAt;
+        shipment.separationStartedAt = startedAt;
+        shipment.separationExpiresAt = expiresAt;
+        await manager.getRepository(ShipmentEntity).update(id, {
+          status: 'EM_SEPARACAO', receivedById: user.id, receivedAt: startedAt,
+          separationStartedAt: startedAt, separationExpiresAt: expiresAt,
+        });
+        await manager.save(items.map((item) => Object.assign(new ShipmentSeparationDraftEntity(), {
+          shipmentItemId: item.id, returnQuantity: 0, updatedAt: startedAt,
+        })));
+        await this.record(shipment, user.id, 'SHIPMENT_SEPARATION_START', manager, metadata, {
+          previousStatus: 'AGUARDANDO_RECEBIMENTO', separationStartedAt: startedAt, separationExpiresAt: expiresAt,
+          capturedTimeoutMinutes: minutes,
+        });
+        return;
+      }
       if (status === 'CONFIRMADO' && sector === 'REVISAO') {
         for (const productId of [...new Set(items.map((item) => item.productId))].sort()) {
           await manager.getRepository(ProductEntity).createQueryBuilder('product').where('product.id = :productId', { productId })
@@ -227,7 +264,7 @@ export class ShipmentsService {
           await this.stock.addQuantity({ productId: item.productId, batchId: item.batchId, stockLocationId: shipment.destinationLocationId }, item.quantity, manager);
         }
       }
-      if (status === 'RECUSADO' && shipment.originSector === 'REVISAO') {
+      if (status === 'RECUSADO' && shipment.originSector === 'REVISAO' && shipment.shipmentKind !== 'RETORNO_IMEDIATO') {
         for (const item of items) await this.stock.restoreQuantity(this.stockKey(item), item.quantity, manager);
       }
       shipment.status = status;
@@ -242,6 +279,151 @@ export class ShipmentsService {
         { previousStatus: 'AGUARDANDO_RECEBIMENTO', confirmedExpirationKeys: dto.confirmedExpirationKeys ?? [] });
     });
     return this.get(id, user);
+  }
+
+  async saveSeparationDraft(id: string, dto: SeparationDraftDto, user: AuthenticatedUser,
+    metadata: AuditRequestMetadata): Promise<ShipmentEntity> {
+    await this.expireDueSeparations();
+    const sector = this.sector(user);
+    await this.dataSource.transaction(async (manager) => {
+      const locked = await manager.getRepository(ShipmentEntity).createQueryBuilder('shipment')
+        .where('shipment.id = :id', { id }).setLock('pessimistic_write').getOne();
+      if (!locked) throw new NotFoundException('Envio nao encontrado.');
+      if (sector !== 'REVISAO' || locked.destinationSector !== sector) throw new ForbiddenException('Somente a Revisao pode editar esta separacao.');
+      if (locked.status !== 'EM_SEPARACAO') throw new ConflictException('A separacao nao esta mais disponivel.');
+      const shipment = await this.details(manager).where('shipment.id = :id', { id }).getOneOrFail();
+      const values = this.validateSeparationItems(shipment.items, dto);
+      const now = new Date();
+      await manager.save(values.map(({ item, returnQuantity }) => Object.assign(new ShipmentSeparationDraftEntity(), {
+        shipmentItemId: item.id, returnQuantity, updatedAt: now,
+      })));
+      await this.record(shipment, user.id, 'SHIPMENT_SEPARATION_DRAFT_SAVE', manager, metadata, {
+        items: values.map(({ item, returnQuantity }) => ({ shipmentItemId: item.id, returnQuantity })),
+      });
+    });
+    return this.get(id, user);
+  }
+
+  async completeSeparation(id: string, dto: CompleteSeparationDto, files: UploadedImage[], user: AuthenticatedUser,
+    metadata: AuditRequestMetadata): Promise<ShipmentEntity> {
+    await this.expireDueSeparations();
+    const positive = dto.items.filter((item) => item.returnQuantity > 0);
+    if (files.length !== positive.length) throw new BadRequestException('Adicione uma foto para cada produto com retorno.');
+    files.forEach((file) => this.storage.validateImage(file));
+    const photos: StoredImage[] = [];
+    let committed = false;
+    let expiredDuringCompletion = false;
+    try {
+      for (const file of files) photos.push(await this.storage.saveImage(file));
+      await this.dataSource.transaction(async (manager) => {
+        const locked = await manager.getRepository(ShipmentEntity).createQueryBuilder('shipment')
+          .where('shipment.id = :id', { id }).setLock('pessimistic_write').getOne();
+        if (!locked) throw new NotFoundException('Envio nao encontrado.');
+        if (this.sector(user) !== 'REVISAO' || locked.destinationSector !== 'REVISAO') throw new ForbiddenException('Somente a Revisao pode concluir esta separacao.');
+        if (locked.status !== 'EM_SEPARACAO') throw new ConflictException('A separacao ja foi concluida ou expirou.');
+        if (!locked.separationExpiresAt || locked.separationExpiresAt.getTime() <= Date.now()) {
+          const expired = await this.details(manager).where('shipment.id = :id', { id }).getOneOrFail();
+          await this.finalizeExpiredShipment(expired, manager, metadata);
+          expiredDuringCompletion = true;
+          return;
+        }
+        const shipment = await this.details(manager).where('shipment.id = :id', { id }).getOneOrFail();
+        const values = this.validateSeparationItems(shipment.items, dto);
+        const now = new Date();
+        const netItems: ShipmentItemEntity[] = [];
+        for (const { item, returnQuantity } of values) {
+          const net = item.quantity - returnQuantity;
+          if (net > 0) {
+            await this.stock.addQuantity({ productId: item.productId, batchId: item.batchId, stockLocationId: shipment.destinationLocationId }, net, manager);
+            netItems.push(Object.assign(new ShipmentItemEntity(), { ...item, quantity: net }));
+          }
+        }
+        shipment.status = 'CONFIRMADO'; shipment.decidedById = user.id; shipment.decidedAt = now; shipment.separationCompletedAt = now;
+        if (netItems.length) await this.recordMovements(Object.assign(new ShipmentEntity(), { ...shipment, items: netItems }), manager, metadata);
+
+        if (positive.length) {
+          const derived = Object.assign(new ShipmentEntity(), {
+            requestKey: crypto.randomUUID(), originSector: 'REVISAO', destinationSector: 'EXPEDICAO',
+            createdById: user.id, originLocationId: null, destinationLocationId: shipment.originLocationId!,
+            observation: `Retorno imediato do recebimento ${shipment.id}.`, shipmentKind: 'RETORNO_IMEDIATO', sourceShipmentId: shipment.id,
+          });
+          await manager.save(derived);
+          const byId = new Map(shipment.items.map((item) => [item.id, item]));
+          let photoIndex = 0;
+          const returnedItems = positive.map((input) => {
+            const source = byId.get(input.shipmentItemId)!;
+            const photo = photos[photoIndex++];
+            return Object.assign(new ShipmentItemEntity(), {
+              shipmentId: derived.id, productId: source.productId, batchId: source.batchId,
+              stockLocationId: shipment.destinationLocationId, quantity: input.returnQuantity,
+              observation: source.observation, productSnapshot: source.productSnapshot,
+              photoStorageKey: photo.key, photoMimeType: photo.mimeType, photoSize: photo.size,
+            });
+          });
+          await manager.save(returnedItems);
+          await this.record(derived, user.id, 'SHIPMENT_IMMEDIATE_RETURN_CREATE', manager, metadata, {
+            sourceShipmentId: shipment.id,
+            items: returnedItems.map((item) => ({ productId: item.productId, batchId: item.batchId, quantity: item.quantity, photoAttached: true })),
+          });
+        }
+        await manager.getRepository(ShipmentEntity).update(id, {
+          status: 'CONFIRMADO', decidedById: user.id, decidedAt: now, separationCompletedAt: now,
+        });
+        await manager.delete(ShipmentSeparationDraftEntity, { shipmentItemId: In(shipment.items.map((item) => item.id)) });
+        await this.record(shipment, user.id, 'SHIPMENT_SEPARATION_COMPLETE', manager, metadata, {
+          items: values.map(({ item, returnQuantity }) => ({ shipmentItemId: item.id, receivedQuantity: item.quantity,
+            returnQuantity, netQuantity: item.quantity - returnQuantity })),
+        });
+      });
+      committed = true;
+      if (expiredDuringCompletion) await Promise.allSettled(photos.map((photo) => this.storage.deleteImage(photo.key)));
+      return this.get(id, user);
+    } catch (error) {
+      if (!committed) await Promise.allSettled(photos.map((photo) => this.storage.deleteImage(photo.key)));
+      throw error;
+    }
+  }
+
+  private validateSeparationItems(items: ShipmentItemEntity[], dto: SeparationDraftDto): Array<{ item: ShipmentItemEntity; returnQuantity: number }> {
+    if (dto.items.length !== items.length) throw new BadRequestException('Informe o retorno de todos os itens recebidos.');
+    const inputs = new Map(dto.items.map((item) => [item.shipmentItemId, item.returnQuantity]));
+    if (inputs.size !== dto.items.length) throw new BadRequestException('Um item nao pode ser repetido na separacao.');
+    return items.map((item) => {
+      const returnQuantity = inputs.get(item.id);
+      if (returnQuantity === undefined || !Number.isSafeInteger(returnQuantity) || returnQuantity < 0 || returnQuantity > item.quantity) {
+        throw new BadRequestException('A quantidade de retorno deve ser inteira e nao pode superar o recebido.');
+      }
+      return { item, returnQuantity };
+    });
+  }
+
+  private async expireDueSeparations(): Promise<void> {
+    const due = await this.dataSource.getRepository(ShipmentEntity).createQueryBuilder('shipment').select('shipment.id', 'id')
+      .where("shipment.status = 'EM_SEPARACAO' AND shipment.separationExpiresAt <= CURRENT_TIMESTAMP")
+      .orderBy('shipment.separationExpiresAt', 'ASC').limit(100).getRawMany<{ id: string }>();
+    for (const row of due) {
+      await this.dataSource.transaction(async (manager) => {
+        const locked = await manager.getRepository(ShipmentEntity).createQueryBuilder('shipment')
+          .where('shipment.id = :id', { id: row.id }).setLock('pessimistic_write').getOne();
+        if (!locked || locked.status !== 'EM_SEPARACAO' || !locked.separationExpiresAt || locked.separationExpiresAt.getTime() > Date.now()) return;
+        const shipment = await this.details(manager).where('shipment.id = :id', { id: row.id }).getOneOrFail();
+        await this.finalizeExpiredShipment(shipment, manager, { requestId: `expiration-${shipment.id}`, ipAddress: null, userAgent: null });
+      });
+    }
+  }
+
+  private async finalizeExpiredShipment(shipment: ShipmentEntity, manager: EntityManager, metadata: AuditRequestMetadata): Promise<void> {
+    for (const item of this.ordered(shipment.items)) {
+      await this.stock.addQuantity({ productId: item.productId, batchId: item.batchId, stockLocationId: shipment.destinationLocationId }, item.quantity, manager);
+    }
+    const now = new Date();
+    shipment.status = 'CONFIRMADO'; shipment.decidedById = shipment.receivedById; shipment.decidedAt = now; shipment.separationCompletedAt = now;
+    await this.recordMovements(shipment, manager, metadata);
+    await manager.getRepository(ShipmentEntity).update(shipment.id, {
+      status: 'CONFIRMADO', decidedById: shipment.receivedById, decidedAt: now, separationCompletedAt: now,
+    });
+    await manager.delete(ShipmentSeparationDraftEntity, { shipmentItemId: In(shipment.items.map((item) => item.id)) });
+    await this.record(shipment, shipment.receivedById!, 'SHIPMENT_SEPARATION_EXPIRE', manager, metadata, { creditedFullQuantity: true });
   }
 
   private ordered(items: ShipmentItemEntity[]): ShipmentItemEntity[] {
@@ -265,6 +447,7 @@ export class ShipmentsService {
         originLocationId, destinationLocationId: shipment.destinationLocationId,
         responsibleUserId: shipment.decidedById, occurredAt: shipment.decidedAt,
         status: MovementStatus.Effective,
+        requiresPcpExecution: shipment.shipmentKind !== 'RETORNO_IMEDIATO',
         observation: shipment.observation ?? `Envio ${shipment.id} confirmado pelo destinatário.`,
       });
       await this.movements.save(movement, manager);

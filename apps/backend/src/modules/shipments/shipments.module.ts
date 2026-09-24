@@ -7,6 +7,7 @@ import { ShipmentsService } from './shipments.service';
 import { StorageModule } from '../storage/storage.module';
 import { CreateShipmentMultipartPipe } from './create-shipment-multipart.pipe';
 import { ShipmentPhotosInterceptor } from './shipment-photos.interceptor';
+import { SettingsModule } from '../settings/settings.module';
 
-@Module({ imports: [BatchesModule, StocksModule, MovementsModule, StorageModule], controllers: [ShipmentsController], providers: [ShipmentsService, CreateShipmentMultipartPipe, ShipmentPhotosInterceptor] })
+@Module({ imports: [BatchesModule, StocksModule, MovementsModule, StorageModule, SettingsModule], controllers: [ShipmentsController], providers: [ShipmentsService, CreateShipmentMultipartPipe, ShipmentPhotosInterceptor] })
 export class ShipmentsModule {}

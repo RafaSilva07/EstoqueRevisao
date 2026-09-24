@@ -145,3 +145,7 @@ Criado o perfil transversal PCP com fila global paginada, filtros combináveis, 
 ## Etapa 34 — Gramatura de produtos unitários
 
 Produtos `UN` passaram a registrar o peso de uma unidade em gramas inteiras positivas. Novos cadastros exigem o valor; `FD`/`CX` não o aceitam e produtos antigos permanecem sem valor inventado até atualização. Resumo em [relatórios/RELATORIO_ETAPA_34_GRAMATURA_PRODUTOS.md](./relatorios/RELATORIO_ETAPA_34_GRAMATURA_PRODUTOS.md).
+
+## Separação imediata e configurações operacionais
+
+O recebimento Expedição → Revisão ganhou separação opcional com prazo capturado por envio, crédito líquido, expiração integral e retorno derivado sem PCP. Destinos da revisão deixaram de depender da marcação fixa dos três locais iniciais e passaram a uma relação configurável com locais cadastrados. A decisão está registrada em [ADR_SEPARACAO_CONFIGURACOES.md](./ADR_SEPARACAO_CONFIGURACOES.md) e a etapa em [relatórios/RELATORIO_SEPARACAO_E_CONFIGURACOES.md](./relatorios/RELATORIO_SEPARACAO_E_CONFIGURACOES.md).

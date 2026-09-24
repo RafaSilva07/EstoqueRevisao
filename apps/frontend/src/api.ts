@@ -72,6 +72,11 @@ export interface StockLocation {
   reviewRole: 'SOURCE' | 'DESTINATION' | null;
 }
 
+export interface OperationalSettings {
+  immediateSeparationMinutes: number;
+  reviewDestinations: StockLocation[];
+}
+
 export interface StockPosition {
   id: string;
   productId: string;
@@ -131,6 +136,7 @@ export interface Movement {
   responsibleUser: { id: string; username: string };
   canceledByUser: { id: string; username: string } | null;
   pcpExecutionStatus: 'PENDENTE' | 'EXECUTADA';
+  requiresPcpExecution: boolean;
   pcpExecutedByUserId: string | null;
   pcpExecutedAt: string | null;
   pcpExecutionObservation: string | null;

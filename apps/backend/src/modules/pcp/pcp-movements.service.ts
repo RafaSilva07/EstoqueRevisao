@@ -56,6 +56,7 @@ export class PcpMovementsService {
       const movement = await this.movements.findByIdForUpdate(id, manager);
       if (!movement) throw new NotFoundException({ code: 'MOVEMENT_NOT_FOUND', message: 'Movimentacao nao encontrada.' });
       if (movement.status !== MovementStatus.Effective) throw new ConflictException({ code: 'PCP_MOVEMENT_NOT_CONCLUDED', message: 'Somente movimentacoes concluidas podem ser executadas pelo PCP.' });
+      if (movement.requiresPcpExecution === false) throw new ConflictException({ code: 'PCP_EXECUTION_NOT_REQUIRED', message: 'Esta movimentacao nao exige execucao do PCP.' });
       if (movement.pcpExecutionStatus === PcpExecutionStatus.Executed) throw new ConflictException({ code: 'PCP_MOVEMENT_ALREADY_EXECUTED', message: 'Esta movimentacao ja foi executada pelo PCP.' });
       const executedAt = new Date();
       movement.pcpExecutionStatus = PcpExecutionStatus.Executed;

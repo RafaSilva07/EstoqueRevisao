@@ -8,6 +8,7 @@ import { MovementItemDistributionEntity } from './entities/movement-item-distrib
 import { MovementsController } from './movements.controller';
 import { MovementsRepository } from './movements.repository';
 import { MovementsService } from './movements.service';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { MovementsService } from './movements.service';
     ]),
     StocksModule,
     BatchesModule,
+    SettingsModule,
   ],
   controllers: [MovementsController],
   providers: [MovementsRepository, MovementsService],

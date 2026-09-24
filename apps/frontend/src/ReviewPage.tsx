@@ -1,6 +1,6 @@
 import { PositionSelect } from './PositionSelect';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, Paginated, Product, StockLocation, StockPosition } from './api';
+import { api, OperationalSettings, Paginated, Product, StockLocation, StockPosition } from './api';
 import { EmptyState, LoadingState, Modal, Notice, OperationGuide, PageHeader } from './components';
 import { formatDate } from './format';
 import { calculateDistribution, isIntegerQuantity, quantityUnits } from './review';
@@ -49,9 +49,12 @@ export function ReviewPage({
   const load = useCallback(async (preserveError = false) => {
     setLoading(true);
     try {
-      const locationData = await api.get<Paginated<StockLocation>>('/stocks?limit=100&active=true');
+      const [locationData, configuration] = await Promise.all([
+        api.get<Paginated<StockLocation>>('/stocks?limit=100&active=true'),
+        api.get<OperationalSettings>('/settings/operational'),
+      ]);
       const source = locationData.items.find((location) => location.reviewRole === 'SOURCE');
-      setLocations(locationData.items);
+      setLocations([...(source ? [source] : []), ...configuration.reviewDestinations]);
       if (!source) {
         setPositions([]);
         setError('O local de origem da revisao nao esta configurado.');
@@ -75,7 +78,7 @@ export function ReviewPage({
   }, [load]);
 
   const destinations = useMemo(
-    () => locations.filter((location) => location.reviewRole === 'DESTINATION'),
+    () => locations.filter((location) => location.reviewRole !== 'SOURCE'),
     [locations],
   );
   const products = useMemo(() => {

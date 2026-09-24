@@ -16,6 +16,7 @@ import { NavigationTrail, SectionMenu } from './Navigation';
 import { homeActions, Page, parentPage } from './navigation-model';
 import { Sector } from './shipments';
 import { UsersPage } from './UsersPage';
+import { SettingsPage } from './SettingsPage';
 import { ProductForm } from './ProductForm';
 import { PcpPage } from './PcpPage';
 import { MovementDetailModal } from './MovementDetailModal';
@@ -214,12 +215,13 @@ export function App() {
   };
   return <div className="app-shell"><a className="skip-link" href="#main-content">Ir para o conteúdo</a>
     <header className="topbar"><button className="brand" onClick={() => go('home')} aria-label="Ir para o início"><span>ER</span><strong>Estoque Revisão</strong></button><div className="user-area">{switcher}<span className="user-name">{user.username} · {operationalModeLabel[activeMode]}</span><button className="secondary desktop-logout" onClick={logout} disabled={loggingOut}>Sair</button></div></header>
-    <aside className="sidebar"><nav aria-label="Navegação principal"><NavButton active={page === 'home'} onClick={() => go('home')}>Início</NavButton>{areas.map((area) => <NavButton key={area.page} active={page === area.page || parentPage(page, activeUser) === area.page} onClick={() => go(area.page)}>{area.title}</NavButton>)}<NavButton active={page === 'more' || page === 'users'} onClick={() => go('more')}>Menu e conta</NavButton></nav><p className="sidebar-note">{operationalModeLabel[activeMode]}</p></aside>
+    <aside className="sidebar"><nav aria-label="Navegação principal"><NavButton active={page === 'home'} onClick={() => go('home')}>Início</NavButton>{areas.map((area) => <NavButton key={area.page} active={page === area.page || parentPage(page, activeUser) === area.page} onClick={() => go(area.page)}>{area.title}</NavButton>)}<NavButton active={page === 'more' || page === 'users' || page === 'settings'} onClick={() => go('more')}>Menu e conta</NavButton></nav><p className="sidebar-note">{operationalModeLabel[activeMode]}</p></aside>
     <main className="workspace" id="main-content" tabIndex={-1}>
       <NavigationTrail page={page} user={activeUser} navigate={go} />
       {menus.includes(page) && <SectionMenu page={page} user={activeUser} navigate={go} />}
       {page === 'more' && <section className="surface account-card"><h2>{user.username}</h2><p className="muted">{operationalModeLabel[activeMode]}</p><button className="secondary" onClick={logout} disabled={loggingOut}>{loggingOut ? 'Saindo…' : 'Sair do sistema'}</button></section>}
       {page === 'users' && adminMode && <UsersPage currentUserId={user.id} onOwnUpdate={logout} />}
+      {page === 'settings' && adminMode && <SettingsPage />}
       {activeSector !== 'PCP' && ['shipments', 'shipment-new', 'shipment-sent', 'shipment-history'].includes(page) && can('shipments.read') && <ShipmentsPage key={`${activeSector}:${page}`} user={activeUser} initialView={page === 'shipment-history' ? 'history' : page === 'shipment-sent' ? 'sent' : 'pending'} initialCreating={page === 'shipment-new'} showCreateAction={false} />}
       {activeSector === 'PCP' && ['pcp', 'pcp-all', 'pcp-executed'].includes(page) && can('pcp.movements.read') && <PcpPage key={page} initialStatus={page === 'pcp-all' ? '' : page === 'pcp-executed' ? 'EXECUTADA' : 'PENDENTE'} />}
       {reviewSector && <>
@@ -239,7 +241,7 @@ export function App() {
     <nav className="bottom-nav" aria-label="Navegação principal mobile">
       <NavButton active={page === 'home'} onClick={() => go('home')}>Início</NavButton>
       {areas.slice(0, 2).map((area) => <NavButton key={area.page} active={page === area.page || parentPage(page, activeUser) === area.page} onClick={() => go(area.page)}>{area.title}</NavButton>)}
-      <NavButton active={page === 'more' || page === 'users'} onClick={() => go('more')}>Menu</NavButton>
+      <NavButton active={page === 'more' || page === 'users' || page === 'settings'} onClick={() => go('more')}>Menu</NavButton>
     </nav>
   </div>;
 }

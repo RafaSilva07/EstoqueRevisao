@@ -54,6 +54,9 @@ export class MovementEntity {
   @Column({ name: 'pcp_execution_status', type: 'varchar', length: 20, default: PcpExecutionStatus.Pending })
   pcpExecutionStatus!: PcpExecutionStatus;
 
+  @Column({ name: 'requires_pcp_execution', type: 'boolean', default: true })
+  requiresPcpExecution = true;
+
   @Column({ name: 'pcp_executed_by_user_id', type: 'uuid', nullable: true })
   pcpExecutedByUserId!: string | null;
 

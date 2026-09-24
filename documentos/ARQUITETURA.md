@@ -171,6 +171,14 @@ Endpoints:
 As permissões são `pcp.movements.read` e `pcp.movements.execute`. O papel exclusivo `PCP` recebe ainda somente leituras necessárias de produtos, lotes, locais, saldos e evidências. Autorizações operacionais continuam protegidas pelos guards existentes.
 - `DATABASE_URL` é o banco local; `TEST_DATABASE_URL` deve apontar para banco isolado e descartável.
 
+## Configurações e separação imediata
+
+`SettingsModule` mantém apenas os parâmetros necessários: `system_settings` armazena o prazo em minutos e `review_process_destinations` relaciona locais cadastrados aos destinos atuais. Alterações são transacionais, administrativas e auditadas.
+
+O estado intermediário pertence a `shipments`, pois ainda não existe movimentação efetiva de estoque. Cada envio guarda início/expiração e possui rascunhos por item. A finalização e a expiração bloqueiam a linha do envio; a primeira transição válida calcula o crédito e cria a movimentação. Retornos usam outro `shipment`, com `source_shipment_id`, preservando o fluxo existente de fotos e decisão do destinatário.
+
+`movements.requires_pcp_execution` distingue lançamentos que devem entrar na fila pendente. Retornos imediatos permanecem consultáveis no PCP, mas não podem ser executados nem aparecem entre pendentes. A expiração é lazy e independente da tela: consultas/processamentos relevantes procuram timestamps vencidos no backend, sem introduzir scheduler.
+
 ## Frontend
 
 - Abordagem mobile-first a partir de 320 px.

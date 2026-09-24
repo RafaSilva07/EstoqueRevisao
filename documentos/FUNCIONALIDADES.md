@@ -162,6 +162,23 @@ A revisão de UN preserva o produto. Para FD/CX, o operador informa quantas emba
 
 Lote, fabricação e validade são preservados; não há edição desses campos na revisão. O produto unitário recebe uma referência interna equivalente, reutilizando a validação e a confirmação de validade divergente. O histórico mostra a transformação e todas as distribuições em uma única operação. O estorno retira as unidades e devolve as embalagens originais; se faltarem unidades no destino, nada é alterado. Revisões antigas permanecem com o comportamento original registrado.
 
+## Configurações e separação imediata
+
+Administradores no modo `ADMIN` acessam **Configurações** para definir o prazo de separação (5 a 1440 minutos, inicialmente 180) e selecionar um ou mais destinos internos cadastrados para a revisão. O formulário de revisão consulta essa configuração e monta os campos dinamicamente, mantendo total, distribuído e restante e bloqueando diferenças.
+
+No recebimento Expedição → Revisão, **Sim, separar agora** coloca o envio em `EM_SEPARACAO`, exibe o prazo e permite salvar as quantidades de retorno como rascunho. A Expedição acompanha o estado sem ação. A conclusão exige foto em cada item retornado, credita somente a quantidade líquida e cria um envio de retorno ligado ao original. O retorno aguarda decisão da Expedição e é marcado como execução PCP não necessária. Se o prazo vencer, o acesso seguinte consolida integralmente o recebimento sem retorno.
+
+Endpoints envolvidos:
+
+```text
+GET   /api/v1/settings/operational
+GET   /api/v1/settings
+PATCH /api/v1/settings/immediate-separation
+PATCH /api/v1/settings/review-destinations
+PATCH /api/v1/shipments/:id/separation-draft
+POST  /api/v1/shipments/:id/separation-completion
+```
+
 ## Histórico de movimentações
 
 ```text

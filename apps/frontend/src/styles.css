@@ -497,6 +497,15 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
 .pcp-audit-list li { display: flex; justify-content: space-between; gap: .75rem; border-bottom: 1px solid var(--line); padding: .5rem 0; }
 .pcp-audit-list span { color: var(--muted); text-align: right; }
 .badge.pending { background: #fff2cc; color: #6b4e00; }
+.settings-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }
+.settings-grid .form-panel { display: grid; align-content: start; gap: 1rem; }
+.settings-grid .form-panel > h2, .settings-grid .form-panel > p { margin-bottom: 0; }
+.settings-grid .form-panel > button { justify-self: start; }
+.settings-options { display: grid; gap: .45rem; border: 1px solid var(--line); border-radius: .7rem; padding: .8rem; margin: 1rem 0; }
+.separation-items { display: grid; gap: .8rem; margin: 1rem 0; }
+.separation-items .shipment-item-card { display: grid; gap: .65rem; border: 1px solid var(--line); border-radius: .7rem; padding: .85rem; background: #f6f9fa; }
+.check-row { display: flex; flex-direction: row; align-items: center; gap: .65rem; min-height: 44px; }
+.check-row input { flex: 0 0 auto; width: 1.2rem; height: 1.2rem; }
 @media (max-width: 759px) {
   .pcp-list { border: 0; background: transparent; padding: 0; box-shadow: none; }
   .pcp-audit-list li { display: grid; }

@@ -6,6 +6,7 @@ import { MovementStatus } from '../movements/domain/movement-status.enum';
 import { MovementEntity } from '../movements/entities/movement.entity';
 import { ShipmentEntity, ShipmentItemEntity } from '../shipments/shipment.entity';
 import { PcpMovementQueryDto } from './dto/pcp-movement-query.dto';
+import { PcpExecutionStatus } from './domain/pcp-execution-status.enum';
 
 @Injectable()
 export class PcpMovementsRepository {
@@ -30,6 +31,7 @@ export class PcpMovementsRepository {
       status: query.operationalStatus === 'CONCLUIDA' ? MovementStatus.Effective : MovementStatus.Canceled,
     });
     if (query.pcpStatus) builder.andWhere('movement.pcpExecutionStatus = :pcpStatus', { pcpStatus: query.pcpStatus });
+    if (query.pcpStatus === PcpExecutionStatus.Pending) builder.andWhere('movement.requiresPcpExecution = true');
     if (query.type) builder.andWhere('movement.type = :type', { type: query.type });
     if (query.originLocationId) builder.andWhere('movement.originLocationId = :originLocationId', { originLocationId: query.originLocationId });
     if (query.destinationLocationId) builder.andWhere(`(

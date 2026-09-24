@@ -1,13 +1,13 @@
 import { UserSession } from './api';
 
-export type Page = 'home' | 'operations' | 'requests' | 'stock-menu' | 'history-menu' | 'pcp-menu' | 'pcp' | 'pcp-all' | 'pcp-executed' | 'users' | 'shipments' | 'shipment-new' | 'shipment-sent' | 'shipment-history' | 'new-entry' | 'new-exit' | 'new-transfer' | 'new-review' | 'movements' | 'inventory' | 'reports' | 'reports-reviews' | 'reports-stock' | 'products' | 'stocks' | 'more';
+export type Page = 'home' | 'operations' | 'requests' | 'stock-menu' | 'history-menu' | 'pcp-menu' | 'pcp' | 'pcp-all' | 'pcp-executed' | 'users' | 'settings' | 'shipments' | 'shipment-new' | 'shipment-sent' | 'shipment-history' | 'new-entry' | 'new-exit' | 'new-transfer' | 'new-review' | 'movements' | 'inventory' | 'reports' | 'reports-reviews' | 'reports-stock' | 'products' | 'stocks' | 'more';
 export type MenuAction = { page: Page; title: string; description: string };
 
 export const pageTitles: Record<Page, string> = {
   home: 'Início', operations: 'Movimentar produtos', requests: 'Solicitações',
   'stock-menu': 'Estoque', 'history-menu': 'Histórico', 'pcp-menu': 'PCP',
   pcp: 'Pendentes de execução', 'pcp-all': 'Todas as movimentações', 'pcp-executed': 'Executadas',
-  users: 'Gerenciar usuários', shipments: 'Pendentes de aceite', 'shipment-new': 'Novo envio',
+  users: 'Gerenciar usuários', settings: 'Configurações', shipments: 'Pendentes de aceite', 'shipment-new': 'Novo envio',
   'shipment-sent': 'Acompanhar solicitações', 'shipment-history': 'Histórico de solicitações',
   'new-entry': 'Realizar entrada', 'new-exit': 'Realizar saída', 'new-transfer': 'Transferência interna',
   'new-review': 'Realizar revisão', movements: 'Movimentações', inventory: 'Saldos e lotes',
@@ -22,7 +22,7 @@ export function parentPage(page: Page, user?: UserSession): Page {
   if (['inventory', 'reports-stock', 'stocks'].includes(page)) return 'stock-menu';
   if (['movements', 'reports', 'reports-reviews'].includes(page)) return 'history-menu';
   if (['pcp', 'pcp-all', 'pcp-executed'].includes(page)) return 'pcp-menu';
-  if (page === 'users') return 'more';
+  if (page === 'users' || page === 'settings') return 'more';
   return 'home';
 }
 
@@ -54,6 +54,7 @@ export function menuActions(page: Page, user: UserSession): MenuAction[] {
     add(review && can('products.read'), 'products', 'Buscar e consultar o cadastro.');
     add(sector === 'PCP' && can('pcp.movements.read'), 'pcp-menu', 'Consultar a execução administrativa.');
     if (page === 'more') add(user.roles.includes('ADMIN'), 'users', 'Administrar contas e perfis.');
+    if (page === 'more') add(user.roles.includes('ADMIN'), 'settings', 'Definir prazo e destinos da revisão.');
   } else if (page === 'operations') {
     add(review && admin && can('movements.create'), 'new-entry', 'Receber de uma origem externa.');
     add(review && admin && can('movements.create'), 'new-exit', 'Enviar para um destino externo.');

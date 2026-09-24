@@ -11,6 +11,7 @@ Este diretório é a fonte principal de contexto para desenvolvimento. Antes de 
 | O que já está implementado na API e na interface | [FUNCIONALIDADES.md](./FUNCIONALIDADES.md) |
 | Evolução do projeto, migrations, decisões substituídas e dívidas | [HISTORICO.md](./HISTORICO.md) |
 | Instalação e execução local | [COMO_RODAR.md](./COMO_RODAR.md) |
+| Decisão sobre separação imediata e configurações capturadas | [ADR_SEPARACAO_CONFIGURACOES.md](./ADR_SEPARACAO_CONFIGURACOES.md) |
 
 Os quatro documentos acima são canônicos e devem ser atualizados quando uma etapa mudar o comportamento do sistema. Relatórios e ADRs anteriores permanecem em [`arquivo/`](./arquivo/README.md) apenas como evidência histórica; não devem ser usados isoladamente para determinar o comportamento atual.
 
@@ -25,6 +26,8 @@ O EstoqueRevisao é um sistema web para controle de produtos por lote e local l�
 - lotes e datas informados nas operações, sem cadastro prévio;
 - saldo atual por produto, lote, validade e local, com confirmação de validades divergentes;
 - envios Revisão ↔ Produção/Expedição, com reserva, confirmação/recusa e indicação interna;
+- separação imediata opcional no recebimento Expedição → Revisão, com prazo configurável e retorno derivado;
+- configurações administrativas para prazo de separação e destinos dinâmicos da revisão;
 - entrada e saída diretas para outros locais externos;
 - transferência interna, inclusive com troca ou criação de lote;
 - revisão com distribuição de cada item entre múltiplos destinos;

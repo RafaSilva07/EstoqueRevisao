@@ -24,7 +24,7 @@ import { MovementCancellations1788652800000 } from './migrations/1788652800000-m
 
 import { OperationalLotExpiration1789084800000 } from './migrations/1789084800000-operational-lot-expiration';
 
-import { ShipmentEntity, ShipmentItemEntity } from '../modules/shipments/shipment.entity';
+import { ShipmentEntity, ShipmentItemEntity, ShipmentSeparationDraftEntity } from '../modules/shipments/shipment.entity';
 import { SectorShipments1789344000000 } from './migrations/1789344000000-sector-shipments';
 import { ShipmentObservations1789430400000 } from './migrations/1789430400000-shipment-observations';
 import { ReviewPackageUnpacking1789516800000 } from './migrations/1789516800000-review-package-unpacking';
@@ -33,10 +33,16 @@ import { PcpMovementExecution1789689600000 } from './migrations/1789689600000-pc
 import { ProductUnitWeight1789776000000 } from './migrations/1789776000000-product-unit-weight';
 import { PcpSector1789862400000 } from './migrations/1789862400000-pcp-sector';
 import { ReviewOperatorRole1789948800000 } from './migrations/1789948800000-review-operator-role';
+import { SeparationAndSettings1790035200000 } from './migrations/1790035200000-separation-and-settings';
+import { SystemSettingEntity } from '../modules/settings/system-setting.entity';
+import { ReviewDestinationEntity } from '../modules/settings/review-destination.entity';
 
 export const databaseEntities = [
   ShipmentEntity,
   ShipmentItemEntity,
+  ShipmentSeparationDraftEntity,
+  SystemSettingEntity,
+  ReviewDestinationEntity,
   UserEntity,
   RoleEntity,
   PermissionEntity,
@@ -69,6 +75,7 @@ export const databaseMigrations = [
   ProductUnitWeight1789776000000,
   PcpSector1789862400000,
   ReviewOperatorRole1789948800000,
+  SeparationAndSettings1790035200000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {

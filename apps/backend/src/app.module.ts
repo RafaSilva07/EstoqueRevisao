@@ -20,6 +20,7 @@ import { PcpModule } from './modules/pcp/pcp.module';
 import { GlobalExceptionFilter } from './shared/http/global-exception.filter';
 import { LoggingModule } from './shared/logging/logging.module';
 import { RequestContextMiddleware } from './shared/logging/request-context.middleware';
+import { SettingsModule } from './modules/settings/settings.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { RequestContextMiddleware } from './shared/logging/request-context.middl
     ReportsModule,
     PcpModule,
     ShipmentsModule,
+    SettingsModule,
     HealthModule,
   ],
   providers: [

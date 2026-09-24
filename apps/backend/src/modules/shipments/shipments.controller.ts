@@ -1,11 +1,11 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req, Res, StreamableFile, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res, StreamableFile, UploadedFiles, UseInterceptors } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AuthenticatedUser } from '../auth/authenticated-user.interface';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { getAuditRequestMetadata } from '../audit/audit-request-metadata';
 import { OperationalLotsService } from '../batches/operational-lots.service';
 import { ResolveOperationalLotDto } from '../batches/dto/operational-lot.dto';
-import { AvailableShipmentPositionsQueryDto, CreateShipmentDto, ExpirationConfirmationDto, RefuseShipmentDto, ShipmentQueryDto } from './shipment.dto';
+import { AvailableShipmentPositionsQueryDto, CreateShipmentDto, ExpirationConfirmationDto, RefuseShipmentDto, SeparationDraftDto, ShipmentQueryDto } from './shipment.dto';
 import { ShipmentsService } from './shipments.service';
 import { CreateShipmentMultipartPipe } from './create-shipment-multipart.pipe';
 import { UploadedImage } from '../storage/storage.service';
@@ -48,5 +48,15 @@ export class ShipmentsController {
   @Post(':id/refusal') @RequirePermissions('shipments.decide')
   refuse(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: RefuseShipmentDto, @Req() req: Request): ReturnType<ShipmentsService['decide']> {
     return this.service.decide(id, 'RECUSADO', dto.reason, {}, req.user as AuthenticatedUser, getAuditRequestMetadata(req));
+  }
+  @Patch(':id/separation-draft') @RequirePermissions('shipments.decide')
+  draft(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: SeparationDraftDto, @Req() req: Request): ReturnType<ShipmentsService['saveSeparationDraft']> {
+    return this.service.saveSeparationDraft(id, dto, req.user as AuthenticatedUser, getAuditRequestMetadata(req));
+  }
+  @Post(':id/separation-completion') @RequirePermissions('shipments.decide') @UseInterceptors(ShipmentPhotosInterceptor)
+  async completeSeparation(@Param('id', new ParseUUIDPipe()) id: string, @Body('payload') payload: string,
+    @UploadedFiles() files: UploadedImage[], @Req() req: Request): ReturnType<ShipmentsService['completeSeparation']> {
+    const dto = await this.multipart.separation(payload);
+    return this.service.completeSeparation(id, dto, files ?? [], req.user as AuthenticatedUser, getAuditRequestMetadata(req));
   }
 }

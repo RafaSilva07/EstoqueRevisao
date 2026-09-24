@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import { getPostgresError } from '../../shared/database/postgres-error';
 import { paginate, PaginatedResult } from '../../shared/pagination/paginated-result.interface';
@@ -24,6 +24,7 @@ import { MovementItemEntity } from './entities/movement-item.entity';
 import { MovementItemDistributionEntity } from './entities/movement-item-distribution.entity';
 import { MovementEntity } from './entities/movement.entity';
 import { MovementsRepository } from './movements.repository';
+import { SettingsService } from '../settings/settings.service';
 
 type EffectiveMovementItem = CreateEffectiveMovementDto['items'][number] & {
   destinationBatchId?: string;
@@ -63,6 +64,7 @@ export class MovementsService {
     private readonly audit: AuditService,
     private readonly dataSource: DataSource,
     private readonly operationalLots: OperationalLotsService,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
 
   async list(query: MovementQueryDto): Promise<PaginatedResult<MovementEntity>> {
@@ -270,10 +272,9 @@ export class MovementsService {
           products.set(productId, product);
         }
         const sources = await this.locations.findByReviewRole(ReviewLocationRole.Source, manager);
-        const destinations = await this.locations.findByReviewRole(
-          ReviewLocationRole.Destination,
-          manager,
-        );
+        const destinations = this.settings
+          ? await this.settings.reviewDestinations(manager)
+          : await this.locations.findByReviewRole(ReviewLocationRole.Destination, manager);
         if (sources.length !== 1 || destinations.length === 0) {
           throw new ConflictException({
             code: 'REVIEW_CONFIGURATION_INVALID',

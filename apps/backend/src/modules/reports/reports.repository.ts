@@ -7,7 +7,6 @@ import { MovementStatus } from '../movements/domain/movement-status.enum';
 import { MovementType } from '../movements/domain/movement-type.enum';
 import { StockPositionEntity } from '../stocks/entities/stock-position.entity';
 import { StockLocationEntity } from '../stocks/entities/stock-location.entity';
-import { ReviewLocationRole } from '../stocks/domain/review-location-role.enum';
 import { PaginationMeta } from '../../shared/pagination/paginated-result.interface';
 import { ExpirationStatus, StockReportQueryDto } from './dto/stock-report-query.dto';
 import { MovementReportQueryDto } from './dto/movement-report-query.dto';
@@ -168,12 +167,11 @@ export class ReportsRepository {
       .addOrderBy(`COALESCE(item.output_product_snapshot->>'defaultUnit', item.product_snapshot->>'defaultUnit', product.default_unit)`, 'ASC');
 
     const classificationsBuilder = this.stockLocations.createQueryBuilder('classification')
+      .innerJoin('review_process_destinations', 'reviewConfiguration', 'reviewConfiguration.stock_location_id = classification.id')
       .select('classification.id', 'destinationLocationId')
       .addSelect('classification.code', 'destinationCode')
       .addSelect('classification.name', 'destination')
-      .where('classification.reviewRole = :destinationRole', {
-        destinationRole: ReviewLocationRole.Destination,
-      })
+      .where('classification.active = true')
       .orderBy('classification.name', 'ASC');
     if (query.destinationLocationId) {
       classificationsBuilder.andWhere('classification.id = :classificationId', {

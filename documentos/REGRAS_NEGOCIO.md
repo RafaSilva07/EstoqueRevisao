@@ -93,6 +93,24 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 
 ## Envios entre setores
 
+### Separação imediata no recebimento da Expedição
+
+- Ao confirmar Expedição → Revisão, o operador escolhe entre receber integralmente ou iniciar separação imediata.
+- A separação usa `EM_SEPARACAO`, com início e expiração persistidos por envio. O prazo configurado é capturado no início e não muda depois.
+- Enquanto separa, nenhum saldo definitivo é creditado e o PCP não recebe uma movimentação executável. Vários envios podem permanecer nesse estado independentemente.
+- O retorno aceita somente itens do envio original, quantidades inteiras entre zero e o recebido e uma foto obrigatória para cada quantidade positiva.
+- Na conclusão, o saldo da Revisão recebe diretamente `recebido - retorno`. Não ocorre crédito bruto seguido de débito.
+- Havendo retorno, nasce um envio derivado Revisão → Expedição, vinculado ao original. Ele usa o aceite/recusa de envios, não reserva saldo e não exige execução PCP.
+- Se o prazo vencer, o rascunho é invalidado, todo o volume é creditado à Revisão e o movimento original segue para o PCP normalmente.
+- Linha e status do envio são bloqueados na conclusão/expiração; somente uma transição pode consolidar saldo.
+
+### Configuração do processo de revisão
+
+- O prazo da separação e os destinos da revisão são configurações persistidas e alteráveis apenas no modo administrativo.
+- Destinos devem ser locais internos ativos já cadastrados; pelo menos um deve permanecer selecionado.
+- Novas revisões usam a seleção atual. Movimentações históricas preservam os destinos gravados em suas distribuições.
+- A soma das distribuições continua obrigatoriamente igual à quantidade revisada; a configuração dinâmica não flexibiliza essa invariante.
+
 - Usuários possuem setor `REVISAO`, `PRODUCAO`, `EXPEDICAO` ou `PCP`. O setor atribuído vem da sessão validada no banco, nunca de um campo operacional comum. PCP é um setor administrativo e não participa como origem ou destino de envios de mercadoria.
 - Somente usuários com função `ADMIN` podem alternar temporariamente entre o modo completo `ADMIN` e os modos Revisão, Produção, Expedição e PCP. O modo escolhido vale por requisição, aplica todas as restrições do perfil selecionado e não altera o setor cadastrado nem a identidade registrada em histórico e auditoria. Cabeçalhos de alternância enviados por não administradores ou com valor inválido são rejeitados.
 - Produção/Expedição enviam somente para Revisão e decidem somente recebimentos destinados ao próprio setor. Não acessam operações, saldos ou relatórios internos da Revisão.
