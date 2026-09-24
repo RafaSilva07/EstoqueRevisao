@@ -1,5 +1,9 @@
 # Histórico de desenvolvimento
 
+## Navegação e histórico unificados em branch de avaliação
+
+Branch `feat/navegacao-simplificada`: menus intermediários foram retirados da navegação principal. Histórico passou a reunir envios e movimentações em uma consulta paginada, sem duplicar a operação confirmada. Estoque e validades tornou-se a entrada principal para saldos; a Home passou a chamar de finalizadas somente operações sem ação pendente. Não há migration nesta etapa. Ver [relatório da etapa 46](./relatorios/RELATORIO_ETAPA_46_NAVEGACAO_SIMPLIFICADA.md).
+
 ## Cancelamento de envio, ordenações e correção de expiração
 
 Migration `ShipmentSenderCancellation1790294400000`: envios aguardando recebimento podem ser cancelados integralmente pelo próprio autor, com motivo, preservação histórica, auditoria e restauração atômica das reservas da Revisão. Consultas filtráveis de movimentações, envios, PCP, usuários e relatórios receberam ordenação. A consolidação automática de separações vencidas passou a gerar UUID válido para a auditoria, corrigindo o erro 500 que bloqueava Home e envios. Ver [relatório da etapa 45](./relatorios/RELATORIO_ETAPA_45_CANCELAMENTO_ENVIOS_ORDENACAO.md).

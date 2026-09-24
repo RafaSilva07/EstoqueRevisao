@@ -14,6 +14,9 @@ const movement = {
   pcpExecutionStatus: 'PENDENTE', requiresPcpExecution: true, occurredAt: '2026-09-01T12:00:00Z',
   originLocation: { name: 'Expedição' }, destinationLocation: { name: 'Revisar' }, responsibleUser: { username: 'Operador' }, items: [],
 } as unknown as Movement;
+const finished = { id: 'movement-2', kind: 'MOVEMENT', code: 'REV-000154', type: 'REVISAO',
+  origin: 'Revisar', destination: 'Lata Boa', responsible: 'Operador', occurredAt: '2026-09-01T11:00:00Z',
+  status: 'EFETIVADA', scope: 'DONE', itemCount: 1 };
 const user: UserSession = { id: 'u', username: 'Operador', sector: 'REVISAO', roles: ['REVISAO'], permissions: ['shipments.read', 'shipments.decide', 'movements.read'] };
 let host: HTMLDivElement; let root: Root;
 const navigate = vi.fn(); const onOpenRecord = vi.fn();
@@ -30,6 +33,7 @@ describe('Resumo operacional da Home', () => {
     host = document.createElement('div'); document.body.append(host); root = createRoot(host);
     vi.spyOn(api, 'get').mockImplementation(async (path) => { await Promise.resolve();
       if (path === '/shipments/shipment-1') return shipment;
+      if (path.startsWith('/history?scope=DONE')) return result([finished]);
       if (path.startsWith('/shipments')) return result([shipment]);
       if (path === '/pcp/movements/movement-1') return { ...movement, shipmentEvidence: [] };
       if (path.startsWith('/pcp/movements?')) { const { items: _items, ...summary } = movement; return result([{ ...summary, itemCount: _items.length }]); }
@@ -87,5 +91,12 @@ describe('Resumo operacional da Home', () => {
     expect(host.querySelector('.photo-viewer-dialog')).not.toBeNull();
     await act(async () => { host.querySelector<HTMLButtonElement>('[aria-label="Aumentar zoom"]')!.click(); await Promise.resolve(); });
     expect(host.querySelector('output')?.textContent).toBe('150%');
+  });
+  it('mostra como finalizado apenas o que a consulta completa retornou', async () => {
+    await act(async () => { root.render(<OperationalHomePage user={user} navigate={navigate} onOpenRecord={onOpenRecord} />); await Promise.resolve(); });
+    const finishedPanel = host.querySelector('#recent-finished-title')?.closest('section');
+    expect(finishedPanel?.textContent).toContain('REV-000154');
+    expect(finishedPanel?.textContent).not.toContain('ENT-000153');
+    expect(host.querySelector('#pending-pcp-title')?.closest('section')?.textContent).toContain('ENT-000153');
   });
 });

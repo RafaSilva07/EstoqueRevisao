@@ -65,6 +65,7 @@ export class ShipmentsService {
     if (query.view === 'pending') builder.andWhere("shipment.destinationSector = :sector AND shipment.status IN ('AGUARDANDO_RECEBIMENTO','EM_SEPARACAO')");
     if (query.view === 'open') builder.andWhere("shipment.status IN ('AGUARDANDO_RECEBIMENTO','EM_SEPARACAO')");
     if (query.view === 'sent' || query.view === 'updates') builder.andWhere('shipment.createdById = :userId', { userId: user.id });
+    if (query.view === 'sent') builder.andWhere("shipment.status IN ('AGUARDANDO_RECEBIMENTO','EM_SEPARACAO')");
     if (query.view === 'history' || query.view === 'updates') builder.andWhere("shipment.status NOT IN ('AGUARDANDO_RECEBIMENTO','EM_SEPARACAO')");
     if (query.codigoMovimentacao) builder.andWhere('shipment.codigoMovimentacao = :publicCode', { publicCode: query.codigoMovimentacao.trim().toUpperCase() });
     if (query.status) builder.andWhere('shipment.status = :status', { status: query.status });

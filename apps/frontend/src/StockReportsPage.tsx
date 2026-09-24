@@ -71,8 +71,8 @@ export function StockReportsPage({
   }
 
   return <>
-    <PageHeader eyebrow="Relatorios" title="Estoque e validades" description="Consulte saldos disponíveis e validades. Quantidades em trânsito ficam em Envios." />
-    <ReportNavigation current="stock" onMovements={onMovements} onReviews={onReviews} onStock={() => undefined} />
+    <PageHeader eyebrow="Consulta de estoque" title="Estoque e validades" description="Veja quanto há disponível em cada produto, lote e local. Envios em trânsito aparecem em Envios e recebimentos." />
+    {(onMovements || onReviews) && <ReportNavigation current="stock" onMovements={onMovements} onReviews={onReviews} onStock={() => undefined} />}
     {error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
     <FilterPanel count={activeFilters}>
       <div className="panel-heading">

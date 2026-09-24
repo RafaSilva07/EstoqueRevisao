@@ -1,39 +1,32 @@
 import { UserSession } from './api';
 
-export type Page = 'home' | 'operations' | 'requests' | 'stock-menu' | 'history-menu' | 'pcp-menu' | 'pcp' | 'pcp-all' | 'pcp-executed' | 'users' | 'settings' | 'shipments' | 'shipment-new' | 'shipment-sent' | 'shipment-history' | 'new-entry' | 'new-exit' | 'new-transfer' | 'new-review' | 'movements' | 'inventory' | 'reports' | 'reports-reviews' | 'reports-stock' | 'products' | 'stocks' | 'more';
+export type Page = 'home' | 'operations' | 'pcp' | 'pcp-all' | 'pcp-executed' | 'users' | 'settings' | 'shipments' | 'shipment-new' | 'shipment-sent' | 'new-entry' | 'new-exit' | 'new-transfer' | 'new-review' | 'movements' | 'history' | 'inventory' | 'reports' | 'reports-reviews' | 'products' | 'stocks' | 'more';
 export type MenuAction = { page: Page; title: string; description: string };
 
 export const pageTitles: Record<Page, string> = {
-  home: 'Início', operations: 'Movimentar produtos', requests: 'Solicitações',
-  'stock-menu': 'Estoque', 'history-menu': 'Histórico', 'pcp-menu': 'PCP',
+  home: 'Início', operations: 'Movimentar produtos',
   pcp: 'Pendentes de execução', 'pcp-all': 'Todas as movimentações', 'pcp-executed': 'Executadas',
   users: 'Gerenciar usuários', settings: 'Configurações', shipments: 'Pendentes de aceite', 'shipment-new': 'Novo envio',
-  'shipment-sent': 'Acompanhar solicitações', 'shipment-history': 'Histórico de solicitações',
+  'shipment-sent': 'Meus envios em aberto',
   'new-entry': 'Realizar entrada', 'new-exit': 'Realizar saída', 'new-transfer': 'Transferência interna',
-  'new-review': 'Realizar revisão', movements: 'Movimentações', inventory: 'Saldos e lotes',
+  'new-review': 'Realizar revisão', movements: 'Movimentações', history: 'Histórico', inventory: 'Estoque e validades',
   reports: 'Relatório de movimentações', 'reports-reviews': 'Relatório de revisões',
-  'reports-stock': 'Estoque e validades', products: 'Produtos', stocks: 'Estoques e locais', more: 'Menu',
+  products: 'Produtos', stocks: 'Estoques e locais', more: 'Menu',
 };
 
 export function parentPage(page: Page, user?: UserSession): Page {
   if (user && homeActions(user).some((action) => action.page === page)) return 'home';
   if (page.startsWith('new-')) return 'operations';
-  if (['shipments', 'shipment-new', 'shipment-sent', 'shipment-history'].includes(page)) return 'requests';
-  if (['inventory', 'reports-stock', 'stocks'].includes(page)) return 'stock-menu';
-  if (['movements', 'reports', 'reports-reviews'].includes(page)) return 'history-menu';
-  if (['pcp', 'pcp-all', 'pcp-executed'].includes(page)) return 'pcp-menu';
+  if (['shipment-new', 'shipment-sent'].includes(page)) return 'shipments';
+  if (page === 'movements' || page === 'reports' || page === 'reports-reviews') return 'history';
+  if (page === 'pcp-all' || page === 'pcp-executed') return 'pcp';
+  if (page === 'stocks') return 'more';
   if (page === 'users' || page === 'settings') return 'more';
   return 'home';
 }
 
-// A small set of actions is shown directly; larger menus retain area grouping.
 export function homeActions(user: UserSession): MenuAction[] {
-  const areas = menuActions('home', user);
-  const actions = areas.flatMap((area) => {
-    const children = menuActions(area.page, user);
-    return children.length ? children : [area];
-  });
-  return actions.length <= 6 ? actions : areas;
+  return menuActions('home', user);
 }
 
 // Visibility reuses session permissions and the existing operational sector boundaries.
@@ -46,37 +39,24 @@ export function menuActions(page: Page, user: UserSession): MenuAction[] {
   const add = (allowed: boolean, destination: Page, description: string, title = pageTitles[destination]) => {
     if (allowed) actions.push({ page: destination, title, description });
   };
-  if (page === 'home' || page === 'more') {
-    add(review && can('movements.create'), 'operations', admin ? 'Entrar, sair, transferir ou revisar.' : 'Transferir ou revisar produtos.');
-    add(review && (can('stock-positions.read') || can('stocks.read')), 'stock-menu', 'Consultar saldos, lotes e locais.');
-    add(sector !== 'PCP' && can('shipments.read'), 'requests', 'Enviar, receber e acompanhar.');
-    add(review && can('movements.read'), 'history-menu', 'Consultar movimentações e relatórios.');
-    add(review && can('products.read'), 'products', 'Buscar e consultar o cadastro.');
-    add(sector === 'PCP' && can('pcp.movements.read'), 'pcp-menu', 'Consultar a execução administrativa.');
-    if (page === 'more') add(user.roles.includes('ADMIN'), 'users', 'Administrar contas e perfis.');
-    if (page === 'more') add(user.roles.includes('ADMIN'), 'settings', 'Definir prazo e destinos da revisão.');
+  if (page === 'home') {
+    add(review && can('movements.create'), 'operations', admin ? 'Entrada, saída, transferência e revisão.' : 'Transferir ou revisar produtos.');
+    add(sector !== 'PCP' && can('shipments.read'), 'shipments', 'Enviar, receber e acompanhar entre setores.', 'Envios e recebimentos');
+    add((review || sector === 'PCP') && can('stock-positions.read'), 'inventory', 'Ver saldos, lotes e validades.');
+    add(can('movements.read') || can('pcp.movements.read') || (sector !== 'PCP' && can('shipments.read')), 'history', 'Encontrar envios e operações pelo status.', 'Histórico');
+    add(can('products.read'), 'products', 'Buscar códigos e consultar produtos.');
+    add(sector === 'PCP' && can('pcp.movements.read'), 'pcp', 'Executar movimentações pendentes.', 'Fila do PCP');
+  } else if (page === 'more') {
+    add(review && can('movements.read'), 'reports', 'Totais e exportação de movimentações.', 'Relatórios de movimentações');
+    add(review && can('movements.read'), 'reports-reviews', 'Totais por classificação da revisão.', 'Relatórios de revisões');
+    add(review && can('stocks.read'), 'stocks', 'Cadastrar e consultar locais de estoque.');
+    add(admin, 'users', 'Administrar contas e perfis.');
+    add(admin, 'settings', 'Definir prazo e destinos da revisão.');
   } else if (page === 'operations') {
     add(review && admin && can('movements.create'), 'new-entry', 'Receber de uma origem externa.');
     add(review && admin && can('movements.create'), 'new-exit', 'Enviar para um destino externo.');
     add(review && can('movements.create'), 'new-transfer', 'Mover produtos entre locais.');
     add(review && can('movements.create'), 'new-review', 'Classificar produtos em revisão.');
-  } else if (page === 'requests' && sector !== 'PCP' && can('shipments.read')) {
-    add(can('shipments.create'), 'shipment-new', review ? 'Enviar para Produção ou Expedição.' : 'Enviar produtos para a Revisão.', review ? 'Enviar da Revisão' : 'Enviar para Revisão');
-    add(can('shipments.decide'), 'shipments', 'Conferir os recebimentos do seu setor.');
-    add(true, 'shipment-sent', 'Consultar os envios feitos por você.');
-    add(true, 'shipment-history', 'Consultar decisões e detalhes.', 'Histórico');
-  } else if (page === 'stock-menu' && review) {
-    add(can('stock-positions.read'), 'inventory', 'Consultar por produto, lote e local.');
-    add(can('stock-positions.read'), 'reports-stock', 'Consultar saldos e prazos de validade.');
-    add(can('stocks.read'), 'stocks', 'Consultar a estrutura dos locais.');
-  } else if (page === 'history-menu' && review) {
-    add(can('movements.read'), 'movements', 'Consultar operações e seus detalhes.');
-    add(can('movements.read'), 'reports', 'Filtrar movimentações por período.');
-    add(can('movements.read'), 'reports-reviews', 'Consultar as classificações realizadas.');
-  } else if (page === 'pcp-menu' && sector === 'PCP' && can('pcp.movements.read')) {
-    add(true, 'pcp', 'Consultar a fila de trabalho.');
-    add(true, 'pcp-all', 'Consultar todos os status.');
-    add(true, 'pcp-executed', 'Consultar os lançamentos realizados.');
   }
   return actions;
 }

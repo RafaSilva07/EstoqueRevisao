@@ -2,9 +2,9 @@
 
 Este documento descreve o comportamento disponível hoje. As regras completas e invariantes estão em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md).
 
-## Navegação experimental e Revisão operacional
+## Navegação simplificada e Revisão operacional
 
-Na branch `experiment/ux-navegacao-simplificada`, perfis com até seis ações disponíveis veem essas ações diretamente na Home. Produção/Expedição mostram enviar, pendentes, acompanhamento e histórico; PCP mostra suas três consultas. Perfis com mais opções mantêm a navegação por área. Voltar retorna à Home quando a ação veio desse menu direto.
+Na branch `feat/navegacao-simplificada`, a Home e o menu lateral mostram destinos diretos conforme o perfil: **Movimentar produtos**, **Envios e recebimentos**, **Estoque e validades**, **Histórico**, **Produtos** e, no PCP, **Fila do PCP**. Ações administrativas e relatórios de totais ficam em **Menu e conta**. Os menus intermediários de estoque, histórico, solicitações e PCP não aparecem mais.
 
 O cadastro de usuários oferece `Revisão operacional` (`REVISAO`), no setor Revisão: solicitações, revisão, transferência e consultas, sem ADMIN. Entrada/saída direta, cancelamento de movimentações/revisões e ativação/inativação de cadastros são exclusivos do ADMIN e bloqueados pela API. Usuários existentes não são reclassificados automaticamente. Para atribuir acesso operacional, selecione esse perfil sem marcar Administrador.
 
@@ -44,7 +44,7 @@ O cadastro mantém código, descrição, unidade, prazo de validade e, para fard
 
 ## Envios entre setores
 
-A Revisão acessa **Envios entre setores** pelo início, operações ou menu; Produção/Expedição recebem uma interface restrita ao próprio setor. As três consultas são **Aguardando minha ação**, **Enviados por mim** e **Histórico**, com paginação, cards e detalhes. O início destaca pendências e decisões recentes dos próprios envios; a indicação é atualizada a cada 30 segundos, sem interromper formulários/decisões abertos.
+A Revisão acessa **Envios e recebimentos** pela Home ou menu; Produção/Expedição recebem uma interface restrita ao próprio setor. A tela operacional separa **Para receber** de **Meus envios em aberto**; concluídos, recusados e cancelados são encontrados no **Histórico** unificado. O início destaca pendências e decisões recentes dos próprios envios; a indicação é atualizada a cada 30 segundos, sem interromper formulários/decisões abertos.
 
 Novo envio aceita vários itens e exige conferência do resumo. A seleção de produto possui campos independentes de código e descrição com sugestões filtradas durante a digitação; escolher em qualquer campo identifica o produto único e preenche o outro automaticamente, sem uma terceira seleção. A lista também pode ser aberta pelos botões dos campos e refinada por teclado.
 
@@ -67,7 +67,7 @@ POST            /api/v1/shipments/:id/confirmation
 POST            /api/v1/shipments/:id/refusal
 ```
 
-Listagem: `view=pending|sent|history|updates|open`, `status`, `page` e `limit`; `open` reúne envios ainda aguardando recebimento ou em separação dos quais o setor participa, enquanto `updates` retorna decisões recentes dos próprios envios. Consultas respeitam o setor. `available-positions` é exclusivo da Revisão, exige `productId` e ao menos `batchCode` ou `manufacturingDate`, e retorna somente saldo positivo de produto/local ativos. Criação recebe multipart com `payload` contendo `requestKey`, `destinationSector` e `items`, além de um arquivo `photos` por item na mesma ordem; origem é inferida do usuário. Itens externos recebem `productId/lot/quantity` (ou variante existente via `batchId`); itens da Revisão recebem `productId/batchId/stockLocationId/quantity`. Confirmação aceita `confirmedExpirationKeys` quando houver divergência apresentada; recusa exige `reason`.
+Listagem: `view=pending|sent|history|updates|open`, `status`, `page` e `limit`; `sent` mostra apenas envios ainda em andamento criados pelo usuário, `open` reúne envios aguardando recebimento ou em separação dos quais o setor participa, e `updates` retorna decisões recentes dos próprios envios. Consultas respeitam o setor. `available-positions` é exclusivo da Revisão, exige `productId` e ao menos `batchCode` ou `manufacturingDate`, e retorna somente saldo positivo de produto/local ativos. Criação recebe multipart com `payload` contendo `requestKey`, `destinationSector` e `items`, além de um arquivo `photos` por item na mesma ordem; origem é inferida do usuário. Itens externos recebem `productId/lot/quantity` (ou variante existente via `batchId`); itens da Revisão recebem `productId/batchId/stockLocationId/quantity`. Confirmação aceita `confirmedExpirationKeys` quando houver divergência apresentada; recusa exige `reason`.
 
 Somente a confirmação gera entradas/saídas nos relatórios existentes. Nas saídas da Revisão, o saldo já fica indisponível desde a criação e aparece como **em trânsito** nos envios pendentes; recusa ou cancelamento pré-recebimento restaura o disponível. O autor pode cancelar enquanto o envio estiver aguardando recebimento, com motivo obrigatório; o envio permanece no histórico como `CANCELADO`, e administradores visualizam a auditoria no detalhe. Estoque/Home/relatório de validades mostram saldo disponível. Movimentos vinculados exibem o identificador do envio na observação e não oferecem cancelamento isolado; devoluções são novos envios. Regras completas em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#envios-entre-setores).
 
@@ -118,7 +118,7 @@ GET             /api/v1/stock-positions
 GET             /api/v1/stock-positions/:id
 ```
 
-A tela Estoque atual filtra por produto, variante de lote/validade e local e mostra somente posições positivas, com fabricação e validade. Cada validade mantém seu próprio saldo; os totais da Home e dos relatórios continuam usando essas posições reais. Oferece atalhos para transferir uma posição e, quando ela pertence à origem de revisão, realizar revisão.
+A entrada principal **Estoque e validades** consulta posições com saldo positivo, fabricação, validade, situação e totais, com filtros de produto, lote, local e vencimento. Cada validade mantém seu próprio saldo; os totais da Home e da consulta continuam usando essas posições reais.
 
 ## Entrada externa
 
@@ -184,9 +184,12 @@ POST  /api/v1/shipments/:id/separation-completion
 ```text
 GET             /api/v1/movements
 GET             /api/v1/movements/:id
+GET             /api/v1/history
 ```
 
-A listagem filtra por período, tipo, origem, destino e produto e permite ordenar por registros mais recentes, mais antigos ou tipo. Cards/linhas de movimentações e históricos são clicáveis e abrem um modal central ampliado. O detalhe apresenta identificador, tipo, estados operacional e PCP, data/hora, responsável, rota, observação, itens, lotes, fabricação, validade, quantidades e distribuições. Os dados do produto confirmados em novos itens são preservados por snapshot; datas são preservadas nas variantes imutáveis. Relatórios históricos e CSVs existentes também mostram as datas de origem/destino. Registros efetivados e cancelados permanecem no mesmo histórico.
+A entrada principal **Histórico** reúne, em uma lista paginada, envios e movimentações diretas sem duplicar o envio confirmado pelo movimento de estoque que ele gerou. Filtra por etapa (em andamento, aguardando PCP, finalizada ou encerrada), origem do registro, tipo, período e código/produto; ordena por data. O setor vê apenas seus envios; Revisão também vê operações diretas; PCP vê as movimentações de sua competência. Os cards abrem os detalhes existentes. `GET /api/v1/history` fornece essa consulta somente de leitura. Relatórios de totais/CSV continuam acessíveis em **Menu e conta**.
+
+O detalhe de movimentação apresenta identificador, tipo, estados operacional e PCP, data/hora, responsável, rota, observação, itens, lotes, fabricação, validade, quantidades e distribuições. Os dados do produto confirmados em novos itens são preservados por snapshot; datas são preservadas nas variantes imutáveis. Relatórios históricos e CSVs existentes também mostram as datas de origem/destino. Registros efetivados e cancelados permanecem consultáveis.
 
 ## Cancelamento e estorno
 
@@ -206,7 +209,7 @@ O backend revalida o saldo sob transação e bloqueios. Se uma parcela necessár
 GET             /api/v1/reports/movements
 ```
 
-A interface `Relatórios > Movimentações` consulta período, tipo, produto, lote e status. Exibe os resultados paginados em cards no mobile e tabela no desktop, além dos totais entregues pela API, sem recalculá-los no navegador. Possui estados de carregamento, vazio e erro e permite limpar todos os filtros. O acesso exige `movements.read`.
+A interface **Menu e conta > Relatórios de movimentações** consulta período, tipo, produto, lote e status. Exibe os resultados paginados em cards no mobile e tabela no desktop, além dos totais entregues pela API, sem recalculá-los no navegador. Possui estados de carregamento, vazio e erro e permite limpar todos os filtros. O acesso exige `movements.read`.
 
 Os endpoints de exportação existentes no backend ainda não possuem tela. Dashboard também não faz parte desta interface.
 
@@ -214,7 +217,7 @@ Os endpoints de exportação existentes no backend ainda não possuem tela. Dash
 
 `GET /api/v1/reports/reviews` aceita período, produto, lote, classificação/destino e paginação. Retorna as distribuições de revisões efetivadas compatíveis, a quantidade total revisada separada por unidade e os totais de todos os destinos configurados para revisão — inicialmente Lata Boa, Varejo e TUF. Classificações sem quantidade válida são retornadas com total zero nas unidades presentes no resultado; revisões canceladas não entram nos resultados nem nos totais.
 
-A interface `Relatórios > Revisões` apresenta esses totais sem recalculá-los, filtros combináveis, resultados paginados em cards no mobile e tabela no desktop, estados de carregamento, vazio e erro e ação para limpar filtros. Reutiliza `movements.read` e não oferece exportação nem dashboard.
+A interface **Menu e conta > Relatórios de revisões** apresenta esses totais sem recalculá-los, filtros combináveis, resultados paginados em cards no mobile e tabela no desktop, estados de carregamento, vazio e erro e ação para limpar filtros. Reutiliza `movements.read` e não oferece exportação nem dashboard.
 
 Revisões com desmontagem mostram o código unitário e as quantidades de saída em UN. Movimentações mostram separadamente as embalagens consumidas e as unidades produzidas; o CSV já existente também inclui o produto resultante e a quantidade produzida.
 
@@ -222,17 +225,17 @@ Revisões com desmontagem mostram o código unitário e as quantidades de saída
 
 `GET /api/v1/reports/stock` retorna somente posições atuais com saldo positivo, incluindo produto, lote, local/classificação, quantidade, fabricação e validade. Aceita filtros de produto, lote, local e situação da validade. A situação é calculada em relação à data de referência e à janela configurada, resultando em `VALIDO`, `PROXIMO_VENCIMENTO` ou `VENCIDO`; fabricação e validade trafegam como data civil `YYYY-MM-DD`.
 
-A interface `Relatórios > Estoque e validades` apresenta saldo, lote, fabricação, validade e situação, com destaque visual simples para cada estado. Possui os mesmos filtros, paginação da API, estados de carregamento, vazio e erro e ação para limpar filtros. O acesso exige `stock-positions.read`; exportação não faz parte desta interface.
+A interface principal **Estoque e validades** apresenta saldo, lote, fabricação, validade e situação, com destaque visual simples para cada estado. Possui os mesmos filtros, paginação da API, estados de carregamento, vazio e erro e ação para limpar filtros. O acesso exige `stock-positions.read`; exportação não faz parte desta interface.
 
 ## Dashboard operacional
 
 Todos os cards das listas da Home abrem um resumo sem navegação imediata. Reutiliza Modal acessível, itens e visualizador privado de fotos; mostra código, rota, responsável, estados, datas, observações e, para envios, separação e vínculos de retorno. Fechar/ESC retornam à Home. Ações encaminham ao registro específico na página existente: confirmar recebimento/retorno, continuar separação, ver retorno, executar PCP ou ver detalhes completos. O resumo não executa operações.
 
-`codigoMovimentacao` aparece desde a criação do envio e permanece igual no recebimento, separação, confirmação/recusa, movimentação de estoque, PCP e histórico. Busque o código completo em **Histórico > Movimentações**, na busca geral do PCP ou nos envios, respeitando os outros filtros. `GET /movements` e `GET /shipments` aceitam `codigoMovimentacao`; `GET /pcp/movements` aceita o código no `search`. Transferências não recebem código nem usam UUID como substituto público.
+`codigoMovimentacao` aparece desde a criação do envio e permanece igual no recebimento, separação, confirmação/recusa, movimentação de estoque, PCP e histórico. Busque o código em **Histórico**, na fila do PCP ou nos envios em aberto. `GET /history` aceita busca parcial por código/produto; `GET /movements` e `GET /shipments` aceitam `codigoMovimentacao`; `GET /pcp/movements` aceita o código no `search`. Transferências não recebem código nem usam UUID como substituto público.
 
 A Home exibe, antes dos atalhos, um ponto de atenção quando o setor ativo possui solicitações aguardando seu aceite ou envios em separação. Os totais vêm das consultas de envios, com escopo do setor e atualização ao entrar ou alternar o modo operacional.
 
-Abaixo dos menus e botões existentes ficam, conforme as permissões do perfil: movimentações abertas das quais o setor participa; movimentações concluídas aguardando execução do PCP; e as últimas movimentações finalizadas. Todos os perfis consultam o resumo sem sair da Home; somente as ações encaminham às telas operacionais. A apresentação é mobile-first em cards clicáveis e não recalcula estados no navegador.
+Abaixo dos menus e botões ficam, conforme as permissões: envios abertos dos quais o setor participa; movimentações concluídas no estoque aguardando PCP; e uma lista única das últimas operações **finalizadas**. A última lista usa o mesmo estado do Histórico e só inclui confirmação/efetivação sem ação restante do PCP. Recusas e cancelamentos ficam em **Encerradas**, não em finalizadas. A apresentação é mobile-first em cards clicáveis e não recalcula estados no navegador.
 
 ## Experiência de uso
 

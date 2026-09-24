@@ -36,6 +36,7 @@ apps/
       shipments/     envios setoriais, reserva e decisão de recebimento
       storage/       armazenamento privado local/Supabase das evidências
       reports/       consultas operacionais e exportação CSV
+      history/       linha do tempo de envios e movimentações
       health/        saúde da aplicação e do banco
     shared/          logs, erros, validação e paginação
   frontend/src/      shell, páginas, componentes e cliente da API
@@ -52,6 +53,7 @@ docker-compose.yml   PostgreSQL do desenvolvimento
 - `StockPositionsService` é a única fronteira de alteração do saldo.
 - `MovementsService` coordena documento, itens, distribuições, efeitos no estoque e auditoria.
 - `ReportsRepository` concentra consultas de leitura, agregações e filtros sem duplicar histórico ou saldo.
+- `HistoryService` pagina uma união somente de leitura de envios e movimentações. Movimentos gerados por um envio não aparecem como segunda linha; setor e permissões são aplicados antes da consulta.
 - `AuditService` aceita o `EntityManager` da operação para participar da mesma transação.
 - O frontend nunca substitui validação ou autorização do backend.
 

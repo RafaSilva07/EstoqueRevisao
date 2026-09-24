@@ -7,6 +7,7 @@ import { ShipmentSummaryModal } from './ShipmentSummaryModal';
 import { SectionMenu } from './Navigation';
 import { Page } from './navigation-model';
 import { sectorLabel, Shipment, shipmentStatusLabel } from './shipments';
+import { HistoryItem } from './HistoryPage';
 
 type OperationalHomePageProps = { user: UserSession; navigate: (page: Page) => void; onOpenRecord: (page: Page, id: string) => void };
 type MovementSummary = Movement | PcpMovementSummary;
@@ -37,8 +38,7 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
   const [pendingAcceptance, setPendingAcceptance] = useState(0);
   const [inSeparation, setInSeparation] = useState(0);
   const [pendingPcp, setPendingPcp] = useState<MovementSummary[]>([]);
-  const [recentMovements, setRecentMovements] = useState<MovementSummary[]>([]);
-  const [recentShipments, setRecentShipments] = useState<Shipment[]>([]);
+  const [recentFinished, setRecentFinished] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedMovement, setSelectedMovement] = useState<MovementSummary | null>(null);
@@ -54,23 +54,21 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
           api.get<Paginated<Shipment>>('/shipments?view=open&page=1&limit=10'),
           api.get<Paginated<Shipment>>('/shipments?view=pending&status=AGUARDANDO_RECEBIMENTO&page=1&limit=1'),
           api.get<Paginated<Shipment>>('/shipments?view=open&status=EM_SEPARACAO&page=1&limit=1'),
-          api.get<Paginated<Shipment>>('/shipments?view=history&page=1&limit=5'),
         ]) : Promise.resolve(null);
         const movementRequests = canReadMovements ? Promise.all([
           api.get<Paginated<Movement>>('/movements?status=EFETIVADA&pcpStatus=PENDENTE&page=1&limit=5'),
-          api.get<Paginated<Movement>>('/movements?status=EFETIVADA&page=1&limit=5'),
         ]) : canReadPcp ? Promise.all([
           api.get<Paginated<PcpMovementSummary>>('/pcp/movements?operationalStatus=CONCLUIDA&pcpStatus=PENDENTE&sort=ASC&page=1&limit=5'),
-          api.get<Paginated<PcpMovementSummary>>('/pcp/movements?operationalStatus=CONCLUIDA&sort=DESC&page=1&limit=5'),
         ]) : Promise.resolve(null);
-        const [shipmentData, movementData] = await Promise.all([shipmentRequests, movementRequests]);
+        const finishedRequest = canReadShipments || canReadMovements || canReadPcp
+          ? api.get<Paginated<HistoryItem>>('/history?scope=DONE&page=1&limit=5') : Promise.resolve(null);
+        const [shipmentData, movementData, finishedData] = await Promise.all([shipmentRequests, movementRequests, finishedRequest]);
         if (!active) return;
         setOpenShipments(shipmentData?.[0].items ?? []);
         setPendingAcceptance(shipmentData?.[1].meta.total ?? 0);
         setInSeparation(shipmentData?.[2].meta.total ?? 0);
-        setRecentShipments(shipmentData?.[3].items ?? []);
         setPendingPcp(movementData?.[0].items ?? []);
-        setRecentMovements(movementData?.[1].items ?? []);
+        setRecentFinished(finishedData?.items ?? []);
         setError('');
       } catch (caught) {
         if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível carregar o resumo operacional.');
@@ -99,23 +97,18 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
     {error && <Notice kind="error">{error}</Notice>}
 
     {!loading && !error && canReadShipments && <section className="surface dashboard-section home-operation-panel" aria-labelledby="open-shipments-title">
-      <PanelHeading id="open-shipments-title" eyebrow="Prioridade" title="Movimentações em aberto" action={<button className="text-button" onClick={() => navigate('requests')}>Ver solicitações</button>} />
+      <PanelHeading id="open-shipments-title" eyebrow="Prioridade" title="Envios em aberto" action={<button className="text-button" onClick={() => navigate('shipments')}>Ver envios</button>} />
       {openShipments.length === 0 ? <EmptyState title="Nenhuma movimentação em aberto" description="Não há envios aguardando aceite, recebimento ou separação neste setor." /> : <div className="home-operation-list">{openShipments.map((shipment) => <button type="button" className="home-operation-card" key={shipment.id} onClick={() => setSelectedShipmentId(shipment.id)}><span className={`badge ${shipment.status === 'EM_SEPARACAO' ? 'pending' : 'warning'}`}>{shipmentStatusLabel[shipment.status]}</span><strong>{shipmentRoute(shipment)}</strong><span>{shipment.items.length} {shipment.items.length === 1 ? 'produto' : 'produtos'} · {shipment.createdBy.username}</span><small>{formatDateTime(shipment.createdAt)} · {shipment.codigoMovimentacao}</small></button>)}</div>}
     </section>}
 
     {!loading && !error && (canReadMovements || canReadPcp) && <section className="surface dashboard-section home-operation-panel" aria-labelledby="pending-pcp-title">
-      <PanelHeading id="pending-pcp-title" eyebrow="PCP" title="Finalizadas aguardando execução do PCP" action={<button className="text-button" onClick={() => navigate(canReadPcp ? 'pcp' : 'movements')}>Ver todas</button>} />
+      <PanelHeading id="pending-pcp-title" eyebrow="PCP" title="Concluídas no estoque · aguardando PCP" action={<button className="text-button" onClick={() => navigate(canReadPcp ? 'pcp' : 'history')}>Ver todas</button>} />
       {pendingPcp.length === 0 ? <EmptyState title="Nenhuma movimentação aguardando o PCP" description="As movimentações concluídas pendentes de execução aparecerão aqui." /> : <div className="home-operation-list">{pendingPcp.map((movement) => <button type="button" className="home-operation-card" key={movement.id} onClick={() => openMovement(movement)}><span className="badge pending">PCP pendente</span><strong>{movementLabels[movement.type]}</strong><span>{movementRoute(movement)} · {itemCount(movement)} {itemCount(movement) === 1 ? 'item' : 'itens'}</span><small>{formatDateTime(movement.occurredAt)} · {movement.codigoMovimentacao ?? 'Sem código público'}</small></button>)}</div>}
     </section>}
 
-    {!loading && !error && (canReadMovements || canReadPcp) && <section className="surface dashboard-section home-operation-panel" aria-labelledby="recent-movements-title">
-      <PanelHeading id="recent-movements-title" eyebrow="Histórico" title="Últimas movimentações finalizadas" action={<button className="text-button" onClick={() => navigate(canReadPcp ? 'pcp-all' : 'movements')}>Ver histórico</button>} />
-      {recentMovements.length === 0 ? <EmptyState title="Nenhuma movimentação finalizada" description="As últimas operações concluídas aparecerão aqui." /> : <div className="home-operation-list">{recentMovements.map((movement) => <button type="button" className="home-operation-card" key={movement.id} onClick={() => openMovement(movement)}><span className="badge active">Concluída</span><strong>{movementLabels[movement.type]}</strong><span>{movementRoute(movement)} · {itemCount(movement)} {itemCount(movement) === 1 ? 'item' : 'itens'}</span><small>{formatDateTime(movement.occurredAt)} · {movement.codigoMovimentacao ?? 'Sem código público'}</small></button>)}</div>}
-    </section>}
-
-    {!loading && !error && !canReadMovements && !canReadPcp && canReadShipments && <section className="surface dashboard-section home-operation-panel" aria-labelledby="recent-shipments-title">
-      <PanelHeading id="recent-shipments-title" eyebrow="Histórico" title="Últimas movimentações finalizadas" action={<button className="text-button" onClick={() => navigate('shipment-history')}>Ver histórico</button>} />
-      {recentShipments.length === 0 ? <EmptyState title="Nenhuma movimentação finalizada" description="Os últimos envios confirmados ou recusados aparecerão aqui." /> : <div className="home-operation-list">{recentShipments.map((shipment) => <button type="button" className="home-operation-card" key={shipment.id} onClick={() => setSelectedShipmentId(shipment.id)}><span className={`badge ${shipment.status === 'CONFIRMADO' ? 'active' : 'canceled'}`}>{shipmentStatusLabel[shipment.status]}</span><strong>{shipmentRoute(shipment)}</strong><span>{shipment.items.length} {shipment.items.length === 1 ? 'produto' : 'produtos'} · {shipment.createdBy.username}</span><small>{formatDateTime(shipment.decidedAt ?? shipment.createdAt)} · {shipment.codigoMovimentacao}</small></button>)}</div>}
+    {!loading && !error && (canReadShipments || canReadMovements || canReadPcp) && <section className="surface dashboard-section home-operation-panel" aria-labelledby="recent-finished-title">
+      <PanelHeading id="recent-finished-title" eyebrow="Histórico" title="Últimas movimentações finalizadas" action={<button className="text-button" onClick={() => navigate('history')}>Ver histórico</button>} />
+      {recentFinished.length === 0 ? <EmptyState title="Nenhuma movimentação finalizada" description="Somente operações sem ação pendente aparecerão aqui." /> : <div className="home-operation-list">{recentFinished.map((item) => <button type="button" className="home-operation-card" key={`${item.kind}:${item.id}`} onClick={() => item.kind === 'SHIPMENT' ? setSelectedShipmentId(item.id) : onOpenRecord(canReadPcp ? 'pcp-all' : 'history', item.id)}><span className="badge active">Finalizada</span><strong>{item.kind === 'SHIPMENT' ? 'Envio entre setores' : movementLabels[item.type as Movement['type']] ?? item.type}</strong><span>{item.origin} → {item.destination} · {item.itemCount} {item.itemCount === 1 ? 'item' : 'itens'}</span><small>{formatDateTime(item.occurredAt)} · {item.code ?? 'Sem código público'}</small></button>)}</div>}
     </section>}
     {selectedMovement && <MovementDetailModal movementId={selectedMovement.id} initialMovement={'items' in selectedMovement ? selectedMovement : undefined} pcp={canReadPcp} onClose={() => setSelectedMovement(null)}>{(movement) => <button className="button-wide" onClick={() => { setSelectedMovement(null); onOpenRecord(canReadPcp ? 'pcp-all' : 'movements', movement.id); }}>{canReadPcp && user.permissions.includes('pcp.movements.execute') && movement.status === 'EFETIVADA' && movement.requiresPcpExecution && movement.pcpExecutionStatus === 'PENDENTE' ? 'Marcar como executada' : 'Ver detalhes completos'}</button>}</MovementDetailModal>}
     {selectedShipmentId && <ShipmentSummaryModal id={selectedShipmentId} user={user} onClose={() => setSelectedShipmentId(null)} onOpen={(id) => { setSelectedShipmentId(null); onOpenRecord('shipments', id); }} />}

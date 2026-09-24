@@ -88,7 +88,7 @@ function SeparationDialog({ shipment, onClose, onDone }: { shipment: Shipment; o
   </Modal>;
 }
 
-export function ShipmentsPage({ user, initialView = 'pending', initialCreating = false, showCreateAction = true, initialId }: { user: UserSession; initialView?: 'pending' | 'sent' | 'history'; initialCreating?: boolean; showCreateAction?: boolean; initialId?: string }) {
+export function ShipmentsPage({ user, initialView = 'pending', initialCreating = false, showCreateAction = true, initialId, onHistory }: { user: UserSession; initialView?: 'pending' | 'sent'; initialCreating?: boolean; showCreateAction?: boolean; initialId?: string; onHistory?: () => void }) {
   const [view, setView] = useState(initialView);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<Paginated<Shipment> | null>(null);
@@ -140,9 +140,9 @@ export function ShipmentsPage({ user, initialView = 'pending', initialCreating =
   if (creating) return <NewShipment sector={user.sector as ShipmentSector} onClose={() => setCreating(false)} onCreated={() => { setCreating(false); setSelected(null); setView('sent'); setPage(1); setSuccess('Envio criado. Aguardando confirmação do destinatário.'); void load(); }} />;
   return <>
     {user.sector !== 'REVISAO' && <ShipmentHomeNotice onOpen={() => { setView('pending'); setPage(1); }} />}
-    <PageHeader eyebrow={sectorLabel[user.sector as ShipmentSector]} title="Envios entre setores" description="Receba, acompanhe seus envios e consulte as decisões." action={showCreateAction && canCreate && <button onClick={() => setCreating(true)}>{user.sector === 'REVISAO' ? 'Novo envio' : 'Novo envio para Revisão'}</button>} />
+    <PageHeader eyebrow={sectorLabel[user.sector as ShipmentSector]} title="Envios e recebimentos" description="Aqui ficam os envios que ainda precisam de recebimento ou separação. Os concluídos, recusados e cancelados ficam no Histórico." action={showCreateAction && canCreate && <button onClick={() => setCreating(true)}>{user.sector === 'REVISAO' ? 'Novo envio' : 'Novo envio para Revisão'}</button>} />
     {success && <Notice kind="success" onClose={() => setSuccess('')}>{success}</Notice>}
-    <nav className="shipment-tabs" aria-label="Consultas de envios">{([['pending','Aguardando minha ação'],['sent','Enviados por mim'],['history','Histórico']] as const).map(([key,label]) => <button key={key} className={view === key ? '' : 'secondary'} aria-pressed={view === key} onClick={() => { setView(key); setPage(1); setSelected(null); }}>{label}</button>)}</nav>
+    <nav className="shipment-tabs" aria-label="Consultas de envios">{([['pending','Para receber'],['sent','Meus envios em aberto']] as const).map(([key,label]) => <button key={key} className={view === key ? '' : 'secondary'} aria-pressed={view === key} onClick={() => { setView(key); setPage(1); setSelected(null); }}>{label}</button>)}{onHistory && <button className="secondary" onClick={onHistory}>Abrir histórico completo</button>}</nav>
     <label>Buscar pelo código da movimentação<input type="search" placeholder="ENT-000153" value={codeSearch} onChange={(event) => { setCodeSearch(event.target.value); setPage(1); }} /></label>
     <label>Ordenar por<select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}><option value="RECENT">Mais recentes</option><option value="OLDEST">Mais antigos</option><option value="STATUS">Status</option></select></label>
     {error ? <Notice kind="error">{error} <button className="secondary" onClick={() => void load()}>Tentar novamente</button></Notice> : loading ? <LoadingState label="Consultando envios" /> : !data?.items.length ? <EmptyState title="Nenhum envio nesta consulta" description="Novos recebimentos e decisões aparecerão aqui." /> : <>

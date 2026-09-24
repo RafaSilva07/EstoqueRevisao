@@ -4,9 +4,9 @@ import { ShipmentsPage } from './ShipmentsPage';
 import { NewShipment } from './NewShipment';
 
 describe('Interface de envios', () => {
-  it('mostra as três consultas e ação específica do setor externo', () => {
-    const html = renderToStaticMarkup(<ShipmentsPage user={{id:'u',username:'Operador',sector:'PRODUCAO',roles:['PRODUCAO'],permissions:['shipments.read','shipments.create']}} />);
-    for (const text of ['Aguardando minha ação','Enviados por mim','Histórico','Novo envio para Revisão','Aguardando meu recebimento']) expect(html).toContain(text);
+  it('separa trabalho em aberto do histórico e mostra a ação do setor externo', () => {
+    const html = renderToStaticMarkup(<ShipmentsPage user={{id:'u',username:'Operador',sector:'PRODUCAO',roles:['PRODUCAO'],permissions:['shipments.read','shipments.create']}} onHistory={() => undefined} />);
+    for (const text of ['Para receber','Meus envios em aberto','Abrir histórico completo','Novo envio para Revisão','Aguardando meu recebimento']) expect(html).toContain(text);
     expect(html).not.toContain('Cancelar movimentação');
   });
   it('não oferece criação a quem só pode consultar', () => {

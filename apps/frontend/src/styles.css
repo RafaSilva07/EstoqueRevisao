@@ -461,6 +461,13 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
 .shipment-tabs, .shipment-pagination { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin: 1rem 0; }
 .shipment-tabs > button { flex: 1 1 10rem; }
 .shipment-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1rem; }
+.history-list { display: grid; gap: .75rem; margin: 1rem 0; }
+.history-card { display: grid; width: 100%; min-width: 0; gap: .35rem; text-align: left; overflow-wrap: anywhere; color: var(--text); }
+.history-card .badge { justify-self: start; }
+.history-card strong { color: var(--primary-dark); }
+.history-card small { color: var(--muted); }
+.history-card-action { color: var(--primary-dark); font-weight: 700; }
+.history-card:hover, .history-card:focus-visible { border-color: var(--primary); background: var(--primary-soft); }
 .shipment-card { padding: 1rem; min-width: 0; overflow-wrap: anywhere; margin-bottom: 1rem; }
 .shipment-card h2 { font-size: 1.2rem; }
 .shipment-items { width: 100%; margin: .75rem 0 1rem; }

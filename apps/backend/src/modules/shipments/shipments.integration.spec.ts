@@ -28,6 +28,7 @@ import { Sector, ShipmentEntity, ShipmentItemEntity } from './shipment.entity';
 import { ShipmentsService } from './shipments.service';
 import { CreateShipmentDto, ShipmentQueryDto } from './shipment.dto';
 import { StorageService, UploadedImage } from '../storage/storage.service';
+import { HistoryService } from '../history/history.service';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 (databaseUrl ? describe : describe.skip)('Envios entre setores (PostgreSQL)', () => {
@@ -298,5 +299,23 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     const second = await service.list({view:'pending',page:2,limit:2},users.REVISAO);
     expect(first.meta.total).toBe(3); expect(second.items).toHaveLength(1);
     expect(first.items.map((item) => item.id)).not.toContain(second.items[0].id);
+  });
+  it('unifica o histórico sem duplicar envio confirmado e só finaliza após PCP', async () => {
+    const history = new HistoryService(db);
+    const review = { ...users.REVISAO, permissions: [...users.REVISAO.permissions, 'movements.read'] };
+    const query = { page: 1, limit: 20, scope: 'ALL' as const, kind: 'ALL' as const, sort: 'RECENT' as const };
+    const shipment = await incoming();
+    expect((await history.list(query, review)).items).toEqual(expect.arrayContaining([expect.objectContaining({ id: shipment.id, scope: 'OPEN' })]));
+    expect((await history.list(query, users.EXPEDICAO)).items).toHaveLength(0);
+    await decide(shipment.id, 'REVISAO');
+    const pending = await history.list({ ...query, scope: 'PENDING_PCP' }, review);
+    expect(pending.items).toHaveLength(1);
+    expect(pending.items[0].id).toBe(shipment.id);
+    expect((await history.list({ ...query, scope: 'DONE' }, review)).items).toHaveLength(0);
+    await db.query("UPDATE movements SET pcp_execution_status = 'EXECUTADA', pcp_executed_at = NOW(), pcp_executed_by_user_id = $1 WHERE shipment_id = $2", [users.REVISAO.id, shipment.id]);
+    const done = await history.list({ ...query, scope: 'DONE' }, review);
+    expect(done.items).toHaveLength(1);
+    expect(done.items[0].id).toBe(shipment.id);
+    expect((await history.list({ ...query, scope: 'DONE', limit: 1, page: 2 }, review)).meta.total).toBe(1);
   });
 });

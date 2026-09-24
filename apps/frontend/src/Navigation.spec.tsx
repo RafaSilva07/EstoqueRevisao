@@ -10,19 +10,19 @@ const user: UserSession = { id: 'u', username: 'Operador', sector: 'REVISAO', ro
 const noop = () => undefined;
 
 describe('Navegação simplificada', () => {
-  it('abre ações diretamente na Home dos perfis com poucas funcionalidades', () => {
+  it('mostra destinos claros na Home de cada setor', () => {
     for (const sector of ['PRODUCAO', 'EXPEDICAO'] as const) {
       const external = { ...user, sector };
-      expect(homeActions(external).map((a) => a.page)).toEqual(['shipment-new', 'shipments', 'shipment-sent', 'shipment-history']);
-      expect(parentPage('shipment-new', external)).toBe('home');
+      expect(homeActions(external).map((a) => a.page)).toEqual(['shipments', 'history', 'products']);
+      expect(parentPage('shipment-new', external)).toBe('shipments');
       const html = renderToStaticMarkup(<SectionMenu page="home" user={external} navigate={noop} />);
-      expect(html).toContain('Enviar para Revisão');
-      expect(html).toContain('Pendentes de aceite');
+      expect(html).toContain('Envios e recebimentos');
+      expect(html).toContain('Histórico');
     }
     const pcp = { ...user, sector: 'PCP' as const };
-    expect(homeActions(pcp).map((a) => a.page)).toEqual(['pcp', 'pcp-all', 'pcp-executed']);
-    expect(parentPage('pcp-executed', pcp)).toBe('home');
-    expect(homeActions({ ...user, permissions: ['shipments.read'] }).map((a) => a.page)).toEqual(['shipment-sent', 'shipment-history']);
+    expect(homeActions(pcp).map((a) => a.page)).toEqual(['inventory', 'history', 'products', 'pcp']);
+    expect(parentPage('pcp-executed', pcp)).toBe('pcp');
+    expect(homeActions({ ...user, permissions: ['shipments.read'] }).map((a) => a.page)).toEqual(['shipments', 'history']);
   });
   it('limita entrada e saída direta ao administrador mesmo com movements.create', () => {
     expect(menuActions('operations', { ...user, roles: ['REVISAO'] }).map((a) => a.page)).toEqual(['new-transfer', 'new-review']);
@@ -31,29 +31,27 @@ describe('Navegação simplificada', () => {
   });
   it('mostra somente áreas na Home, sem operações, métricas ou tabelas', () => {
     const html = renderToStaticMarkup(<SectionMenu page="home" user={user} navigate={noop} />);
-    for (const title of ['O que você quer fazer?', 'Movimentar produtos', 'Estoque', 'Solicitações', 'Histórico', 'Produtos']) expect(html).toContain(title);
+    for (const title of ['O que você quer fazer?', 'Movimentar produtos', 'Estoque e validades', 'Envios e recebimentos', 'Histórico', 'Produtos']) expect(html).toContain(title);
     for (const text of ['Realizar entrada', '<table', 'PCP', 'Gerenciar usuários']) expect(html).not.toContain(text);
   });
   it('preserva as fronteiras dos setores mesmo com permissões de administrador', () => {
     for (const sector of ['PRODUCAO', 'EXPEDICAO'] as const) {
       const external = { ...user, sector, roles: ['ADMIN'] };
-      expect(menuActions('home', external).map((a) => a.page)).toEqual(['requests']);
+      expect(menuActions('home', external).map((a) => a.page)).toEqual(['shipments', 'history', 'products']);
       expect(menuActions('operations', external)).toEqual([]);
-      expect(menuActions('requests', external)[0].title).toBe('Enviar para Revisão');
     }
-    expect(menuActions('home', { ...user, sector: 'PCP' }).map((a) => a.page)).toEqual(['pcp-menu']);
-    expect(menuActions('requests', { ...user, sector: 'PCP' })).toEqual([]);
-    expect(menuActions('requests', user)[0].title).toBe('Enviar da Revisão');
+    expect(menuActions('home', { ...user, sector: 'PCP' }).map((a) => a.page)).toEqual(['inventory', 'history', 'products', 'pcp']);
   });
   it('omite criação e aceite de quem só consulta e trata ausência de acesso', () => {
     const readOnly = { ...user, permissions: ['shipments.read'] };
-    expect(menuActions('requests', readOnly).map((a) => a.page)).toEqual(['shipment-sent', 'shipment-history']);
+    expect(menuActions('home', readOnly).map((a) => a.page)).toEqual(['shipments', 'history']);
     expect(menuActions('operations', readOnly)).toEqual([]);
     expect(menuActions('home', { ...user, permissions: [] })).toEqual([]);
   });
   it('fornece retorno curto para cada operação e consulta', () => {
     for (const action of menuActions('operations', user)) expect(parentPage(action.page)).toBe('operations');
-    for (const action of menuActions('requests', user)) expect(parentPage(action.page)).toBe('requests');
+    expect(parentPage('shipment-new')).toBe('shipments');
+    expect(parentPage('reports')).toBe('history');
     const html = renderToStaticMarkup(<NavigationTrail page="new-entry" navigate={noop} />);
     expect(html).toContain('← Voltar');
     expect(html).toContain('Movimentar produtos');
@@ -66,9 +64,10 @@ describe('Navegação simplificada', () => {
     expect(html).toContain('Observação geral do envio');
     const denied = renderToStaticMarkup(<ShipmentsPage user={{ ...user, permissions: ['shipments.read'] }} initialCreating />);
     expect(denied).not.toContain('Adicionar produto');
-    const history = renderToStaticMarkup(<ShipmentsPage user={user} initialView="history" showCreateAction={false} />);
-    expect(history).not.toContain('Novo envio');
-    expect(history).toContain('aria-pressed="true">Histórico');
+    const sent = renderToStaticMarkup(<ShipmentsPage user={user} initialView="sent" showCreateAction={false} onHistory={noop} />);
+    expect(sent).not.toContain('Novo envio');
+    expect(sent).toContain('aria-pressed="true">Meus envios em aberto');
+    expect(sent).toContain('Abrir histórico completo');
   });
   it('predefine as consultas PCP sem mudar os filtros disponíveis', () => {
     const all = renderToStaticMarkup(<PcpPage initialStatus="" />);

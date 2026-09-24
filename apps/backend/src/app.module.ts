@@ -21,6 +21,7 @@ import { GlobalExceptionFilter } from './shared/http/global-exception.filter';
 import { LoggingModule } from './shared/logging/logging.module';
 import { RequestContextMiddleware } from './shared/logging/request-context.middleware';
 import { SettingsModule } from './modules/settings/settings.module';
+import { HistoryModule } from './modules/history/history.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     ShipmentsModule,
     SettingsModule,
     HealthModule,
+    HistoryModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

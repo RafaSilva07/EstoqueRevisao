@@ -22,6 +22,7 @@ import { PcpPage } from './PcpPage';
 import { MovementDetailModal } from './MovementDetailModal';
 import { OperationalMode, operationalModeLabel, userForOperationalMode } from './operational-mode';
 import { OperationalHomePage } from './OperationalHomePage';
+import { HistoryPage } from './HistoryPage';
 
 type Navigate = (page: Page) => void;
 const messageFrom = (error: unknown) => error instanceof Error ? error.message : 'Ocorreu um erro inesperado.';
@@ -49,7 +50,7 @@ function ProductsPage({ canWrite, canManageStatus }: { canWrite: boolean; canMan
   return <><PageHeader eyebrow="Cadastro base" title="Produtos" description="Consulte produtos e mantenha suas unidades e conversoes." action={canWrite && <button onClick={() => openForm(null)}>+ Novo produto</button>} />{success && <Notice kind="success" onClose={() => setSuccess('')}>{success}</Notice>}{error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}{showForm && <Modal labelledBy="product-form-title" busy={busy} onClose={() => setShowForm(false)}><h2 id="product-form-title">{editing ? 'Editar produto' : 'Cadastrar produto'}</h2>{error && <Notice kind="error">{error}</Notice>}<ProductForm key={editing?.id ?? 'new'} product={editing} busy={busy} onSave={save} onCancel={() => setShowForm(false)} /></Modal>}<div className="content-grid"><section className="surface list-panel"><div className="toolbar"><label className="search-field">Buscar produto<input type="search" placeholder="Codigo ou nome" value={search} onChange={(event) => setSearch(event.target.value)} /></label></div>{loading ? <LoadingState label="Carregando produtos" /> : products.length === 0 ? <EmptyState title={search ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'} description={search ? 'Revise o termo de busca.' : 'Cadastre o primeiro produto para comecar.'} action={canWrite && !search ? <button onClick={() => openForm(null)}>Cadastrar produto</button> : undefined} /> : <div className="responsive-table"><table><thead><tr><th>Codigo</th><th>Produto</th><th>Unidade</th><th>Status</th><th>Acoes</th></tr></thead><tbody>{products.map((product) => <tr key={product.id} className={selected?.id === product.id ? 'selected' : ''}><td data-label="Codigo"><button className="text-button" onClick={() => void select(product)}>{product.code}</button></td><td data-label="Produto">{product.name}</td><td data-label="Unidade">{product.defaultUnit}</td><td data-label="Status"><Status active={product.active} /></td><td data-label="Acoes"><div className="row-actions">{canWrite && <><button className="secondary" onClick={() => openForm(product)}>Editar</button>{canManageStatus && <button className="secondary" onClick={() => product.active ? setConfirming(product) : void toggle(product)}>{product.active ? 'Inativar' : 'Ativar'}</button>}</>}</div></td></tr>)}</tbody></table></div>}</section><aside className="surface detail-panel" tabIndex={-1}><p className="eyebrow">Detalhes</p><h2>{selected?.name ?? 'Selecione um produto'}</h2>{selected ? <><dl><dt>Codigo</dt><dd>{selected.code}</dd><dt>Unidade</dt><dd>{selected.defaultUnit}</dd>{['FD', 'CX'].includes(selected.defaultUnit) && <><dt>Unidades por embalagem</dt><dd>{selected.unitsPerPackage ?? 'Configuração pendente'}</dd><dt>Códigos unitários possíveis</dt><dd>{selected.unitProducts?.map((product) => `${product.code} — ${product.name}`).join('; ') || 'Configuração pendente'}</dd></>}<dt>Prazo padrão</dt><dd>{selected.shelfLifeYears ? `${selected.shelfLifeYears} ano(s)` : 'Ainda não informado'}</dd><dt>Status</dt><dd>{selected.active ? 'Ativo' : 'Inativo'}</dd></dl><div className="divider" /><h3>Conversoes de unidade</h3>{conversions.length === 0 ? <p className="muted">Nenhuma conversao cadastrada.</p> : <ul className="conversion-list">{conversions.map((item) => <li key={item.id}><strong>{item.fromUnit}</strong><span>1 × {item.factor} = {item.factor} {item.toUnit}</span></li>)}</ul>}{canWrite && <form className="compact-form" onSubmit={(event) => void addConversion(event)}><label>Origem<input name="fromUnit" required /></label><label>Destino<input name="toUnit" required /></label><label>Fator<input name="factor" type="number" min="0.000001" step="0.000001" required /></label><button disabled={busy}>{busy ? 'Adicionando...' : 'Adicionar conversao'}</button></form>}</> : <p className="muted">Toque no codigo de um produto para ver os detalhes.</p>}</aside></div><ConfirmDialog open={Boolean(confirming)} title="Inativar produto?" description={`O produto ${confirming?.name ?? ''} deixara de aparecer nas selecoes operacionais.`} confirmLabel="Inativar produto" busy={busy} onCancel={() => setConfirming(null)} onConfirm={() => { if (confirming) void toggle(confirming); }} /></>;
 }
 
-function InventoryPage({ onTransfer, onReview }: { onTransfer?: (prefill: TransferPrefill) => void; onReview?: (prefill: ReviewPrefill) => void }) {
+export function InventoryPage({ onTransfer, onReview }: { onTransfer?: (prefill: TransferPrefill) => void; onReview?: (prefill: ReviewPrefill) => void }) {
   const [positions, setPositions] = useState<StockPosition[]>([]); const [products, setProducts] = useState<Product[]>([]); const [batches, setBatches] = useState<Batch[]>([]); const [locations, setLocations] = useState<StockLocation[]>([]); const [selected, setSelected] = useState<StockPosition | null>(null);
   const [productId, setProductId] = useState(''); const [batchId, setBatchId] = useState(''); const [stockLocationId, setStockLocationId] = useState(''); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   const load = useCallback(async () => { setLoading(true); const query = new URLSearchParams({ limit: '100' }); if (productId) query.set('productId', productId); if (batchId) query.set('batchId', batchId); if (stockLocationId) query.set('stockLocationId', stockLocationId); try { const [positionData, productData, batchData, locationData] = await Promise.all([api.get<Paginated<StockPosition>>(`/stock-positions?${query}`), api.get<Paginated<Product>>('/products?limit=100&active=true'), api.get<Paginated<Batch>>('/batches?limit=100'), api.get<Paginated<StockLocation>>('/stocks?limit=100&active=true')]); setPositions(positionData.items); setProducts(productData.items); setBatches(batchData.items); setLocations(locationData.items); setError(''); } catch (caught) { setError(messageFrom(caught)); } finally { setLoading(false); } }, [batchId, productId, stockLocationId]);
@@ -192,12 +193,12 @@ export function App() {
   const openHistory = () => {
     setSelectedMovementId(undefined);
     setMovementSuccess(undefined);
-    navigate('movements');
+    navigate('history');
   };
   const completeMovement = (id: string, message: string) => {
     setSelectedMovementId(id);
     setMovementSuccess(message);
-    navigate('movements');
+    navigate('history');
   };
   const logout = () => {
     setLoggingOut(true);
@@ -210,12 +211,12 @@ export function App() {
   };
   const switcher = isAdmin && <OperationalSectorSwitcher value={activeMode} onChange={switchSector} />;
   const areas = homeActions(activeUser);
-  const menus: Page[] = ['home', 'operations', 'requests', 'stock-menu', 'history-menu', 'pcp-menu', 'more'];
+  const menus: Page[] = ['home', 'operations', 'more'];
   const reviewSector = activeSector === 'REVISAO';
   const go: Navigate = (destination) => {
     if (destination === 'new-transfer') openTransfer();
     else if (destination === 'new-review') openReview();
-    else if (destination === 'movements') openHistory();
+    else if (destination === 'movements' || destination === 'history') openHistory();
     else navigate(destination);
   };
   return <div className="app-shell"><a className="skip-link" href="#main-content">Ir para o conteúdo</a>
@@ -223,12 +224,12 @@ export function App() {
     <aside className="sidebar"><nav aria-label="Navegação principal"><NavButton active={page === 'home'} onClick={() => go('home')}>Início</NavButton>{areas.map((area) => <NavButton key={area.page} active={page === area.page || parentPage(page, activeUser) === area.page} onClick={() => go(area.page)}>{area.title}</NavButton>)}<NavButton active={page === 'more' || page === 'users' || page === 'settings'} onClick={() => go('more')}>Menu e conta</NavButton></nav><p className="sidebar-note">{operationalModeLabel[activeMode]}</p></aside>
     <main className="workspace" id="main-content" tabIndex={-1}>
       <NavigationTrail page={page} user={activeUser} navigate={go} />
-      {page === 'home' && <OperationalHomePage key={activeMode} user={activeUser} navigate={go} onOpenRecord={(destination, id) => { navigate(destination); setSelectedRecordId(id); setSelectedMovementId(id); setMovementSuccess(undefined); }} />}
+      {page === 'home' && <OperationalHomePage key={activeMode} user={activeUser} navigate={go} onOpenRecord={(destination, id) => { navigate(destination === 'movements' ? 'history' : destination); setSelectedRecordId(id); setSelectedMovementId(id); setMovementSuccess(undefined); }} />}
       {page !== 'home' && menus.includes(page) && <SectionMenu page={page} user={activeUser} navigate={go} />}
       {page === 'more' && <section className="surface account-card"><h2>{user.username}</h2><p className="muted">{operationalModeLabel[activeMode]}</p><button className="secondary" onClick={logout} disabled={loggingOut}>{loggingOut ? 'Saindo…' : 'Sair do sistema'}</button></section>}
       {page === 'users' && adminMode && <UsersPage currentUserId={user.id} onOwnUpdate={logout} />}
       {page === 'settings' && adminMode && <SettingsPage />}
-      {activeSector !== 'PCP' && ['shipments', 'shipment-new', 'shipment-sent', 'shipment-history'].includes(page) && can('shipments.read') && <ShipmentsPage key={`${activeSector}:${page}`} user={activeUser} initialId={selectedRecordId} initialView={page === 'shipment-history' ? 'history' : page === 'shipment-sent' ? 'sent' : 'pending'} initialCreating={page === 'shipment-new'} showCreateAction={false} />}
+      {activeSector !== 'PCP' && ['shipments', 'shipment-new', 'shipment-sent'].includes(page) && can('shipments.read') && <ShipmentsPage key={`${activeSector}:${page}`} user={activeUser} initialId={selectedRecordId} initialView={page === 'shipment-sent' ? 'sent' : 'pending'} initialCreating={page === 'shipment-new'} onHistory={() => go('history')} />}
       {activeSector === 'PCP' && ['pcp', 'pcp-all', 'pcp-executed'].includes(page) && can('pcp.movements.read') && <PcpPage key={page} initialId={selectedRecordId} initialStatus={page === 'pcp-all' ? '' : page === 'pcp-executed' ? 'EXECUTADA' : 'PENDENTE'} />}
       {reviewSector && <>
         {page === 'new-entry' && adminMode && can('movements.create') && <ExternalEntryPage onCreated={(id) => completeMovement(id, 'Entrada registrada com sucesso.')} />}
@@ -238,11 +239,12 @@ export function App() {
         {page === 'movements' && can('movements.read') && <MovementsPage initialId={selectedMovementId} success={movementSuccess} canCancel={adminMode && can('movements.cancel')} />}
         {page === 'products' && can('products.read') && <ProductsPage canManageStatus={adminMode} canWrite={can('products.create') || can('products.update')} />}
         {page === 'stocks' && can('stocks.read') && <StocksPage canManageStatus={adminMode} canWrite={can('stocks.create') || can('stocks.update')} />}
-        {page === 'inventory' && can('stock-positions.read') && <InventoryPage />}
-        {page === 'reports' && can('movements.read') && <ReportsPage onReviews={() => navigate('reports-reviews')} onStock={can('stock-positions.read') ? () => navigate('reports-stock') : undefined} />}
-        {page === 'reports-reviews' && can('movements.read') && <ReviewReportsPage onMovements={() => navigate('reports')} onStock={can('stock-positions.read') ? () => navigate('reports-stock') : undefined} />}
-        {page === 'reports-stock' && can('stock-positions.read') && <StockReportsPage onMovements={can('movements.read') ? () => navigate('reports') : undefined} onReviews={can('movements.read') ? () => navigate('reports-reviews') : undefined} />}
+        {page === 'inventory' && can('stock-positions.read') && <StockReportsPage />}
+        {page === 'reports' && can('movements.read') && <ReportsPage onReviews={() => navigate('reports-reviews')} onStock={can('stock-positions.read') ? () => navigate('inventory') : undefined} />}
+        {page === 'reports-reviews' && can('movements.read') && <ReviewReportsPage onMovements={() => navigate('reports')} onStock={can('stock-positions.read') ? () => navigate('inventory') : undefined} />}
       </>}
+      {page === 'inventory' && activeSector === 'PCP' && can('stock-positions.read') && <StockReportsPage />}
+      {page === 'history' && (can('movements.read') || can('pcp.movements.read') || can('shipments.read')) && <HistoryPage user={activeUser} initialMovementId={selectedMovementId} success={movementSuccess} onOpenShipment={(id) => { setSelectedRecordId(id); navigate('shipments'); }} onOpenPcp={(id) => { setSelectedRecordId(id); navigate('pcp'); }} />}
     </main>
     <nav className="bottom-nav" aria-label="Navegação principal mobile">
       <NavButton active={page === 'home'} onClick={() => go('home')}>Início</NavButton>
