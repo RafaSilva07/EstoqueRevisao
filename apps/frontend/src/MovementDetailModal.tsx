@@ -4,6 +4,7 @@ import { LoadingState, Modal, Notice } from './components';
 import { formatDate, formatDateTime } from './format';
 import { ShipmentPhoto } from './ShipmentsPage';
 import { Shipment } from './shipments';
+import { MovementEvidence } from './MovementEvidence';
 
 const typeLabel: Record<Movement['type'], string> = {
   ENTRADA_EXTERNA: 'Entrada externa',
@@ -23,6 +24,9 @@ export function MovementDetailModal({ movementId, initialMovement, onClose, chil
   const [error, setError] = useState('');
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const movement = initialMovement?.id === movementId ? initialMovement : loadedMovement?.id === movementId ? loadedMovement : null;
+  const destinations = movement?.destinationLocation
+    ? [movement.destinationLocation.name]
+    : [...new Set(movement?.items.flatMap((item) => item.distributions?.map((distribution) => distribution.destinationLocation.name) ?? []) ?? [])];
 
   useEffect(() => {
     if (initialMovement?.id === movementId) return;
@@ -46,23 +50,20 @@ export function MovementDetailModal({ movementId, initialMovement, onClose, chil
     {!movement && !error && <LoadingState label="Carregando detalhes" />}
     {error && <Notice kind="error">{error}</Notice>}
     {movement && <>
-      <div className="panel-heading"><div><p className="eyebrow">Detalhes da movimentação</p><h2 id="movement-detail-title">{typeLabel[movement.type]} <small>{movement.codigoMovimentacao ?? 'Sem código público'}</small></h2></div><button className="secondary" onClick={onClose}>Fechar</button></div>
-      <dl>
-        <dt>Código</dt><dd>{movement.codigoMovimentacao ?? 'Não se aplica'}</dd>
-        <dt>Status operacional</dt><dd><span className={`badge ${movement.status === 'EFETIVADA' ? 'active' : 'canceled'}`}>{movement.status === 'EFETIVADA' ? 'Efetivada' : 'Cancelada'}</span></dd>
-        <dt>Status PCP</dt><dd><span className={`badge ${movement.pcpExecutionStatus === 'EXECUTADA' ? 'active' : 'pending'}`}>{movement.requiresPcpExecution === false ? 'Não necessária' : movement.pcpExecutionStatus === 'EXECUTADA' ? 'Executada' : 'Pendente'}</span></dd>
-        <dt>Data/hora</dt><dd>{formatDateTime(movement.occurredAt)}</dd>
-        <dt>Responsável</dt><dd>{movement.responsibleUser.username}</dd>
-        {shipment && <><dt>Envio original</dt><dd>{shipment.codigoMovimentacao}</dd></>}
-        <dt>Origem</dt><dd>{movement.originLocation.name}</dd>
-        <dt>Destino</dt><dd>{movement.destinationLocation?.name ?? 'Distribuição da revisão'}</dd>
-        <dt>Observação</dt><dd>{movement.observation || '—'}</dd>
-        {movement.pcpExecutionStatus === 'EXECUTADA' && <><dt>Executada no PCP por</dt><dd>{movement.pcpExecutedByUser?.username ?? '—'}</dd><dt>Execução PCP em</dt><dd>{movement.pcpExecutedAt ? formatDateTime(movement.pcpExecutedAt) : '—'}</dd><dt>Observação PCP</dt><dd>{movement.pcpExecutionObservation || '—'}</dd></>}
-        {movement.status === 'CANCELADA' && <><dt>Cancelada em</dt><dd>{movement.canceledAt ? formatDateTime(movement.canceledAt) : '—'}</dd><dt>Cancelada por</dt><dd>{movement.canceledByUser?.username ?? '—'}</dd><dt>Motivo</dt><dd>{movement.cancellationReason || '—'}</dd></>}
-      </dl>
-      <div className="divider" />
-      <h3>Itens</h3>
-      <ul className="movement-detail-items">{movement.items.map((item) => <li key={item.id}>
+      <div className="panel-heading movement-detail-heading"><div><p className="eyebrow">Detalhes da movimentação</p><h2 id="movement-detail-title">{typeLabel[movement.type]}</h2></div><button className="secondary" onClick={onClose}>Fechar</button></div>
+      <section className="movement-route" aria-label="Origem e destino">
+        <div className="movement-route-place"><span>Origem</span><strong>{movement.originLocation.name}</strong></div>
+        <span className="movement-route-arrow" aria-hidden="true">→</span>
+        <div className="movement-route-place"><span>Destino</span><strong>{destinations.length ? destinations.join(' · ') : 'Distribuição da revisão'}</strong></div>
+      </section>
+      <section className="movement-detail-section" aria-labelledby="movement-products-title">
+      <h3 id="movement-products-title">Produtos e quantidades</h3>
+      <ul className="movement-detail-items">{movement.items.map((item) => {
+        const evidence = pcp
+          ? (movement as PcpMovementDetail).shipmentEvidence?.filter((photo) => photo.productId === item.productId && photo.batchId === item.batchId && (photo.photoMimeType || photo.additionalPhotos?.length)) ?? []
+          : shipment?.items.filter((photo) => photo.productId === item.productId && photo.batchId === item.batchId
+            && (!photo.stockLocationId || photo.stockLocationId === movement.originLocationId) && (photo.photoMimeType || photo.additionalPhotos?.length)) ?? [];
+        return <li key={item.id}>
         <strong>{(item.productSnapshot ?? item.product).code} — {(item.productSnapshot ?? item.product).name}</strong>
         {movement.type === 'TRANSFERENCIA_INTERNA' ? <>
           <span>Origem: lote {item.batch.code} · fabricação {formatDate(item.batch.manufacturingDate)} · validade {formatDate(item.batch.expirationDate)} · {movement.originLocation.name}</span>
@@ -71,9 +72,28 @@ export function MovementDetailModal({ movementId, initialMovement, onClose, chil
         <b>{item.quantity} {(item.productSnapshot ?? item.product).defaultUnit}</b>
         {item.outputProductSnapshot && <span>Desmontagem: {item.quantity} {(item.productSnapshot ?? item.product).defaultUnit} × {item.unitsPerPackage} → {item.outputQuantity} UN de {item.outputProductSnapshot.code} — {item.outputProductSnapshot.name}</span>}
         {item.distributions?.length > 0 && <ul className="distribution-detail">{item.distributions.map((distribution) => <li key={distribution.id}>{distribution.destinationLocation.name}: <strong>{distribution.quantity} {(item.outputProductSnapshot ?? item.productSnapshot ?? item.product).defaultUnit}</strong></li>)}</ul>}
-      </li>)}</ul>
-      {shipment && <div className="pcp-evidence-grid">{shipment.items.filter((item) => !item.stockLocation || item.stockLocation.id === movement.originLocationId).map((item) => <ShipmentPhoto key={item.id} shipmentId={shipment.id} itemId={item.id} productName={item.productSnapshot.name} available={Boolean(item.photoMimeType)} additionalPhotos={item.additionalPhotos} />)}</div>}
-      {pcp && <div className="pcp-evidence-grid">{(movement as PcpMovementDetail).shipmentEvidence?.map((item) => <ShipmentPhoto key={item.itemId} shipmentId={item.shipmentId} itemId={item.itemId} productName={movement.items.find((candidate) => candidate.productId === item.productId)?.product.name ?? 'produto'} available={Boolean(item.photoMimeType)} additionalPhotos={item.additionalPhotos} />)}</div>}
+        {evidence.length > 0 && <MovementEvidence key={`${movement.pcpExecutionStatus}:${item.id}`} pendingPcp={movement.status === 'EFETIVADA' && movement.requiresPcpExecution && movement.pcpExecutionStatus === 'PENDENTE'}>
+          <div className="pcp-evidence-grid">{evidence.map((photo) => <ShipmentPhoto key={'itemId' in photo ? photo.itemId : photo.id} shipmentId={'itemId' in photo ? photo.shipmentId : shipment!.id} itemId={'itemId' in photo ? photo.itemId : photo.id} productName={(item.productSnapshot ?? item.product).name} available={Boolean(photo.photoMimeType)} additionalPhotos={photo.additionalPhotos} />)}</div>
+        </MovementEvidence>}
+      </li>})}</ul>
+      </section>
+      <section className="movement-detail-section" aria-labelledby="movement-info-title">
+        <h3 id="movement-info-title">Dados da movimentação</h3>
+        <div className="movement-facts">
+          <div><span>Responsável</span><strong>{movement.responsibleUser.username}</strong></div>
+          <div><span>Data e hora</span><strong>{formatDateTime(movement.occurredAt)}</strong></div>
+          <div><span>Código</span><strong>{movement.codigoMovimentacao ?? 'Não se aplica'}</strong>{shipment && <small>Envio original: {shipment.codigoMovimentacao}</small>}</div>
+          <div><span>Status</span><strong><span className={`badge ${movement.status === 'EFETIVADA' ? 'active' : 'canceled'}`}>{movement.status === 'EFETIVADA' ? 'Efetivada' : 'Cancelada'}</span></strong><small>PCP: {movement.requiresPcpExecution === false ? 'Não necessária' : movement.pcpExecutionStatus === 'EXECUTADA' ? 'Executada' : 'Pendente'}</small></div>
+        </div>
+        {movement.pcpExecutionStatus === 'EXECUTADA' && <p className="movement-detail-event">Executada no PCP por <strong>{movement.pcpExecutedByUser?.username ?? '—'}</strong> em {movement.pcpExecutedAt ? formatDateTime(movement.pcpExecutedAt) : '—'}.</p>}
+        {movement.status === 'CANCELADA' && <p className="movement-detail-event">Cancelada por <strong>{movement.canceledByUser?.username ?? '—'}</strong> em {movement.canceledAt ? formatDateTime(movement.canceledAt) : '—'}.</p>}
+      </section>
+      {(movement.observation || movement.pcpExecutionObservation || movement.cancellationReason) && <section className="movement-detail-section movement-notes" aria-labelledby="movement-notes-title">
+        <h3 id="movement-notes-title">Observações</h3>
+        {movement.observation && <p>{movement.observation}</p>}
+        {movement.pcpExecutionObservation && <p><strong>PCP:</strong> {movement.pcpExecutionObservation}</p>}
+        {movement.cancellationReason && <p><strong>Motivo do cancelamento:</strong> {movement.cancellationReason}</p>}
+      </section>}
       {children?.(movement)}
     </>}
   </Modal>;

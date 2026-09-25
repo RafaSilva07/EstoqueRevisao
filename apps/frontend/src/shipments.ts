@@ -24,7 +24,7 @@ export interface Shipment {
   observation: string | null;
   createdAt: string; createdBy: { id: string; username: string };
   decidedAt: string | null; decidedBy: { username: string } | null; refusalReason: string | null;
-  items: { id: string; quantity: number; productSnapshot: Pick<Product, 'code' | 'name' | 'defaultUnit'>;
+  items: { id: string; productId: string; batchId: string; stockLocationId: string | null; quantity: number; productSnapshot: Pick<Product, 'code' | 'name' | 'defaultUnit'>;
     batch: Batch; stockLocation: StockLocation | null; observation: string | null; photoMimeType: string | null; photoSize: number | null;
     additionalPhotos?: Array<{ ordinal: number; mimeType: string; size: number }>;
     separationDraft?: { returnQuantity: number } | null }[];
