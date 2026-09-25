@@ -1,5 +1,5 @@
 import { Type, Transform } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 import { OperationalLotDto } from '../batches/dto/operational-lot.dto';
 import { PaginationQueryDto } from '../../shared/pagination/pagination-query.dto';
 import { trimString } from '../../shared/validation/transforms';
@@ -12,6 +12,7 @@ export class ShipmentItemDto {
   @IsOptional() @ValidateNested() @Type(() => OperationalLotDto) lot?: OperationalLotDto;
   @Type(() => Number) @IsInt() @Min(1) quantity!: number;
   @IsOptional() @Transform(trimString) @IsString() @MaxLength(1000) observation?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(10) photoCount?: number;
 }
 export class ExpirationConfirmationDto {
   @IsOptional() @IsArray() @ArrayMaxSize(1000)
@@ -23,6 +24,7 @@ export class ExpirationConfirmationDto {
 export class SeparationItemDto {
   @IsUUID() shipmentItemId!: string;
   @Type(() => Number) @IsInt() @Min(0) returnQuantity!: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(10) photoCount?: number;
 }
 
 export class SeparationDraftDto {

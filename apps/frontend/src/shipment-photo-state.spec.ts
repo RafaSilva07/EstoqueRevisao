@@ -1,16 +1,18 @@
-import { describe, expect, it, vi } from 'vitest';
-import { allShipmentPhotosReady, replaceShipmentPhoto } from './shipment-photo-state';
+import { describe, expect, it } from 'vitest';
+import { allShipmentPhotosReady } from './shipment-photo-state';
 
 describe('Fotos dos itens do envio', () => {
   const file = (name: string) => new File(['photo'], name, { type: 'image/jpeg' });
-  it('só libera o envio quando todos os itens possuem foto', () => {
-    expect(allShipmentPhotosReady([])).toBe(false);
-    expect(allShipmentPhotosReady([{ key: 'a', photo: file('a.jpg') }, { key: 'b' }])).toBe(false);
-    expect(allShipmentPhotosReady([{ key: 'a', photo: file('a.jpg') }, { key: 'b', photo: file('b.jpg') }])).toBe(true);
+  const photo = (name: string) => ({ file: file(name), url: name });
+  it('exige o mínimo configurado por produto e respeita o máximo', () => {
+    const limits = { minimum: 2, maximum: 3 };
+    expect(allShipmentPhotosReady([], limits)).toBe(false);
+    expect(allShipmentPhotosReady([{ key: 'a', photos: [photo('a.jpg')] }], limits)).toBe(false);
+    expect(allShipmentPhotosReady([{ key: 'a', photos: [photo('a.jpg'), photo('b.jpg')] }], limits)).toBe(true);
+    expect(allShipmentPhotosReady([{ key: 'a', photos: [photo('a.jpg'), photo('b.jpg'), photo('c.jpg'), photo('d.jpg')] }], limits)).toBe(false);
   });
-  it('associa e substitui somente a foto do item correto', () => {
-    const revoke = vi.fn();
-    const result = replaceShipmentPhoto([{ key: 'a', photo: file('old.jpg'), photoUrl: 'old' }, { key: 'b' }], 'a', file('new.jpg'), 'new', revoke);
-    expect(result[0]).toMatchObject({ key: 'a', photoUrl: 'new' }); expect(result[1]).toEqual({ key: 'b' }); expect(revoke).toHaveBeenCalledWith('old');
+  it('limita o total a 100 fotos por envio', () => {
+    const items = Array.from({ length: 34 }, (_, index) => ({ key: String(index), photos: [photo('a.jpg'), photo('b.jpg'), photo('c.jpg')] }));
+    expect(allShipmentPhotosReady(items, { minimum: 1, maximum: 3 })).toBe(false);
   });
 });

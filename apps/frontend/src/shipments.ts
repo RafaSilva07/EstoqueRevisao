@@ -13,10 +13,12 @@ export interface ShipmentAuditEvent {
 }
 export interface Shipment {
   codigoMovimentacao: string;
-  movements?: Array<{ id: string; codigoMovimentacao: string | null; pcpExecutionStatus: 'PENDENTE' | 'EXECUTADA'; requiresPcpExecution: boolean }>;
+  movements?: Array<{ id: string; codigoMovimentacao: string | null; pcpExecutionStatus: 'PENDENTE' | 'EXECUTADA'; requiresPcpExecution: boolean;
+    occurredAt: string; items?: Array<{ id: string; quantity: number; productSnapshot: Pick<Product, 'code' | 'name' | 'defaultUnit'> | null; batch: Batch }> }>;
 
   id: string; originSector: ShipmentSector; destinationSector: ShipmentSector; status: ShipmentStatus;
   shipmentKind: 'NORMAL' | 'RETORNO_IMEDIATO'; sourceShipmentId: string | null;
+  sourceShipment?: { id: string; codigoMovimentacao: string } | null;
   derivedShipments?: Array<{ id: string; status: ShipmentStatus }>;
   receivedAt: string | null; separationStartedAt: string | null; separationExpiresAt: string | null; separationCompletedAt: string | null;
   observation: string | null;
@@ -24,5 +26,6 @@ export interface Shipment {
   decidedAt: string | null; decidedBy: { username: string } | null; refusalReason: string | null;
   items: { id: string; quantity: number; productSnapshot: Pick<Product, 'code' | 'name' | 'defaultUnit'>;
     batch: Batch; stockLocation: StockLocation | null; observation: string | null; photoMimeType: string | null; photoSize: number | null;
+    additionalPhotos?: Array<{ ordinal: number; mimeType: string; size: number }>;
     separationDraft?: { returnQuantity: number } | null }[];
 }

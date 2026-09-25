@@ -1,6 +1,6 @@
 import { PositionSelect } from './PositionSelect';
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { api, Paginated, Product, StockPosition } from './api';
+import { api, Paginated, Product, ShipmentPhotoLimits, StockPosition } from './api';
 import { Modal, Notice, PageHeader } from './components';
 import { OperationalLotFields } from './OperationalLotFields';
 import { ProductAutocomplete } from './ProductAutocomplete';
@@ -8,11 +8,10 @@ import { emptyLot, OperationalLot } from './operational-lot';
 import { formatDate } from './format';
 import { useMovementSubmission } from './useMovementSubmission';
 import { ShipmentSector, sectorLabel } from './shipments';
-import { CameraModal } from './CameraModal';
-import { allShipmentPhotosReady, replaceShipmentPhoto } from './shipment-photo-state';
-import { PhotoViewer } from './PhotoViewer';
+import { allShipmentPhotosReady, PhotoAttachment } from './shipment-photo-state';
+import { ShipmentPhotoInput } from './ShipmentPhotoInput';
 
-interface DraftItem { key: string; product: Product; lot: OperationalLot; quantity: number; observation: string | null; position?: StockPosition; photo?: File; photoUrl?: string }
+interface DraftItem { key: string; product: Product; lot: OperationalLot; quantity: number; observation: string | null; position?: StockPosition; photos: PhotoAttachment[] }
 
 export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSector; onCreated: (id: string) => void; onClose: () => void }) {
   const outgoing = sector === 'REVISAO';
@@ -38,13 +37,21 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [cameraItemKey, setCameraItemKey] = useState<string | null>(null);
+  const [photoLimits, setPhotoLimits] = useState<ShipmentPhotoLimits | null>(null);
   const photoUrls = useRef(new Set<string>());
   const submission = useMovementSubmission('/shipments', onCreated);
   const canQueryPositions = outgoing && Boolean(product) && Boolean(batchCode.trim() || manufacturingDate);
-  const allPhotosReady = allShipmentPhotosReady(items);
+  const allPhotosReady = allShipmentPhotosReady(items, photoLimits);
+  const photoTotal = items.reduce((sum, item) => sum + item.photos.length, 0);
 
   useEffect(() => () => { photoUrls.current.forEach((url) => URL.revokeObjectURL(url)); }, []);
+
+  useEffect(() => {
+    let active = true;
+    void api.get<ShipmentPhotoLimits>('/settings/shipment-photos').then((limits) => { if (active) setPhotoLimits(limits); })
+      .catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível carregar os limites de fotos.'); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (!canQueryPositions || !product) return;
@@ -151,7 +158,7 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
     }
     if (!outgoing && (!ready || !lot.expirationDate || lot.expirationDate < lot.manufacturingDate)) { setError('Confira lote, fabricação e validade.'); return; }
     setItems((current) => [...current, { key: crypto.randomUUID(), product, lot: outgoing ? position!.batch : { ...lot }, quantity: amount,
-      observation: itemObservation.trim() || null, position: outgoing ? position : undefined }]);
+      observation: itemObservation.trim() || null, position: outgoing ? position : undefined, photos: [] }]);
     closeItem();
   }
   function clearProduct() {
@@ -164,15 +171,23 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
     setPositionId('');
     setPositions([]);
   }
-  function attachPhoto(key: string, photo: File) {
-    const photoUrl = URL.createObjectURL(photo); photoUrls.current.add(photoUrl);
-    setItems((current) => replaceShipmentPhoto(current, key, photo, photoUrl, (previous) => { URL.revokeObjectURL(previous); photoUrls.current.delete(previous); }));
-    setCameraItemKey(null);
+  function attachPhotos(key: string, files: File[]) {
+    const photos = files.map((file) => ({ file, url: URL.createObjectURL(file) }));
+    photos.forEach((photo) => photoUrls.current.add(photo.url));
+    setItems((current) => current.map((item) => item.key === key ? { ...item, photos: [...item.photos, ...photos] } : item));
+  }
+  function removePhoto(key: string, index: number) {
+    setItems((current) => current.map((item) => {
+      if (item.key !== key) return item;
+      const removed = item.photos[index];
+      if (removed) { URL.revokeObjectURL(removed.url); photoUrls.current.delete(removed.url); }
+      return { ...item, photos: item.photos.filter((_, photoIndex) => photoIndex !== index) };
+    }));
   }
   function removeItem(key: string) {
     setItems((current) => current.filter((item) => {
       if (item.key !== key) return true;
-      if (item.photoUrl) { URL.revokeObjectURL(item.photoUrl); photoUrls.current.delete(item.photoUrl); }
+      item.photos.forEach((photo) => { URL.revokeObjectURL(photo.url); photoUrls.current.delete(photo.url); });
       return false;
     }));
   }
@@ -182,8 +197,9 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
       <span>Validade {formatDate(item.lot.expirationDate)}{item.position ? ` · ${item.position.stockLocation.name}` : ''}</span>
       {item.observation && <span><strong>Observação do produto:</strong> {item.observation}</span>}
     </div>
-    {item.photoUrl ? <PhotoViewer src={item.photoUrl} alt={`Foto de ${item.product.name}`} status="✓ Foto adicionada" /> : <span className="photo-required">⚠ Foto obrigatória</span>}
-    {!confirming && <div className="row-actions"><button type="button" onClick={() => setCameraItemKey(item.key)}>{item.photo ? 'Refazer foto' : 'Tirar foto'}</button><button type="button" className="secondary" onClick={() => removeItem(item.key)}>Remover item</button></div>}
+    {photoLimits && <ShipmentPhotoInput photos={item.photos} limits={photoLimits} productName={item.product.name}
+      remainingTotal={100 - photoTotal} onAdd={(files) => attachPhotos(item.key, files)} onRemove={(index) => removePhoto(item.key, index)} readOnly={confirming} />}
+    {!confirming && <button type="button" className="secondary" onClick={() => removeItem(item.key)}>Remover item</button>}
   </li>)}</ul>;
   return <>
     <PageHeader eyebrow="Envios entre setores" title={outgoing ? 'Novo envio' : 'Novo envio para Revisão'} action={<button className="secondary" onClick={onClose}>Voltar</button>} />
@@ -216,16 +232,16 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
     </Modal>}
     <section className="surface form-panel"><div className="panel-heading item-list-heading"><h2>Produtos ({items.length})</h2><button type="button" onClick={() => { setError(''); setAdding(true); }}>Adicionar produto</button></div>{summary}
       <label>Observação geral do envio (opcional)<textarea value={observation} onChange={(event) => setObservation(event.target.value)} maxLength={1000} rows={3} /></label>
-      {!allPhotosReady && items.length > 0 && <p className="action-hint photo-required">Adicione uma foto para cada produto antes de enviar.</p>}
+      {!photoLimits && <p className="action-hint">Carregando os limites de fotos…</p>}
+      {!allPhotosReady && photoLimits && items.length > 0 && <p className="action-hint photo-required">Adicione de {photoLimits.minimum} a {photoLimits.maximum} foto(s) por produto, até 100 no envio.</p>}
       <button disabled={!allPhotosReady} onClick={() => { submission.resetConfirmation(); setConfirming(true); }}>Conferir e enviar</button></section>
-    {cameraItemKey && <CameraModal onClose={() => setCameraItemKey(null)} onUse={(file) => attachPhoto(cameraItemKey, file)} />}
     {confirming && <Modal labelledBy="shipment-summary-title" busy={submission.busy} onClose={() => setConfirming(false)}>
       <h2 id="shipment-summary-title">{sectorLabel[sector]} → {sectorLabel[destination]}</h2>{summary}
       <p>Após enviar, os itens não poderão ser editados. O destinatário confirmará ou recusará o recebimento.</p>
       {submission.conflict && <Notice kind="info">{submission.conflict.message}</Notice>}
       {submission.error && <Notice kind="error">{submission.error}</Notice>}
       {observation.trim() && <p><strong>Observação geral:</strong> {observation.trim()}</p>}
-      <div className="dialog-actions"><button className="secondary" disabled={submission.busy} onClick={() => setConfirming(false)}>Voltar para conferir</button><button disabled={submission.busy || !allPhotosReady} onClick={() => void submission.submit({ destinationSector: destination, observation: observation.trim() || undefined, items: items.map((item) => ({ productId: item.product.id, quantity: item.quantity, observation: item.observation ?? undefined, ...(item.position ? { batchId: item.position.batchId, stockLocationId: item.position.stockLocationId } : { lot: item.lot }) })) }, items.map((item) => item.photo!))}>{submission.busy ? 'Enviando…' : submission.conflict ? 'Confirmar validade diferente e enviar' : 'Enviar ao destinatário'}</button></div>
+      <div className="dialog-actions"><button className="secondary" disabled={submission.busy} onClick={() => setConfirming(false)}>Voltar para conferir</button><button disabled={submission.busy || !allPhotosReady} onClick={() => void submission.submit({ destinationSector: destination, observation: observation.trim() || undefined, items: items.map((item) => ({ productId: item.product.id, quantity: item.quantity, observation: item.observation ?? undefined, photoCount: item.photos.length, ...(item.position ? { batchId: item.position.batchId, stockLocationId: item.position.stockLocationId } : { lot: item.lot }) })) }, items.flatMap((item) => item.photos.map((photo) => photo.file)))}>{submission.busy ? 'Enviando…' : submission.conflict ? 'Confirmar validade diferente e enviar' : 'Enviar ao destinatário'}</button></div>
     </Modal>}
   </>;
 }

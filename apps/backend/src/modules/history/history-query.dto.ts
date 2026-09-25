@@ -8,6 +8,9 @@ export class HistoryQueryDto extends PaginationQueryDto {
   @IsOptional() @IsIn(['ALL', 'SHIPMENT', 'MOVEMENT'])
   kind: 'ALL' | 'SHIPMENT' | 'MOVEMENT' = 'ALL';
 
+  @IsOptional() @IsIn(['ALL', 'INCOMING', 'OUTGOING', 'INTERNAL'])
+  direction: 'ALL' | 'INCOMING' | 'OUTGOING' | 'INTERNAL' = 'ALL';
+
   @IsOptional() @IsIn(['RECENT', 'OLDEST'])
   sort: 'RECENT' | 'OLDEST' = 'RECENT';
 

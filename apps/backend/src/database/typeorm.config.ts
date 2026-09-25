@@ -24,7 +24,7 @@ import { MovementCancellations1788652800000 } from './migrations/1788652800000-m
 
 import { OperationalLotExpiration1789084800000 } from './migrations/1789084800000-operational-lot-expiration';
 
-import { ShipmentEntity, ShipmentItemEntity, ShipmentSeparationDraftEntity } from '../modules/shipments/shipment.entity';
+import { ShipmentEntity, ShipmentItemEntity, ShipmentItemAdditionalPhotoEntity, ShipmentSeparationDraftEntity } from '../modules/shipments/shipment.entity';
 import { SectorShipments1789344000000 } from './migrations/1789344000000-sector-shipments';
 import { ShipmentObservations1789430400000 } from './migrations/1789430400000-shipment-observations';
 import { ReviewPackageUnpacking1789516800000 } from './migrations/1789516800000-review-package-unpacking';
@@ -39,11 +39,13 @@ import { MovementPublicCodes1790121600000 } from './migrations/1790121600000-mov
 import { ShipmentLifecyclePublicCodes1790208000000 } from './migrations/1790208000000-shipment-lifecycle-public-codes';
 import { ShipmentSenderCancellation1790294400000 } from './migrations/1790294400000-shipment-sender-cancellation';
 import { ProductManagementAllRoles1790380800000 } from './migrations/1790380800000-product-management-all-roles';
+import { MultipleShipmentPhotos1790467200000 } from './migrations/1790467200000-multiple-shipment-photos';
 import { ReviewDestinationEntity } from '../modules/settings/review-destination.entity';
 
 export const databaseEntities = [
   ShipmentEntity,
   ShipmentItemEntity,
+  ShipmentItemAdditionalPhotoEntity,
   ShipmentSeparationDraftEntity,
   SystemSettingEntity,
   ReviewDestinationEntity,
@@ -84,6 +86,7 @@ export const databaseMigrations = [
   ShipmentLifecyclePublicCodes1790208000000,
   ShipmentSenderCancellation1790294400000,
   ProductManagementAllRoles1790380800000,
+  MultipleShipmentPhotos1790467200000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {

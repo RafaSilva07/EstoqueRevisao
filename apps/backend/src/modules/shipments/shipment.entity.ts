@@ -55,8 +55,21 @@ export class ShipmentItemEntity {
   @Column({ name: 'photo_storage_key', type: 'varchar', length: 300, nullable: true, select: false }) photoStorageKey!: string | null;
   @Column({ name: 'photo_mime_type', type: 'varchar', length: 30, nullable: true }) photoMimeType!: string | null;
   @Column({ name: 'photo_size', type: 'integer', nullable: true }) photoSize!: number | null;
+  @OneToMany(() => ShipmentItemAdditionalPhotoEntity, (photo) => photo.shipmentItem) additionalPhotos!: ShipmentItemAdditionalPhotoEntity[];
   @Column({ name: 'product_snapshot', type: 'jsonb' }) productSnapshot!: { code: string; name: string; defaultUnit: string };
   @OneToOne(() => ShipmentSeparationDraftEntity, (draft) => draft.shipmentItem) separationDraft!: unknown;
+}
+
+@Entity('shipment_item_additional_photos')
+export class ShipmentItemAdditionalPhotoEntity {
+  @PrimaryColumn('uuid') id: string = randomUUID();
+  @Column({ name: 'shipment_item_id', type: 'uuid' }) shipmentItemId!: string;
+  @ManyToOne(() => ShipmentItemEntity, (item) => item.additionalPhotos, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'shipment_item_id' }) shipmentItem!: ShipmentItemEntity;
+  @Column({ type: 'integer' }) ordinal!: number;
+  @Column({ name: 'storage_key', type: 'varchar', length: 300, select: false }) storageKey!: string;
+  @Column({ name: 'mime_type', type: 'varchar', length: 30 }) mimeType!: string;
+  @Column({ type: 'integer' }) size!: number;
 }
 
 @Entity('shipment_separation_drafts')

@@ -1,11 +1,10 @@
-export interface PhotoDraft { key: string; photo?: File; photoUrl?: string }
+import { ShipmentPhotoLimits } from './api';
 
-export const allShipmentPhotosReady = (items: PhotoDraft[]): boolean => items.length > 0 && items.every((item) => item.photo instanceof File);
+export interface PhotoAttachment { file: File; url: string }
+export interface PhotoDraft { key: string; photos: PhotoAttachment[] }
 
-export function replaceShipmentPhoto<T extends PhotoDraft>(items: T[], key: string, photo: File, photoUrl: string, revoke: (url: string) => void): T[] {
-  return items.map((item) => {
-    if (item.key !== key) return item;
-    if (item.photoUrl) revoke(item.photoUrl);
-    return { ...item, photo, photoUrl };
-  });
+export function allShipmentPhotosReady(items: PhotoDraft[], limits: ShipmentPhotoLimits | null): boolean {
+  if (!limits || items.length === 0) return false;
+  const total = items.reduce((sum, item) => sum + item.photos.length, 0);
+  return total <= 100 && items.every((item) => item.photos.length >= limits.minimum && item.photos.length <= limits.maximum);
 }

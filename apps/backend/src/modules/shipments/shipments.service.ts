@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { DataSource, EntityManager, In, SelectQueryBuilder } from 'typeorm';
 import { AuthenticatedUser } from '../auth/authenticated-user.interface';
 import { AuditService } from '../audit/audit.service';
@@ -18,17 +18,18 @@ import { MovementType } from '../movements/domain/movement-type.enum';
 import { MovementStatus } from '../movements/domain/movement-status.enum';
 import { PaginatedResult, paginate } from '../../shared/pagination/paginated-result.interface';
 import { AvailableShipmentPositionsQueryDto, CompleteSeparationDto, CreateShipmentDto, ExpirationConfirmationDto, SeparationDraftDto, ShipmentQueryDto } from './shipment.dto';
-import { Sector, ShipmentEntity, ShipmentItemEntity, ShipmentSeparationDraftEntity } from './shipment.entity';
+import { Sector, ShipmentEntity, ShipmentItemAdditionalPhotoEntity, ShipmentItemEntity, ShipmentSeparationDraftEntity } from './shipment.entity';
 import { StoredImage, StorageService, UploadedImage } from '../storage/storage.service';
 import { SettingsService } from '../settings/settings.service';
 import { AuditLogEntity } from '../audit/entities/audit-log.entity';
+import { validatePhotoCounts } from './shipment-photo-counts';
 
 @Injectable()
 export class ShipmentsService {
   constructor(private readonly dataSource: DataSource, private readonly lots: OperationalLotsService,
     private readonly stock: StockPositionsService, private readonly movements: MovementsRepository,
     private readonly audit: AuditService, private readonly storage: StorageService,
-    @Optional() private readonly settings?: SettingsService) {}
+    private readonly settings: SettingsService) {}
 
   private sector(user: AuthenticatedUser): Sector {
     if (!['REVISAO','PRODUCAO','EXPEDICAO'].includes(user.sector ?? '')) throw new ForbiddenException('Usuário sem setor válido.');
@@ -44,6 +45,7 @@ export class ShipmentsService {
       .leftJoinAndSelect('shipment.sourceShipment', 'sourceShipment')
       .leftJoinAndSelect('shipment.derivedShipments', 'derivedShipment')
       .leftJoinAndSelect('shipment.items', 'item')
+      .leftJoinAndSelect('item.additionalPhotos', 'additionalPhoto')
       .leftJoinAndSelect('item.separationDraft', 'separationDraft')
       .leftJoinAndSelect('item.batch', 'batch')
       .leftJoinAndSelect('item.stockLocation', 'location');
@@ -52,7 +54,10 @@ export class ShipmentsService {
   async get(id: string, user: AuthenticatedUser, manager = this.dataSource.manager, processExpiration = true): Promise<ShipmentEntity> {
     if (processExpiration) await this.expireDueSeparations();
     const sector = this.sector(user);
-    const shipment = await this.details(manager).where('shipment.id = :id', { id })
+    const shipment = await this.details(manager)
+      .leftJoinAndSelect('linkedMovement.items', 'linkedMovementItem')
+      .leftJoinAndSelect('linkedMovementItem.batch', 'movementBatch')
+      .where('shipment.id = :id', { id })
       .andWhere('(shipment.originSector = :sector OR shipment.destinationSector = :sector)', { sector }).getOne();
     if (!shipment) throw new NotFoundException('Envio não encontrado neste setor.');
     return shipment;
@@ -119,21 +124,28 @@ export class ShipmentsService {
   }
 
   async create(dto: CreateShipmentDto, files: UploadedImage[], user: AuthenticatedUser, metadata: AuditRequestMetadata): Promise<ShipmentEntity> {
-    if (files.length !== dto.items.length) throw new BadRequestException('Adicione exatamente uma foto para cada produto do envio.');
+    const existing = await this.dataSource.getRepository(ShipmentEntity).findOneBy({ requestKey: dto.requestKey });
+    if (existing) {
+      if (existing.createdById !== user.id || existing.originSector !== this.sector(user)) throw new ConflictException('Chave de envio ja utilizada.');
+      return this.get(existing.id, user);
+    }
+    const counts = validatePhotoCounts(dto.items, files.length, await this.settings.photoLimits());
     files.forEach((file) => this.storage.validateImage(file));
     const photos: StoredImage[] = [];
+    let created = false;
     try {
       for (const file of files) photos.push(await this.storage.saveImage(file));
-      const result = await this.persist(dto, photos, user, metadata);
+      const result = await this.persist(dto, photos, counts, user, metadata);
+      created = result.created;
       if (!result.created) await Promise.allSettled(photos.map((photo) => this.storage.deleteImage(photo.key)));
       return this.get(result.id, user);
     } catch (error) {
-      await Promise.allSettled(photos.map((photo) => this.storage.deleteImage(photo.key)));
+      if (!created) await Promise.allSettled(photos.map((photo) => this.storage.deleteImage(photo.key)));
       throw error;
     }
   }
 
-  private async persist(dto: CreateShipmentDto, photos: StoredImage[], user: AuthenticatedUser, metadata: AuditRequestMetadata): Promise<{ id: string; created: boolean }> {
+  private async persist(dto: CreateShipmentDto, photos: StoredImage[], counts: number[], user: AuthenticatedUser, metadata: AuditRequestMetadata): Promise<{ id: string; created: boolean }> {
     const sector = this.sector(user);
     if ((sector === 'REVISAO') === (dto.destinationSector === 'REVISAO')) throw new BadRequestException('O envio deve ocorrer entre Revisão e Produção ou Expedição.');
     return this.dataSource.transaction(async (manager) => {
@@ -170,6 +182,8 @@ export class ShipmentsService {
         }
       }
       const items: ShipmentItemEntity[] = [];
+      const additionalPhotos: ShipmentItemAdditionalPhotoEntity[] = [];
+      let photoIndex = 0;
       for (const [index, input] of dto.items.entries()) {
         let batch: BatchEntity | null;
         if (sector === 'REVISAO') {
@@ -185,13 +199,21 @@ export class ShipmentsService {
         }
         if (!batch) throw new BadRequestException('Lote incompatível com o produto.');
         const product = products.get(input.productId)!;
+        const itemPhotos = photos.slice(photoIndex, photoIndex + counts[index]);
+        photoIndex += counts[index];
+        const firstPhoto = itemPhotos[0];
+        const shipmentItemId = crypto.randomUUID();
         items.push(Object.assign(new ShipmentItemEntity(), {
+          id: shipmentItemId,
           shipmentId: shipment.id, productId: product.id, batchId: batch.id,
           stockLocationId: input.stockLocationId ?? null, quantity: input.quantity,
           observation: input.observation?.trim() || null,
-          photoStorageKey: photos[index].key, photoMimeType: photos[index].mimeType, photoSize: photos[index].size,
+          photoStorageKey: firstPhoto.key, photoMimeType: firstPhoto.mimeType, photoSize: firstPhoto.size,
           productSnapshot: { code: product.code, name: product.name, defaultUnit: product.defaultUnit },
         }));
+        itemPhotos.slice(1).forEach((photo, offset) => additionalPhotos.push(Object.assign(new ShipmentItemAdditionalPhotoEntity(), {
+          shipmentItemId, ordinal: offset + 2, storageKey: photo.key, mimeType: photo.mimeType, size: photo.size,
+        })));
       }
       // Reject repeated positions to make the available balance check unambiguous.
       const keys = new Set<string>();
@@ -203,17 +225,29 @@ export class ShipmentsService {
       }
       await this.saveNewShipment(shipment, manager);
       await manager.save(items);
+      if (additionalPhotos.length) await manager.save(additionalPhotos);
       await this.record(shipment, user.id, 'SHIPMENT_CREATE', manager, metadata, {
-        items: items.map((item) => ({ productId: item.productId, batchId: item.batchId, stockLocationId: item.stockLocationId,
-          quantity: item.quantity, observation: item.observation, productSnapshot: item.productSnapshot, photoAttached: true })),
+        items: items.map((item, index) => ({ productId: item.productId, batchId: item.batchId, stockLocationId: item.stockLocationId,
+          quantity: item.quantity, observation: item.observation, productSnapshot: item.productSnapshot, photoCount: counts[index] })),
         confirmedExpirationKeys: dto.confirmedExpirationKeys ?? [],
       });
       return { id: shipment.id, created: true };
     });
   }
 
-  async photo(shipmentId: string, itemId: string, user: AuthenticatedUser): Promise<{ data: Buffer; mimeType: string }> {
-    await this.get(shipmentId, user);
+  async photo(shipmentId: string, itemId: string, user: AuthenticatedUser, ordinal = 1): Promise<{ data: Buffer; mimeType: string }> {
+    if (user.sector === 'PCP' && user.permissions.includes('pcp.movements.read')) {
+      const linked = await this.dataSource.getRepository(MovementEntity).existsBy({ shipmentId });
+      if (!linked) throw new NotFoundException('Evidencia do envio nao encontrada no PCP.');
+    } else await this.get(shipmentId, user);
+    if (!Number.isInteger(ordinal) || ordinal < 1 || ordinal > 10) throw new NotFoundException('Foto do item nao encontrada.');
+    if (ordinal > 1) {
+      const additional = await this.dataSource.getRepository(ShipmentItemAdditionalPhotoEntity).createQueryBuilder('photo')
+        .addSelect('photo.storageKey').innerJoin('photo.shipmentItem', 'item')
+        .where('photo.shipmentItemId = :itemId AND item.shipmentId = :shipmentId AND photo.ordinal = :ordinal', { itemId, shipmentId, ordinal }).getOne();
+      if (!additional) throw new NotFoundException('Foto do item nao encontrada.');
+      return { data: await this.storage.readImage(additional.storageKey), mimeType: additional.mimeType };
+    }
     const item = await this.dataSource.getRepository(ShipmentItemEntity).createQueryBuilder('item')
       .addSelect('item.photoStorageKey').where('item.id = :itemId AND item.shipmentId = :shipmentId', { itemId, shipmentId }).getOne();
     if (!item) throw new NotFoundException('Item do envio não encontrado.');
@@ -360,7 +394,7 @@ export class ShipmentsService {
     metadata: AuditRequestMetadata): Promise<ShipmentEntity> {
     await this.expireDueSeparations();
     const positive = dto.items.filter((item) => item.returnQuantity > 0);
-    if (files.length !== positive.length) throw new BadRequestException('Adicione uma foto para cada produto com retorno.');
+    const counts = validatePhotoCounts(positive, files.length, await this.settings.photoLimits());
     files.forEach((file) => this.storage.validateImage(file));
     const photos: StoredImage[] = [];
     let committed = false;
@@ -402,10 +436,18 @@ export class ShipmentsService {
           await this.saveNewShipment(derived, manager);
           const byId = new Map(shipment.items.map((item) => [item.id, item]));
           let photoIndex = 0;
-          const returnedItems = positive.map((input) => {
+          const additionalPhotos: ShipmentItemAdditionalPhotoEntity[] = [];
+          const returnedItems = positive.map((input, itemIndex) => {
             const source = byId.get(input.shipmentItemId)!;
-            const photo = photos[photoIndex++];
+            const itemPhotos = photos.slice(photoIndex, photoIndex + counts[itemIndex]);
+            photoIndex += counts[itemIndex];
+            const photo = itemPhotos[0];
+            const shipmentItemId = crypto.randomUUID();
+            itemPhotos.slice(1).forEach((extra, offset) => additionalPhotos.push(Object.assign(new ShipmentItemAdditionalPhotoEntity(), {
+              shipmentItemId, ordinal: offset + 2, storageKey: extra.key, mimeType: extra.mimeType, size: extra.size,
+            })));
             return Object.assign(new ShipmentItemEntity(), {
+              id: shipmentItemId,
               shipmentId: derived.id, productId: source.productId, batchId: source.batchId,
               stockLocationId: shipment.destinationLocationId, quantity: input.returnQuantity,
               observation: source.observation, productSnapshot: source.productSnapshot,
@@ -413,9 +455,10 @@ export class ShipmentsService {
             });
           });
           await manager.save(returnedItems);
+          if (additionalPhotos.length) await manager.save(additionalPhotos);
           await this.record(derived, user.id, 'SHIPMENT_IMMEDIATE_RETURN_CREATE', manager, metadata, {
             sourceShipmentId: shipment.id,
-            items: returnedItems.map((item) => ({ productId: item.productId, batchId: item.batchId, quantity: item.quantity, photoAttached: true })),
+            items: returnedItems.map((item, index) => ({ productId: item.productId, batchId: item.batchId, quantity: item.quantity, photoCount: counts[index] })),
           });
         }
         await manager.getRepository(ShipmentEntity).update(id, {

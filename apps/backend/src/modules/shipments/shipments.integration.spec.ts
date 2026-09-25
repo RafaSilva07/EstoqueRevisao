@@ -24,11 +24,12 @@ import { StockPositionsService } from '../stocks/stock-positions.service';
 import { MovementEntity } from '../movements/entities/movement.entity';
 import { MovementsRepository } from '../movements/movements.repository';
 import { MovementsService } from '../movements/movements.service';
-import { Sector, ShipmentEntity, ShipmentItemEntity } from './shipment.entity';
+import { Sector, ShipmentEntity, ShipmentItemAdditionalPhotoEntity, ShipmentItemEntity } from './shipment.entity';
 import { ShipmentsService } from './shipments.service';
 import { CreateShipmentDto, ShipmentQueryDto } from './shipment.dto';
 import { StorageService, UploadedImage } from '../storage/storage.service';
 import { HistoryService } from '../history/history.service';
+import { SettingsService } from '../settings/settings.service';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 (databaseUrl ? describe : describe.skip)('Envios entre setores (PostgreSQL)', () => {
@@ -50,7 +51,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
       validateImage: jest.fn(), saveImage: jest.fn((file: UploadedImage) => Promise.resolve({ key: `shipments/2026/09/${randomUUID()}.jpg`, mimeType: file.mimetype, size: file.size })),
       deleteImage: jest.fn(() => Promise.resolve()), readImage: jest.fn(() => Promise.resolve(Buffer.from('photo'))),
     } as unknown as StorageService;
-    service = new ShipmentsService(db, lots, stock, repository, audit, storage);
+    service = new ShipmentsService(db, lots, stock, repository, audit, storage, new SettingsService(db, audit));
     users = {} as Record<Sector, AuthenticatedUser>;
     for (const sector of ['REVISAO','PRODUCAO','EXPEDICAO'] as const) {
       const id = randomUUID();
@@ -67,6 +68,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
   beforeEach(async () => {
     jest.restoreAllMocks();
     await db.query('TRUNCATE audit_logs, movements, stock_positions, shipments CASCADE');
+    await db.query("UPDATE system_settings SET value = CASE key WHEN 'shipment_photo_minimum' THEN '1' ELSE '5' END WHERE key IN ('shipment_photo_minimum', 'shipment_photo_maximum')");
     await db.query('UPDATE products SET active = true WHERE id = $1', [productId]);
   });
   afterAll(async () => { if (db?.isInitialized) await db.destroy(); });
@@ -116,6 +118,33 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     const refused = await incoming('EXPEDICAO');
     await decide(refused.id, 'REVISAO', true);
     expect((await service.get(refused.id, users.EXPEDICAO)).items[0].photoMimeType).toBe('image/jpeg');
+  });
+  it('preserva fotos adicionais por item, impõe limites e reverte falhas da auditoria', async () => {
+    const settings = new SettingsService(db, audit);
+    await settings.updatePhotoLimits({ minimum: 2, maximum: 3 }, users.REVISAO.id, metadata());
+    const dto: CreateShipmentDto = { requestKey: randomUUID(), destinationSector: 'REVISAO', items: [{ productId, batchId, quantity: 2, photoCount: 2 }] };
+    await expect(service.create(dto, [image()], users.PRODUCAO, metadata())).rejects.toBeInstanceOf(BadRequestException);
+    const shipment = await service.create(dto, [image(), image()], users.PRODUCAO, metadata());
+    expect(shipment.items[0].additionalPhotos).toMatchObject([{ ordinal: 2, mimeType: 'image/jpeg', size: 11 }]);
+    expect((await service.photo(shipment.id, shipment.items[0].id, users.REVISAO, 2)).data.toString()).toBe('photo');
+    await expect(service.photo(shipment.id, shipment.items[0].id, users.EXPEDICAO, 2)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(db.getRepository(ShipmentItemAdditionalPhotoEntity).update(shipment.items[0].additionalPhotos[0].id, { size: 12 })).rejects.toThrow();
+    const next = { ...dto, requestKey: randomUUID() };
+    jest.spyOn(audit, 'record').mockRejectedValueOnce(new Error('audit failed'));
+    await expect(service.create(next, [image(), image()], users.PRODUCAO, metadata())).rejects.toThrow('audit failed');
+    expect(await db.getRepository(ShipmentItemAdditionalPhotoEntity).count()).toBe(1);
+    expect(await db.getRepository(ShipmentEntity).count()).toBe(1);
+  });
+  it('aplica fotos múltiplas também ao retorno da separação imediata', async () => {
+    const shipment = await incoming('EXPEDICAO');
+    await service.decide(shipment.id, 'CONFIRMADO', null, { immediateSeparation: true }, users.REVISAO, metadata());
+    const returned = await service.completeSeparation(shipment.id, { items: [{ shipmentItemId: shipment.items[0].id, returnQuantity: 3, photoCount: 2 }] }, [image(), image()], users.REVISAO, metadata());
+    expect(returned.status).toBe('CONFIRMADO');
+    expect(await balance()).toBe(7);
+    expect(await service.get(shipment.id, users.REVISAO)).toMatchObject({ movements: [{ items: [{ quantity: 7, productSnapshot: { code: 'SHIP-P' } }] }] });
+    const derived = await db.getRepository(ShipmentEntity).findOneByOrFail({ sourceShipmentId: shipment.id });
+    const detail = await service.get(derived.id, users.REVISAO);
+    expect(detail.items[0].additionalPhotos).toMatchObject([{ ordinal: 2, mimeType: 'image/jpeg' }]);
   });
   it('preserva observações do envio e de cada produto no histórico', async () => {
     const shipment = await createShipment({

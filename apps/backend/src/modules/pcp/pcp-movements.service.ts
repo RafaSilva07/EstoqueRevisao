@@ -47,6 +47,7 @@ export class PcpMovementsService {
       shipmentEvidence: relevantEvidence.map((item) => ({
         shipmentId: item.shipmentId, itemId: item.id, productId: item.productId, batchId: item.batchId,
         stockLocationId: item.stockLocationId, quantity: item.quantity, photoMimeType: item.photoMimeType,
+        additionalPhotos: item.additionalPhotos?.map((photo) => ({ ordinal: photo.ordinal, mimeType: photo.mimeType, size: photo.size })) ?? [],
       })),
     };
   }

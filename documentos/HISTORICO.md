@@ -161,3 +161,11 @@ Produtos `UN` passaram a registrar o peso de uma unidade em gramas inteiras posi
 ## Separação imediata e configurações operacionais
 
 O recebimento Expedição → Revisão ganhou separação opcional com prazo capturado por envio, crédito líquido, expiração integral e retorno derivado sem PCP. Destinos da revisão deixaram de depender da marcação fixa dos três locais iniciais e passaram a uma relação configurável com locais cadastrados. A decisão está registrada em [ADR_SEPARACAO_CONFIGURACOES.md](./ADR_SEPARACAO_CONFIGURACOES.md) e a etapa em [relatórios/RELATORIO_SEPARACAO_E_CONFIGURACOES.md](./relatorios/RELATORIO_SEPARACAO_E_CONFIGURACOES.md).
+
+## Etapa 48 — Múltiplas fotos por item de envio
+
+O administrador passou a definir mínimo e máximo de fotos por item. Envios comuns e retornos da separação usam a mesma regra; a primeira foto permanece no registro anterior e as adicionais ficam em tabela imutável, preservando compatibilidade histórica. Resumo em [relatórios/RELATORIO_ETAPA_48_MULTIPLAS_FOTOS_ENVIOS.md](./relatorios/RELATORIO_ETAPA_48_MULTIPLAS_FOTOS_ENVIOS.md).
+
+## Etapa 49 — Visibilidade da entrada líquida na separação
+
+A movimentação da diferença recebida já era gravada, mas ficava oculta pela unificação do histórico. O detalhe passou a exibir os itens creditados e o histórico da Revisão passou a mostrar entrada líquida e retorno como dois registros com referência ao envio original. Foi acrescentado filtro de sentido relativo ao setor, sem alterar saldos. Resumo em [relatórios/RELATORIO_ETAPA_49_ENTRADA_LIQUIDA_SEPARACAO.md](./relatorios/RELATORIO_ETAPA_49_ENTRADA_LIQUIDA_SEPARACAO.md).

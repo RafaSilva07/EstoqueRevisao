@@ -53,7 +53,7 @@ docker-compose.yml   PostgreSQL do desenvolvimento
 - `StockPositionsService` é a única fronteira de alteração do saldo.
 - `MovementsService` coordena documento, itens, distribuições, efeitos no estoque e auditoria.
 - `ReportsRepository` concentra consultas de leitura, agregações e filtros sem duplicar histórico ou saldo.
-- `HistoryService` pagina uma união somente de leitura de envios e movimentações. Movimentos gerados por um envio não aparecem como segunda linha; setor e permissões são aplicados antes da consulta.
+- `HistoryService` pagina uma união somente de leitura de envios e movimentações. Em geral, movimentos gerados por envio não duplicam o card; na separação imediata com retorno, a Revisão vê a entrada líquida e o envio derivado como dois registros referenciando o original. Setor, permissões e sentido relativo ao setor são aplicados na consulta.
 - `AuditService` aceita o `EntityManager` da operação para participar da mesma transação.
 - O frontend nunca substitui validação ou autorização do backend.
 
@@ -69,7 +69,7 @@ Evite abstrações prematuras. Uma regra compartilhada deve ser extraída quando
 - `stock_locations`: locais lógicos hierárquicos e configuração da revisão.
 - `stock_positions`: saldo materializado por produto, variante de lote/validade e local. O `batch_id` identifica a validade; as chaves de saldo e os serviços atômicos existentes permanecem.
 - `shipments`, `shipment_items`: workflow imutável com itens e origens congelados; itens pendentes originados na Revisão são o registro do trânsito. O saldo disponível permanece em `stock_positions`, sem novo local artificial.
-- `shipment_items` também guarda `photo_storage_key`, MIME e tamanho. A imagem permanece fora do PostgreSQL e a chave não é exposta nas respostas comuns.
+- `shipment_items` guarda a primeira foto (chave privada, MIME e tamanho); `shipment_item_additional_photos` guarda as demais, com ordem e constraints próprias. Essa extensão preserva os envios antigos sem duplicar a foto inicial. Imagens permanecem fora do PostgreSQL e chaves privadas não são expostas nas respostas comuns.
 - `movements`: cabeçalho, estado, metadados de cancelamento e `shipment_id` opcional; índice único por envio/origem impede duplicar a efetivação.
 - `movement_items`: produto, referências imutáveis de lote/datas de origem e destino, quantidade e `product_snapshot` de código/descrição/unidade nas novas operações. Legados não recebem snapshots inventados.
 - `movement_item_distributions`: destinos e parcelas de itens revisados.
@@ -107,7 +107,7 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 - Erros seguem envelope padronizado com código, mensagem, request ID, timestamp e caminho.
 - Falhas reconhecidas de conexão com o PostgreSQL retornam `503/DATABASE_UNAVAILABLE`, mantendo detalhes técnicos apenas nos logs estruturados.
 - Erros internos não expõem stack trace, SQL ou detalhes de infraestrutura ao cliente.
-- A criação de envio usa `multipart/form-data`, com JSON em `payload` e um campo `photos` por item na mesma ordem. O backend limita quantidade/tamanho e revalida presença, MIME e conteúdo não vazio.
+- A criação de envio usa `multipart/form-data`, com JSON em `payload`, `photoCount` opcional por item e arquivos `photos` agrupados na ordem dos itens. A ausência de `photoCount` equivale a uma foto para clientes anteriores. O retorno da separação usa o mesmo esquema apenas para itens positivos. O backend valida os limites configurados, até 100 arquivos por requisição, tamanho, MIME e conteúdo antes de gravar; as fotos adicionais participam da transação e são removidas do storage se ela falhar.
 - Criações de movimentação usam `request_key` UUID para idempotência.
 - Não existem endpoints públicos para alterar saldo nem endpoints de edição/exclusão de movimentação.
 
@@ -178,7 +178,7 @@ As permissões são `pcp.movements.read` e `pcp.movements.execute`. O papel excl
 
 ## Configurações e separação imediata
 
-`SettingsModule` mantém apenas os parâmetros necessários: `system_settings` armazena o prazo em minutos e `review_process_destinations` relaciona locais cadastrados aos destinos atuais. Alterações são transacionais, administrativas e auditadas.
+`SettingsModule` mantém apenas os parâmetros necessários: `system_settings` armazena o prazo em minutos e os limites de fotos por item; `review_process_destinations` relaciona locais cadastrados aos destinos atuais. Alterações são transacionais, administrativas e auditadas. `GET /settings/shipment-photos` fornece os limites aos formulários de envio; a atualização exige `AdminGuard`.
 
 O estado intermediário pertence a `shipments`, pois ainda não existe movimentação efetiva de estoque. Cada envio guarda início/expiração e possui rascunhos por item. A finalização e a expiração bloqueiam a linha do envio; a primeira transição válida calcula o crédito e cria a movimentação. Retornos usam outro `shipment`, com `source_shipment_id`, preservando o fluxo existente de fotos e decisão do destinatário.
 

@@ -103,9 +103,10 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 - Ao confirmar Expedição → Revisão, o operador escolhe entre receber integralmente ou iniciar separação imediata.
 - A separação usa `EM_SEPARACAO`, com início e expiração persistidos por envio. O prazo configurado é capturado no início e não muda depois.
 - Enquanto separa, nenhum saldo definitivo é creditado e o PCP não recebe uma movimentação executável. Vários envios podem permanecer nesse estado independentemente.
-- O retorno aceita somente itens do envio original, quantidades inteiras entre zero e o recebido e uma foto obrigatória para cada quantidade positiva.
+- O retorno aceita somente itens do envio original, quantidades inteiras entre zero e o recebido e fotos dentro dos limites configurados para cada item com quantidade positiva.
 - Na conclusão, o saldo da Revisão recebe diretamente `recebido - retorno`. Não ocorre crédito bruto seguido de débito.
 - Havendo retorno, nasce um envio derivado Revisão → Expedição, vinculado ao original. Ele usa o aceite/recusa de envios, não reserva saldo e não exige execução PCP.
+- No histórico da Revisão, a separação concluída com retorno apresenta dois registros vinculados ao envio original: a entrada efetiva da quantidade líquida e o envio de retorno. A entrada é recebida pela Revisão; o retorno sai dela. O envio original permanece consultável pelas referências, sem um terceiro card nesse recorte.
 - Se o prazo vencer, o rascunho é invalidado, todo o volume é creditado à Revisão e o movimento original segue para o PCP normalmente.
 - Linha e status do envio são bloqueados na conclusão/expiração; somente uma transição pode consolidar saldo.
 
@@ -125,7 +126,8 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 - O cancelamento de envio originado na Revisão restaura atomicamente todas as reservas nas posições originais; envios originados em Produção/Expedição ainda não possuem saldo a estornar. Aceite e cancelamento concorrentes são serializados e apenas uma transição prevalece.
 - A autoria, data/hora e o motivo do cancelamento são preservados no envio e em evento `SHIPMENT_CANCEL` da auditoria. Administradores podem consultar os eventos no detalhe do envio.
 - O remetente pode registrar uma observação geral no envio e uma observação específica em cada item/produto. Ambas são opcionais, possuem até 1000 caracteres, são preservadas no histórico e tornam-se imutáveis junto com o envio.
-- Cada item de um novo envio deve possuir exatamente uma foto JPEG, PNG ou WebP, não vazia e com até 5 MB. A foto é evidência daquele item, não do cadastro mestre nem do lote, e permanece vinculada após confirmação ou recusa.
+- O administrador configura mínimo e máximo de fotos por item/produto do envio: inteiros entre 1 e 10, com mínimo não superior ao máximo. Inicialmente, permite-se de 1 a 5 fotos por item e até 100 fotos por envio. A mesma regra vale para os itens positivos de retornos da separação imediata.
+- Cada foto deve ser JPEG, PNG ou WebP, não vazia e com até 5 MB. As fotos são evidências daquele item, não do cadastro mestre nem do lote, e permanecem vinculadas após confirmação, recusa ou cancelamento. Alterar os limites não reescreve envios anteriores.
 - O envio só nasce `AGUARDANDO_RECEBIMENTO` quando todos os itens e fotos válidas são recebidos. Fotos não podem ser substituídas depois do envio. Registros históricos anteriores à regra permanecem consultáveis sem foto.
 - Somente usuários autorizados a consultar o envio podem carregar suas fotos. O storage é privado; o banco guarda apenas chave, tipo e tamanho, nunca o binário nem URL pública permanente.
 - Produção/Expedição → Revisão: criar não altera saldo; confirmar adiciona os itens à origem configurada da revisão (`review_role = SOURCE`, “A Revisar”); recusar não altera saldo.

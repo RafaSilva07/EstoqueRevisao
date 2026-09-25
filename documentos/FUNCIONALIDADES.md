@@ -54,9 +54,9 @@ Usuários externos reutilizam o produto selecionado e os campos CONSERVADI/fabri
 
 Em todos os sentidos de envio, cada produto pode receber uma observação opcional e o envio pode receber uma observação geral. Os textos são conferidos antes do envio, ficam disponíveis ao destinatário e no histórico e não podem ser editados após a criação. A observação geral também acompanha a movimentação gerada quando o recebimento é confirmado.
 
-Cada produto do envio exige uma foto própria. O botão **Tirar foto** abre a câmera dentro da aplicação, prioriza a câmera traseira e permite capturar, refazer e usar a imagem. A lista identifica itens completos ou sem foto, aceita substituição antes do envio e bloqueia a conferência enquanto faltar evidência. A captura é reduzida para até aproximadamente 1600 px e enviada como JPEG; o backend também aceita PNG/WebP de até 5 MB e aplica a validação definitiva.
+Cada produto do envio aceita fotos conforme mínimo e máximo definidos em **Configurações** (inicialmente 1 a 5, até 100 por envio). O operador pode capturar pela câmera ou escolher várias imagens, conferir e remover cada uma antes do envio. A conferência é bloqueada se algum produto estiver fora dos limites. A captura é reduzida para até aproximadamente 1600 px e enviada como JPEG; o backend também aceita PNG/WebP de até 5 MB e aplica a validação definitiva. Retornos da separação imediata usam os mesmos limites por item retornado.
 
-Destinatário e remetente podem visualizar a miniatura e abrir a foto em um visualizador próprio, inclusive após confirmação ou recusa. O visualizador permite zoom de 100% a 400%, roda do mouse, duplo clique, restauração e deslocamento por arraste com mouse ou toque. Os cards de produto mantêm código/descrição, quantidade, lote, datas, observação e evidência em grupos alinhados tanto no resumo quanto na decisão de recebimento. A leitura passa por `GET /api/v1/shipments/:id/items/:itemId/photo`, com autenticação e escopo do setor. Itens históricos criados antes desta regra continuam visíveis com a indicação de ausência da foto.
+Destinatário e remetente podem visualizar todas as miniaturas e abrir cada foto no visualizador, inclusive após confirmação ou recusa. O visualizador permite zoom de 100% a 400%, roda do mouse, duplo clique, restauração e deslocamento por arraste com mouse ou toque. Os cards de produto mantêm código/descrição, quantidade, lote, datas, observação e evidências em grupos alinhados. A primeira foto usa `GET /api/v1/shipments/:id/items/:itemId/photo`; as demais usam `/photos/:ordinal`, sempre com autenticação e escopo autorizado. Itens históricos sem foto continuam consultáveis.
 
 Não há edição posterior: destinatário confirma ou recusa com motivo e responsável/data registrados. Recusas oferecem **Criar novo envio**, sem alterar o documento recusado. Loading, erros, sucesso e bloqueio de duplo envio seguem os componentes existentes.
 
@@ -69,7 +69,7 @@ POST            /api/v1/shipments/:id/confirmation
 POST            /api/v1/shipments/:id/refusal
 ```
 
-Listagem: `view=pending|sent|history|updates|open`, `status`, `page` e `limit`; `sent` mostra apenas envios ainda em andamento criados pelo usuário, `open` reúne envios aguardando recebimento ou em separação dos quais o setor participa, e `updates` retorna decisões recentes dos próprios envios. Consultas respeitam o setor. `available-positions` é exclusivo da Revisão, exige `productId` e ao menos `batchCode` ou `manufacturingDate`, e retorna somente saldo positivo de produto/local ativos. Criação recebe multipart com `payload` contendo `requestKey`, `destinationSector` e `items`, além de um arquivo `photos` por item na mesma ordem; origem é inferida do usuário. Itens externos recebem `productId/lot/quantity` (ou variante existente via `batchId`); itens da Revisão recebem `productId/batchId/stockLocationId/quantity`. Confirmação aceita `confirmedExpirationKeys` quando houver divergência apresentada; recusa exige `reason`.
+Listagem: `view=pending|sent|history|updates|open`, `status`, `page` e `limit`; `sent` mostra apenas envios ainda em andamento criados pelo usuário, `open` reúne envios aguardando recebimento ou em separação dos quais o setor participa, e `updates` retorna decisões recentes dos próprios envios. Consultas respeitam o setor. `available-positions` é exclusivo da Revisão, exige `productId` e ao menos `batchCode` ou `manufacturingDate`, e retorna somente saldo positivo de produto/local ativos. Criação recebe multipart com `payload` contendo `requestKey`, `destinationSector` e `items` com `photoCount`, além dos arquivos `photos` agrupados na ordem dos itens; origem é inferida do usuário. Itens externos recebem `productId/lot/quantity` (ou variante existente via `batchId`); itens da Revisão recebem `productId/batchId/stockLocationId/quantity`. Confirmação aceita `confirmedExpirationKeys` quando houver divergência apresentada; recusa exige `reason`.
 
 Somente a confirmação gera entradas/saídas nos relatórios existentes. Nas saídas da Revisão, o saldo já fica indisponível desde a criação e aparece como **em trânsito** nos envios pendentes; recusa ou cancelamento pré-recebimento restaura o disponível. O autor pode cancelar enquanto o envio estiver aguardando recebimento, com motivo obrigatório; o envio permanece no histórico como `CANCELADO`, e administradores visualizam a auditoria no detalhe. Estoque/Home/relatório de validades mostram saldo disponível. Movimentos vinculados exibem o identificador do envio na observação e não oferecem cancelamento isolado; devoluções são novos envios. Regras completas em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#envios-entre-setores).
 
@@ -166,16 +166,20 @@ Lote, fabricação e validade são preservados; não há edição desses campos 
 
 ## Configurações e separação imediata
 
-Administradores no modo `ADMIN` acessam **Configurações** para definir o prazo de separação (5 a 1440 minutos, inicialmente 180) e selecionar um ou mais destinos internos cadastrados para a revisão. O formulário de revisão consulta essa configuração e monta os campos dinamicamente, mantendo total, distribuído e restante e bloqueando diferenças.
+Administradores no modo `ADMIN` acessam **Configurações** para definir o prazo de separação (5 a 1440 minutos, inicialmente 180), os limites de fotos por item dos envios e um ou mais destinos internos cadastrados para a revisão. O formulário de revisão consulta os destinos e monta os campos dinamicamente, mantendo total, distribuído e restante e bloqueando diferenças.
 
-No recebimento Expedição → Revisão, **Sim, separar agora** coloca o envio em `EM_SEPARACAO`, exibe o prazo e permite salvar as quantidades de retorno como rascunho. A Expedição acompanha o estado sem ação. A conclusão exige foto em cada item retornado, credita somente a quantidade líquida e cria um envio de retorno ligado ao original. O retorno aguarda decisão da Expedição e é marcado como execução PCP não necessária. Se o prazo vencer, o acesso seguinte consolida integralmente o recebimento sem retorno.
+No recebimento Expedição → Revisão, **Sim, separar agora** coloca o envio em `EM_SEPARACAO`, exibe o prazo e permite salvar as quantidades de retorno como rascunho. A Expedição acompanha o estado sem ação. A conclusão exige fotos dentro dos limites em cada item retornado, credita somente a quantidade líquida e cria um envio de retorno ligado ao original. O retorno aguarda decisão da Expedição e é marcado como execução PCP não necessária. Se o prazo vencer, o acesso seguinte consolida integralmente o recebimento sem retorno.
+
+No histórico da Revisão, a separação concluída com retorno aparece em dois cards vinculados ao envio original: a **entrada líquida efetivada no estoque** e o envio de retorno. Os detalhes mostram itens e quantidades e permitem consultar o original. O próprio envio original não vira um terceiro card nesse recorte. Retorno integral é identificado sem inventar uma entrada de saldo zero.
 
 Endpoints envolvidos:
 
 ```text
 GET   /api/v1/settings/operational
 GET   /api/v1/settings
+GET   /api/v1/settings/shipment-photos
 PATCH /api/v1/settings/immediate-separation
+PATCH /api/v1/settings/shipment-photos
 PATCH /api/v1/settings/review-destinations
 PATCH /api/v1/shipments/:id/separation-draft
 POST  /api/v1/shipments/:id/separation-completion
@@ -189,7 +193,7 @@ GET             /api/v1/movements/:id
 GET             /api/v1/history
 ```
 
-A entrada principal **Histórico** reúne, em uma lista paginada, envios e movimentações diretas sem duplicar o envio confirmado pelo movimento de estoque que ele gerou. Filtra por etapa (em andamento, aguardando PCP, finalizada ou encerrada), origem do registro, tipo, período e código/produto; ordena por data. O setor vê apenas seus envios; Revisão também vê operações diretas; PCP vê as movimentações de sua competência. Os cards abrem os detalhes existentes. `GET /api/v1/history` fornece essa consulta somente de leitura. Relatórios de totais/CSV continuam acessíveis em **Menu e conta**.
+A entrada principal **Histórico** reúne, em uma lista paginada, envios e movimentações diretas. Em geral, não duplica o envio confirmado pelo movimento de estoque; a separação imediata com retorno é a exceção descrita acima. Filtra por etapa, origem do registro, tipo, período, código/produto e **sentido relativo ao setor logado** (recebidas, enviadas ou internas); ordena por data. A Revisão vê também operações diretas; PCP vê as movimentações de sua competência, sem filtro de sentido por atuar transversalmente. Os cards abrem os detalhes existentes. `GET /api/v1/history` fornece essa consulta somente de leitura. Relatórios de totais/CSV continuam acessíveis em **Menu e conta**.
 
 O detalhe de movimentação apresenta identificador, tipo, estados operacional e PCP, data/hora, responsável, rota, observação, itens, lotes, fabricação, validade, quantidades e distribuições. Os dados do produto confirmados em novos itens são preservados por snapshot; datas são preservadas nas variantes imutáveis. Relatórios históricos e CSVs existentes também mostram as datas de origem/destino. Registros efetivados e cancelados permanecem consultáveis.
 

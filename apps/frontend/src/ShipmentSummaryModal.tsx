@@ -4,9 +4,10 @@ import { LoadingState, Modal, Notice } from './components';
 import { ShipmentItems } from './ShipmentsPage';
 import { formatDateTime } from './format';
 import { Shipment, sectorLabel, shipmentStatusLabel } from './shipments';
+import { ShipmentStockOutcome } from './ShipmentStockOutcome';
 
-export function ShipmentSummaryModal({ id, user, onClose, onOpen }: {
-  id: string; user: UserSession; onClose: () => void; onOpen: (id: string) => void;
+export function ShipmentSummaryModal({ id, user, onClose, onOpen, onOpenMovement }: {
+  id: string; user: UserSession; onClose: () => void; onOpen: (id: string) => void; onOpenMovement?: (id: string) => void;
 }) {
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [error, setError] = useState('');
@@ -33,8 +34,9 @@ export function ShipmentSummaryModal({ id, user, onClose, onOpen }: {
       {shipment.observation && <p><strong>Observação:</strong> {shipment.observation}</p>}
       {shipment.refusalReason && <p><strong>{shipment.status === 'CANCELADO' ? 'Motivo do cancelamento:' : 'Motivo da recusa:'}</strong> {shipment.refusalReason}</p>}
       <ShipmentItems shipment={shipment} />
+      <ShipmentStockOutcome shipment={shipment} onOpenMovement={onOpenMovement} />
       <div className="dialog-actions">
-        {shipment.sourceShipmentId && <button className="secondary" onClick={() => onOpen(shipment.sourceShipmentId!)}>Ver recebimento original</button>}
+        {shipment.sourceShipmentId && <button className="secondary" onClick={() => onOpen(shipment.sourceShipmentId!)}>Ver recebimento original · {shipment.sourceShipment?.codigoMovimentacao ?? shipment.sourceShipmentId}</button>}
         {shipment.derivedShipments?.map((derived) => <button className="secondary" key={derived.id} onClick={() => onOpen(derived.id)}>Ver retorno · {shipmentStatusLabel[derived.status]}</button>)}
         <button onClick={() => onOpen(shipment.id)}>{canDecide && shipment.status === 'EM_SEPARACAO' ? 'Continuar separação' : canDecide && shipment.status === 'AGUARDANDO_RECEBIMENTO' ? shipment.shipmentKind === 'RETORNO_IMEDIATO' ? 'Confirmar retorno' : 'Confirmar recebimento' : 'Ver detalhes completos'}</button>
       </div>

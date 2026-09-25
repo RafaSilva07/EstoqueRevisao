@@ -53,6 +53,7 @@ export function MovementDetailModal({ movementId, initialMovement, onClose, chil
         <dt>Status PCP</dt><dd><span className={`badge ${movement.pcpExecutionStatus === 'EXECUTADA' ? 'active' : 'pending'}`}>{movement.requiresPcpExecution === false ? 'Não necessária' : movement.pcpExecutionStatus === 'EXECUTADA' ? 'Executada' : 'Pendente'}</span></dd>
         <dt>Data/hora</dt><dd>{formatDateTime(movement.occurredAt)}</dd>
         <dt>Responsável</dt><dd>{movement.responsibleUser.username}</dd>
+        {shipment && <><dt>Envio original</dt><dd>{shipment.codigoMovimentacao}</dd></>}
         <dt>Origem</dt><dd>{movement.originLocation.name}</dd>
         <dt>Destino</dt><dd>{movement.destinationLocation?.name ?? 'Distribuição da revisão'}</dd>
         <dt>Observação</dt><dd>{movement.observation || '—'}</dd>
@@ -71,8 +72,8 @@ export function MovementDetailModal({ movementId, initialMovement, onClose, chil
         {item.outputProductSnapshot && <span>Desmontagem: {item.quantity} {(item.productSnapshot ?? item.product).defaultUnit} × {item.unitsPerPackage} → {item.outputQuantity} UN de {item.outputProductSnapshot.code} — {item.outputProductSnapshot.name}</span>}
         {item.distributions?.length > 0 && <ul className="distribution-detail">{item.distributions.map((distribution) => <li key={distribution.id}>{distribution.destinationLocation.name}: <strong>{distribution.quantity} {(item.outputProductSnapshot ?? item.productSnapshot ?? item.product).defaultUnit}</strong></li>)}</ul>}
       </li>)}</ul>
-      {shipment && <div className="pcp-evidence-grid">{shipment.items.filter((item) => !item.stockLocation || item.stockLocation.id === movement.originLocationId).map((item) => <ShipmentPhoto key={item.id} shipmentId={shipment.id} itemId={item.id} productName={item.productSnapshot.name} available={Boolean(item.photoMimeType)} />)}</div>}
-      {pcp && <div className="pcp-evidence-grid">{(movement as PcpMovementDetail).shipmentEvidence?.map((item) => <ShipmentPhoto key={item.itemId} shipmentId={item.shipmentId} itemId={item.itemId} productName={movement.items.find((candidate) => candidate.productId === item.productId)?.product.name ?? 'produto'} available={Boolean(item.photoMimeType)} />)}</div>}
+      {shipment && <div className="pcp-evidence-grid">{shipment.items.filter((item) => !item.stockLocation || item.stockLocation.id === movement.originLocationId).map((item) => <ShipmentPhoto key={item.id} shipmentId={shipment.id} itemId={item.id} productName={item.productSnapshot.name} available={Boolean(item.photoMimeType)} additionalPhotos={item.additionalPhotos} />)}</div>}
+      {pcp && <div className="pcp-evidence-grid">{(movement as PcpMovementDetail).shipmentEvidence?.map((item) => <ShipmentPhoto key={item.itemId} shipmentId={item.shipmentId} itemId={item.itemId} productName={movement.items.find((candidate) => candidate.productId === item.productId)?.product.name ?? 'produto'} available={Boolean(item.photoMimeType)} additionalPhotos={item.additionalPhotos} />)}</div>}
       {children?.(movement)}
     </>}
   </Modal>;

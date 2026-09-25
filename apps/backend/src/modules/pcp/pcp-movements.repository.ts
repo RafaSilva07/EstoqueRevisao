@@ -64,6 +64,7 @@ export class PcpMovementsRepository {
 
   findShipmentEvidence(shipmentId: string): Promise<ShipmentItemEntity[]> {
     return this.shipmentItems.createQueryBuilder('item').leftJoinAndSelect('item.batch', 'batch')
+      .leftJoinAndSelect('item.additionalPhotos', 'additionalPhoto')
       .where('item.shipmentId = :shipmentId', { shipmentId }).orderBy('item.id', 'ASC').getMany();
   }
 

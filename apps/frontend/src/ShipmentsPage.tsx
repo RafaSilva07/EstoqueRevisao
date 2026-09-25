@@ -1,28 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, Paginated, UserSession } from './api';
+import { api, Paginated, ShipmentPhotoLimits, UserSession } from './api';
 import { EmptyState, LoadingState, Modal, Notice, PageHeader } from './components';
 import { formatDate, formatDateTime } from './format';
 import { NewShipment } from './NewShipment';
 import { useMovementSubmission } from './useMovementSubmission';
 import { ShipmentSector, sectorLabel, Shipment, ShipmentAuditEvent, shipmentStatusLabel } from './shipments';
 import { PhotoViewer } from './PhotoViewer';
-import { CameraModal } from './CameraModal';
+import { PhotoAttachment } from './shipment-photo-state';
+import { ShipmentPhotoInput } from './ShipmentPhotoInput';
+import { ShipmentStockOutcome } from './ShipmentStockOutcome';
 
-export function ShipmentPhoto({ shipmentId, itemId, productName, available }: { shipmentId: string; itemId: string; productName: string; available: boolean }) {
+export function ShipmentPhoto({ shipmentId, itemId, productName, available, additionalPhotos = [] }: { shipmentId: string; itemId: string; productName: string; available: boolean; additionalPhotos?: Array<{ ordinal: number; mimeType: string; size: number }> }) {
+  const ordinals = [...(available ? [1] : []), ...additionalPhotos.map((photo) => photo.ordinal)].sort((a, b) => a - b);
+  if (!ordinals.length) return <span className="muted">Item histórico sem foto.</span>;
+  return <div className="shipment-photo-grid">{ordinals.map((ordinal) => <ShipmentPhotoThumbnail key={ordinal} shipmentId={shipmentId} itemId={itemId}
+    productName={productName} ordinal={ordinal} total={ordinals.length} />)}</div>;
+}
+
+function ShipmentPhotoThumbnail({ shipmentId, itemId, productName, ordinal, total }: { shipmentId: string; itemId: string; productName: string; ordinal: number; total: number }) {
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   useEffect(() => {
-    if (!available) return;
     let active = true; let objectUrl = '';
-    void api.getBlob(`/shipments/${shipmentId}/items/${itemId}/photo`).then((blob) => {
+    const path = ordinal === 1 ? `/shipments/${shipmentId}/items/${itemId}/photo` : `/shipments/${shipmentId}/items/${itemId}/photos/${ordinal}`;
+    void api.getBlob(path).then((blob) => {
       if (!active) return; objectUrl = URL.createObjectURL(blob); setUrl(objectUrl);
     }).catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível carregar a foto.'); });
     return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [available, itemId, shipmentId]);
-  if (!available) return <span className="muted">Item histórico sem foto.</span>;
+  }, [itemId, ordinal, shipmentId]);
   if (error) return <span className="photo-required">{error}</span>;
   if (!url) return <span className="muted">Carregando foto…</span>;
-  return <PhotoViewer src={url} alt={`Foto de ${productName}`} status="Toque para ampliar e conferir" />;
+  return <PhotoViewer src={url} alt={`Foto ${ordinal} de ${productName}`} status={`Foto ${ordinal} de ${total} · toque para ampliar`} />;
 }
 
 export function ShipmentItems({ shipment }: { shipment: Shipment }) {
@@ -33,7 +41,7 @@ export function ShipmentItems({ shipment }: { shipment: Shipment }) {
       {item.stockLocation && <span>Origem: {item.stockLocation.name}</span>}
       {item.observation && <span><strong>Observação do produto:</strong> {item.observation}</span>}
     </div>
-    <ShipmentPhoto shipmentId={shipment.id} itemId={item.id} productName={item.productSnapshot.name} available={Boolean(item.photoMimeType)} />
+    <ShipmentPhoto shipmentId={shipment.id} itemId={item.id} productName={item.productSnapshot.name} available={Boolean(item.photoMimeType)} additionalPhotos={item.additionalPhotos} />
   </li>)}</ul>;
 }
 
@@ -73,18 +81,43 @@ function ShipmentCancellation({ shipment, onClose, onDone }: { shipment: Shipmen
 
 function SeparationDialog({ shipment, onClose, onDone }: { shipment: Shipment; onClose: () => void; onDone: () => void }) {
   const [quantities, setQuantities] = useState<Record<string, string>>(() => Object.fromEntries(shipment.items.map((item) => [item.id, String(item.separationDraft?.returnQuantity ?? 0)])));
-  const [photos, setPhotos] = useState<Record<string, File>>({}); const [cameraItem, setCameraItem] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<Record<string, PhotoAttachment[]>>({});
+  const [photoLimits, setPhotoLimits] = useState<ShipmentPhotoLimits | null>(null);
+  const photoUrls = useRef(new Set<string>());
   const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [saved, setSaved] = useState(false);
-  const payload = () => ({ items: shipment.items.map((item) => ({ shipmentItemId: item.id, returnQuantity: Number(quantities[item.id] || 0) })) });
+  useEffect(() => {
+    let active = true;
+    const urls = photoUrls.current;
+    void api.get<ShipmentPhotoLimits>('/settings/shipment-photos').then((limits) => { if (active) setPhotoLimits(limits); })
+      .catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível carregar os limites de fotos.'); });
+    return () => { active = false; urls.forEach((url) => URL.revokeObjectURL(url)); };
+  }, []);
+  const payload = (includePhotos = false) => ({ items: shipment.items.map((item) => ({ shipmentItemId: item.id, returnQuantity: Number(quantities[item.id] || 0),
+    ...(includePhotos && Number(quantities[item.id] || 0) > 0 ? { photoCount: photos[item.id]?.length ?? 0 } : {}) })) });
   const valid = shipment.items.every((item) => Number.isSafeInteger(Number(quantities[item.id])) && Number(quantities[item.id]) >= 0 && Number(quantities[item.id]) <= item.quantity);
-  const photosReady = shipment.items.every((item) => Number(quantities[item.id] || 0) === 0 || Boolean(photos[item.id]));
+  const photoTotal = shipment.items.reduce((sum, item) => sum + (Number(quantities[item.id] || 0) > 0 ? photos[item.id]?.length ?? 0 : 0), 0);
+  const photosReady = Boolean(photoLimits) && photoTotal <= 100 && shipment.items.every((item) => Number(quantities[item.id] || 0) === 0 ||
+    ((photos[item.id]?.length ?? 0) >= photoLimits!.minimum && (photos[item.id]?.length ?? 0) <= photoLimits!.maximum));
+  function addPhotos(itemId: string, files: File[]) {
+    const added = files.map((file) => ({ file, url: URL.createObjectURL(file) }));
+    added.forEach((photo) => photoUrls.current.add(photo.url));
+    setPhotos((current) => ({ ...current, [itemId]: [...(current[itemId] ?? []), ...added] }));
+  }
+  function removePhoto(itemId: string, index: number) {
+    setPhotos((current) => {
+      const existing = current[itemId] ?? [];
+      const removed = existing[index];
+      if (removed) { URL.revokeObjectURL(removed.url); photoUrls.current.delete(removed.url); }
+      return { ...current, [itemId]: existing.filter((_, photoIndex) => photoIndex !== index) };
+    });
+  }
   async function save() { setBusy(true); setError(''); try { await api.patch(`/shipments/${shipment.id}/separation-draft`, payload()); setSaved(true); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Não foi possível salvar o rascunho.'); } finally { setBusy(false); } }
-  async function complete() { if (!valid || !photosReady) return; setBusy(true); setError(''); try { const orderedFiles = shipment.items.filter((item) => Number(quantities[item.id] || 0) > 0).map((item) => photos[item.id]); await api.postMultipart(`/shipments/${shipment.id}/separation-completion`, payload(), orderedFiles); onDone(); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Não foi possível concluir a separação.'); } finally { setBusy(false); } }
+  async function complete() { if (!valid || !photosReady) return; setBusy(true); setError(''); try { const orderedFiles = shipment.items.filter((item) => Number(quantities[item.id] || 0) > 0).flatMap((item) => (photos[item.id] ?? []).map((photo) => photo.file)); await api.postMultipart(`/shipments/${shipment.id}/separation-completion`, payload(true), orderedFiles); onDone(); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Não foi possível concluir a separação.'); } finally { setBusy(false); } }
   return <Modal labelledBy="separation-title" busy={busy} onClose={onClose}><h2 id="separation-title">Separação imediata</h2><p>Informe somente o que retornará à Expedição. O restante entrará diretamente no estoque da Revisão.</p>
     {shipment.separationExpiresAt && <Notice kind="info">Concluir até {formatDateTime(shipment.separationExpiresAt)}.</Notice>}{error && <Notice kind="error">{error}</Notice>}{saved && <Notice kind="success">Rascunho salvo. O prazo continua correndo.</Notice>}
-    <div className="separation-items">{shipment.items.map((item) => { const amount = Number(quantities[item.id] || 0); return <article className="shipment-item-card" key={item.id}><div className="shipment-item-heading"><strong>{item.productSnapshot.code} — {item.productSnapshot.name}</strong><b>Recebido: {item.quantity}</b></div><p>Lote {item.batch.code}</p><label>Quantidade de retorno<input type="number" inputMode="numeric" min="0" max={item.quantity} step="1" value={quantities[item.id] ?? '0'} onChange={(event) => { setQuantities((current) => ({ ...current, [item.id]: event.target.value })); setSaved(false); }} /></label>{amount > 0 && <button type="button" className={photos[item.id] ? 'secondary' : ''} onClick={() => setCameraItem(item.id)}>{photos[item.id] ? '✓ Trocar foto do retorno' : 'Adicionar foto obrigatória'}</button>}</article>; })}</div>
+    {!photoLimits && <p className="muted">Carregando os limites de fotos…</p>}
+    <div className="separation-items">{shipment.items.map((item) => { const amount = Number(quantities[item.id] || 0); return <article className="shipment-item-card" key={item.id}><div className="shipment-item-heading"><strong>{item.productSnapshot.code} — {item.productSnapshot.name}</strong><b>Recebido: {item.quantity}</b></div><p>Lote {item.batch.code}</p><label>Quantidade de retorno<input type="number" inputMode="numeric" min="0" max={item.quantity} step="1" value={quantities[item.id] ?? '0'} onChange={(event) => { setQuantities((current) => ({ ...current, [item.id]: event.target.value })); setSaved(false); }} /></label>{amount > 0 && photoLimits && <ShipmentPhotoInput photos={photos[item.id] ?? []} limits={photoLimits} productName={item.productSnapshot.name} remainingTotal={100 - photoTotal} onAdd={(files) => addPhotos(item.id, files)} onRemove={(index) => removePhoto(item.id, index)} />}</article>; })}</div>
     <div className="dialog-actions"><button type="button" className="secondary" onClick={() => void save()} disabled={busy || !valid}>Salvar e sair</button><button type="button" onClick={() => void complete()} disabled={busy || !valid || !photosReady}>Concluir separação</button></div>
-    {cameraItem && <CameraModal onClose={() => setCameraItem(null)} onUse={(file) => { setPhotos((current) => ({ ...current, [cameraItem]: file })); setCameraItem(null); }} />}
   </Modal>;
 }
 
@@ -103,6 +136,17 @@ export function ShipmentsPage({ user, initialView = 'pending', initialCreating =
   const canCreate = user.permissions.includes('shipments.create');
   const canDecide = user.permissions.includes('shipments.decide');
   const isAdmin = user.roles.includes('ADMIN');
+  const selectedId = selected?.id;
+  useEffect(() => {
+    if (!selectedId) return;
+    let active = true;
+    void api.get<Shipment>(`/shipments/${selectedId}`).then((detail) => {
+      if (active) setSelected((current) => current?.id === selectedId ? detail : current);
+    }).catch((caught: unknown) => {
+      if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível carregar os detalhes do envio.');
+    });
+    return () => { active = false; };
+  }, [selectedId]);
   useEffect(() => {
     if (!selected || !isAdmin) return;
     let active = true;
@@ -162,10 +206,11 @@ export function ShipmentsPage({ user, initialView = 'pending', initialCreating =
       <h2 id="shipment-detail-title">{sectorLabel[selected.originSector]} → {sectorLabel[selected.destinationSector]}</h2>
       <p><strong>{shipmentStatusLabel[selected.status]}</strong></p><p>Enviado por {selected.createdBy.username} em {formatDateTime(selected.createdAt)}</p>
       <strong>{selected.codigoMovimentacao}</strong>
-      {selected.sourceShipmentId && <button className="text-button" onClick={() => void api.get<Shipment>(`/shipments/${selected.sourceShipmentId}`).then(setSelected).catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'Erro ao abrir recebimento.'))}>Ver recebimento original</button>}
+      {selected.sourceShipmentId && <button className="text-button" onClick={() => void api.get<Shipment>(`/shipments/${selected.sourceShipmentId}`).then(setSelected).catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'Erro ao abrir recebimento.'))}>Ver recebimento original · {selected.sourceShipment?.codigoMovimentacao ?? selected.sourceShipmentId}</button>}
       {selected.derivedShipments?.map((derived) => <button key={derived.id} className="text-button" onClick={() => void api.get<Shipment>(`/shipments/${derived.id}`).then(setSelected).catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'Erro ao abrir retorno.'))}>Ver retorno · {shipmentStatusLabel[derived.status]}</button>)}
       {selected.observation && <p><strong>Observação geral:</strong> {selected.observation}</p>}
       <ShipmentItems shipment={selected} />
+      <ShipmentStockOutcome shipment={selected} />
       {selected.decidedAt && <p>{shipmentStatusLabel[selected.status]} por {selected.decidedBy?.username} em {formatDateTime(selected.decidedAt)}</p>}
       {selected.refusalReason && <Notice kind="info">{selected.status === 'CANCELADO' ? 'Motivo do cancelamento' : 'Motivo da recusa'}: {selected.refusalReason}</Notice>}
       {isAdmin && auditShipmentId === selected.id && auditHistory.length > 0 && <><h3>Auditoria</h3><ul className="pcp-audit-list">{auditHistory.map((event) => <li key={event.id}><strong>{event.action === 'SHIPMENT_CANCEL' ? 'Cancelamento do envio' : event.action}</strong><span>{event.user?.username ?? 'Sistema'} · {formatDateTime(event.createdAt)}</span></li>)}</ul></>}

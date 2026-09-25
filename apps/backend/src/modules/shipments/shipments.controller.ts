@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res, StreamableFile, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Query, Req, Res, StreamableFile, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AuthenticatedUser } from '../auth/authenticated-user.interface';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
@@ -43,6 +43,13 @@ export class ShipmentsController {
   async photo(@Param('id', new ParseUUIDPipe()) id: string, @Param('itemId', new ParseUUIDPipe()) itemId: string,
     @Req() req: Request, @Res({ passthrough: true }) response: Response): Promise<StreamableFile> {
     const photo = await this.service.photo(id, itemId, req.user as AuthenticatedUser);
+    response.set({ 'Content-Type': photo.mimeType, 'Content-Length': String(photo.data.length), 'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff' });
+    return new StreamableFile(photo.data);
+  }
+  @Get(':id/items/:itemId/photos/:ordinal') @RequirePermissions('shipments.read')
+  async additionalPhoto(@Param('id', new ParseUUIDPipe()) id: string, @Param('itemId', new ParseUUIDPipe()) itemId: string,
+    @Param('ordinal', ParseIntPipe) ordinal: number, @Req() req: Request, @Res({ passthrough: true }) response: Response): Promise<StreamableFile> {
+    const photo = await this.service.photo(id, itemId, req.user as AuthenticatedUser, ordinal);
     response.set({ 'Content-Type': photo.mimeType, 'Content-Length': String(photo.data.length), 'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff' });
     return new StreamableFile(photo.data);
   }

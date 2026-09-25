@@ -75,7 +75,10 @@ export interface StockLocation {
 export interface OperationalSettings {
   immediateSeparationMinutes: number;
   reviewDestinations: StockLocation[];
+  shipmentPhotos: ShipmentPhotoLimits;
 }
+
+export interface ShipmentPhotoLimits { minimum: number; maximum: number }
 
 export interface StockPosition {
   id: string;
@@ -157,6 +160,7 @@ export interface PcpAuditEvent {
 export interface PcpShipmentEvidence {
   shipmentId: string; itemId: string; productId: string; batchId: string;
   stockLocationId: string | null; quantity: number; photoMimeType: string | null;
+  additionalPhotos?: Array<{ ordinal: number; mimeType: string; size: number }>;
 }
 
 export interface PcpMovementDetail extends Movement {

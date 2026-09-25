@@ -11,3 +11,11 @@ export class UpdateReviewDestinationsDto {
   stockLocationIds!: string[];
 }
 
+export class UpdateShipmentPhotoLimitsDto {
+  @Type(() => Number) @IsInt() @Min(1) @Max(10)
+  minimum!: number;
+
+  @Type(() => Number) @IsInt() @Min(1) @Max(10)
+  maximum!: number;
+}
+

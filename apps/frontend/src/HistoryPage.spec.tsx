@@ -33,4 +33,21 @@ describe('Histórico unificado', () => {
     await act(async () => { host.querySelector<HTMLButtonElement>('.history-card')!.click(); await Promise.resolve(); });
     expect(host.querySelector('[role="dialog"]')?.textContent).toContain('ENT-000152');
   });
+
+  it('separa entrada líquida e retorno e filtra pelo sentido do setor', async () => {
+    const entry = { ...item, id: 'movement-1', kind: 'MOVEMENT', type: 'ENTRADA_EXTERNA', direction: 'INCOMING', parentCode: 'ENT-000152' };
+    const returned = { ...item, id: 'return-1', code: 'SAI-000153', direction: 'OUTGOING', parentCode: 'ENT-000152' };
+    vi.spyOn(api, 'get').mockImplementation((path) => {
+      requestedPaths.push(path);
+      if (path.startsWith('/history?')) return Promise.resolve(result([entry, returned]));
+      return Promise.resolve({ ...item, codigoMovimentacao: item.code, originSector: 'PRODUCAO', destinationSector: 'REVISAO', createdBy: { id: 'operator', username: 'Operador' }, createdAt: item.occurredAt, items: [] });
+    });
+    await act(async () => { root.render(<HistoryPage user={user} onOpenShipment={vi.fn()} onOpenPcp={vi.fn()} />); await Promise.resolve(); });
+    expect(host.querySelectorAll('.history-card')).toHaveLength(2);
+    expect(host.textContent).toContain('Parte do envio original ENT-000152');
+    expect(Array.from(host.querySelectorAll('.history-card')).every((card) => !card.textContent?.includes('meu setor'))).toBe(true);
+    const direction = Array.from(host.querySelectorAll('select')).find((select) => select.closest('label')?.textContent?.includes('Sentido'))!;
+    await act(async () => { direction.value = 'INCOMING'; direction.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
+    expect(requestedPaths.some((path) => path.includes('direction=INCOMING'))).toBe(true);
+  });
 });

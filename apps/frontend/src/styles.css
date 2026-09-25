@@ -489,7 +489,12 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
 .shipment-item-data { display: grid; min-width: 0; gap: .25rem; }
 .shipment-item-data span { line-height: 1.4; }
 .shipment-photo { display: grid; min-width: 0; gap: .4rem; }
+.shipment-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 9rem), 12rem)); gap: .65rem; min-width: 0; }
+.shipment-photo-input { display: grid; gap: .6rem; min-width: 0; }
+.shipment-photo-entry { display: grid; align-content: start; gap: .3rem; min-width: 0; }
+.shipment-photo-entry > button { width: 100%; }
 .shipment-photo-trigger { display: grid; width: min(100%, 20rem); min-width: 0; padding: .25rem; border: 1px solid #bfd0d8; background: #fff; color: var(--primary-dark); text-align: left; }
+.shipment-photo-grid .shipment-photo-trigger { width: 100%; }
 .shipment-photo-trigger:hover { background: var(--primary-soft); }
 .shipment-photo-trigger img { display: block; width: 100%; height: 9rem; border-radius: .4rem; background: #17242b; object-fit: cover; }
 .shipment-photo-trigger span { padding: .35rem .35rem .2rem; font-size: .78rem; font-weight: 700; }
