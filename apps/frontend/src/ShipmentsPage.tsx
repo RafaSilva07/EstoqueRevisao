@@ -9,6 +9,7 @@ import { PhotoViewer } from './PhotoViewer';
 import { PhotoAttachment } from './shipment-photo-state';
 import { ShipmentPhotoInput } from './ShipmentPhotoInput';
 import { ShipmentStockOutcome } from './ShipmentStockOutcome';
+import { auditActionLabel } from './audit-action-labels';
 
 export function ShipmentPhoto({ shipmentId, itemId, productName, available, additionalPhotos = [] }: { shipmentId: string; itemId: string; productName: string; available: boolean; additionalPhotos?: Array<{ ordinal: number; mimeType: string; size: number }> }) {
   const ordinals = [...(available ? [1] : []), ...additionalPhotos.map((photo) => photo.ordinal)].sort((a, b) => a - b);
@@ -213,7 +214,7 @@ export function ShipmentsPage({ user, initialView = 'pending', initialCreating =
       <ShipmentStockOutcome shipment={selected} />
       {selected.decidedAt && <p>{shipmentStatusLabel[selected.status]} por {selected.decidedBy?.username} em {formatDateTime(selected.decidedAt)}</p>}
       {selected.refusalReason && <Notice kind="info">{selected.status === 'CANCELADO' ? 'Motivo do cancelamento' : 'Motivo da recusa'}: {selected.refusalReason}</Notice>}
-      {isAdmin && auditShipmentId === selected.id && auditHistory.length > 0 && <><h3>Auditoria</h3><ul className="pcp-audit-list">{auditHistory.map((event) => <li key={event.id}><strong>{event.action === 'SHIPMENT_CANCEL' ? 'Cancelamento do envio' : event.action}</strong><span>{event.user?.username ?? 'Sistema'} · {formatDateTime(event.createdAt)}</span></li>)}</ul></>}
+      {isAdmin && auditShipmentId === selected.id && auditHistory.length > 0 && <><h3>Auditoria</h3><ul className="pcp-audit-list">{auditHistory.map((event) => <li key={event.id}><strong title={event.action}>{auditActionLabel(event.action)}</strong><span>{event.user?.username ?? 'Sistema'} · {formatDateTime(event.createdAt)}</span></li>)}</ul></>}
       {canDecide && selected.status === 'AGUARDANDO_RECEBIMENTO' && selected.destinationSector === user.sector && <div className="dialog-actions"><button className="secondary" onClick={() => setDecision('refuse')}>Recusar envio</button><button onClick={() => setDecision('confirm')}>Confirmar recebimento</button></div>}
       {selected.status === 'AGUARDANDO_RECEBIMENTO' && selected.createdBy.id === user.id && <button className="danger button-wide" onClick={() => setDecision('cancel')}>Cancelar envio</button>}
       {canDecide && selected.status === 'EM_SEPARACAO' && user.sector === 'REVISAO' && <button className="button-wide" onClick={() => setDecision('separate')}>Continuar separação</button>}
