@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react';
+import { FormEvent, ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { api, Batch, Movement, Paginated, Product, StockLocation, StockLocationKind, StockPosition, UnitConversion, UserSession } from './api';
 import { ConfirmDialog, EmptyState, FilterPanel, LoadingState, Modal, Notice, PageHeader } from './components';
 import { formatDate, formatDateTime } from './format';
@@ -21,7 +21,7 @@ import { ProductForm } from './ProductForm';
 import { ProductAuditPanel } from './ProductAuditPanel';
 import { PcpPage } from './PcpPage';
 import { MovementDetailModal } from './MovementDetailModal';
-import { OperationalMode, operationalModeLabel, userForOperationalMode } from './operational-mode';
+import { OperationalMode, allowedOperationalModes, operationalModeLabel, userForOperationalMode } from './operational-mode';
 import { OperationalHomePage } from './OperationalHomePage';
 import { HistoryPage } from './HistoryPage';
 
@@ -41,8 +41,20 @@ function ProductsPage({ canWrite, canManageStatus, canReadConversions }: { canWr
   const [products, setProducts] = useState<Product[]>([]); const [selected, setSelected] = useState<Product | null>(null); const [conversions, setConversions] = useState<UnitConversion[]>([]);
   const [search, setSearch] = useState(''); const [error, setError] = useState(''); const [success, setSuccess] = useState(''); const [editing, setEditing] = useState<Product | null>(null);
   const [showForm, setShowForm] = useState(false); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [confirming, setConfirming] = useState<Product | null>(null);
-  const load = useCallback(async () => { setLoading(true); try { setProducts((await api.get<Paginated<Product>>(`/products?limit=100&search=${encodeURIComponent(search)}`)).items); setError(''); } catch (caught) { setError(messageFrom(caught)); } finally { setLoading(false); } }, [search]);
-  useEffect(() => { const timeout = window.setTimeout(() => void load(), 250); return () => window.clearTimeout(timeout); }, [load]);
+  const requestVersion = useRef(0);
+  const load = useCallback(async () => {
+    const version = ++requestVersion.current;
+    setLoading(true);
+    try {
+      const result = await api.get<Paginated<Product>>(`/products?limit=100&search=${encodeURIComponent(search)}`);
+      if (version === requestVersion.current) { setProducts(result.items); setError(''); }
+    } catch (caught) {
+      if (version === requestVersion.current) setError(messageFrom(caught));
+    } finally {
+      if (version === requestVersion.current) setLoading(false);
+    }
+  }, [search]);
+  useEffect(() => { const timeout = window.setTimeout(() => void load(), 250); return () => { requestVersion.current += 1; window.clearTimeout(timeout); }; }, [load]);
   function openForm(product: Product | null) { setEditing(product); setShowForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }
   async function save(payload: Record<string, unknown>) { if (busy) return; setBusy(true); try { const saved = editing ? await api.patch<Product>(`/products/${editing.id}`, payload) : await api.post<Product>('/products', payload); setSelected(saved); setSuccess(editing ? 'Produto atualizado com sucesso.' : 'Produto cadastrado com sucesso.'); setShowForm(false); setEditing(null); await load(); } catch (caught) { setError(messageFrom(caught)); } finally { setBusy(false); } }
   async function select(product: Product) { setSelected(product); revealDetails(); if (!canReadConversions) return; try { setConversions(await api.get(`/products/${product.id}/conversions`)); } catch (caught) { setError(messageFrom(caught)); } }
@@ -137,9 +149,9 @@ function RequiredField({ label, children }: { label: string; children: ReactNode
 function FormActions({ busy, saveLabel, onCancel }: { busy: boolean; saveLabel: string; onCancel: () => void }) { return <div className="form-actions"><button disabled={busy}>{busy ? 'Salvando...' : saveLabel}</button><button type="button" className="secondary" onClick={onCancel} disabled={busy}>Cancelar</button></div>; }
 function Status({ active }: { active: boolean }) { return <span className={`badge ${active ? 'active' : ''}`}>{active ? 'Ativo' : 'Inativo'}</span>; }
 function NavButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) { return <button className={active ? 'current' : ''} onClick={onClick} aria-current={active ? 'page' : undefined}>{children}</button>; }
-export function OperationalSectorSwitcher({ value, onChange }: { value: OperationalMode; onChange: (mode: OperationalMode) => void }) {
+export function OperationalSectorSwitcher({ value, modes, onChange }: { value: OperationalMode; modes: OperationalMode[]; onChange: (mode: OperationalMode) => void }) {
   return <label className="sector-switcher"><span>Modo operacional</span><select aria-label="Modo operacional" value={value} onChange={(event) => onChange(event.target.value as OperationalMode)}>
-    <option value="ADMIN">Admin</option><option value="REVISAO">Revisão</option><option value="PRODUCAO">Produção</option><option value="EXPEDICAO">Expedição</option><option value="PCP">PCP</option>
+    {modes.map((mode) => <option key={mode} value={mode}>{operationalModeLabel[mode]}</option>)}
   </select></label>;
 }
 
@@ -159,20 +171,21 @@ export function App() {
     const sector = authenticated?.sector ?? 'REVISAO';
     const mode = authenticated?.roles.includes('ADMIN') ? 'ADMIN' : sector;
     setUser(authenticated); setOperationalMode(mode);
-    api.setOperationalSector(authenticated?.roles.includes('ADMIN') ? mode : null);
+    api.setOperationalSector(authenticated && allowedOperationalModes(authenticated).length > 1 ? mode : null);
   }).finally(() => setChecking(false)); }, []);
   if (checking) return <main className="splash"><span className="spinner" /><p>Preparando seu ambiente...</p></main>;
   if (!user) return <Login onAuthenticated={(authenticated) => {
     const sector = authenticated.sector ?? 'REVISAO';
     const mode = authenticated.roles.includes('ADMIN') ? 'ADMIN' : sector;
     setUser(authenticated); setOperationalMode(mode); setPage('home');
-    api.setOperationalSector(authenticated.roles.includes('ADMIN') ? mode : null);
+    api.setOperationalSector(allowedOperationalModes(authenticated).length > 1 ? mode : null);
   }} />;
-  const isAdmin = user.roles.includes('ADMIN');
-  const activeMode: OperationalMode = isAdmin ? operationalMode : user.sector ?? 'REVISAO';
+  const modes = allowedOperationalModes(user);
+  const generalAdmin = user.roles.includes('ADMIN');
+  const activeMode: OperationalMode = modes.length > 1 ? operationalMode : modes[0];
   const activeUser = userForOperationalMode(user, activeMode);
   const activeSector: Sector = activeUser.sector ?? 'REVISAO';
-  const adminMode = isAdmin && activeMode === 'ADMIN';
+  const adminMode = generalAdmin && activeMode === 'ADMIN';
   const can = (permission: string) => activeUser.permissions.includes(permission);
   const navigate: Navigate = (destination) => {
     setSelectedRecordId(undefined);
@@ -206,11 +219,12 @@ export function App() {
     void api.logout().finally(() => { setUser(null); setLoggingOut(false); });
   };
   const switchSector = (mode: OperationalMode) => {
+    if (!modes.includes(mode)) return;
     api.setOperationalSector(mode); setOperationalMode(mode); setPage('home');
     setSelectedMovementId(undefined); setMovementSuccess(undefined); setTransferPrefill(undefined); setReviewPrefill(undefined);
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
-  const switcher = isAdmin && <OperationalSectorSwitcher value={activeMode} onChange={switchSector} />;
+  const switcher = modes.length > 1 && <OperationalSectorSwitcher value={activeMode} modes={modes} onChange={switchSector} />;
   const areas = homeActions(activeUser);
   const menus: Page[] = ['home', 'operations', 'more'];
   const reviewSector = activeSector === 'REVISAO';

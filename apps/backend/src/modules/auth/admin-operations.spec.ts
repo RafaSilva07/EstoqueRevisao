@@ -53,7 +53,7 @@ describe('Operações administrativas (HTTP)', () => {
     ['GET', '/users'], ['GET', '/users/roles'], ['POST', '/users'], ['PATCH', `/users/${id}`], ['DELETE', `/users/${id}`],
   ])('%s %s exige ADMIN além das permissões', async (method, route) => {
     const body = method === 'GET' ? undefined : JSON.stringify({ active: false });
-    for (const role of ['REVISAO', 'PRODUCAO', 'EXPEDICAO', 'PCP']) {
+    for (const role of ['REVISAO', 'PRODUCAO', 'EXPEDICAO', 'PCP', 'ADMIN_REVISAO_EXPEDICAO', 'ADMIN_PRODUCAO_PCP']) {
       const denied = await fetch(url + route, { method, body, headers: { 'test-role': role, 'Content-Type': 'application/json' } });
       expect(denied.status).toBe(403);
     }

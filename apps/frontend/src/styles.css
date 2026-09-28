@@ -55,9 +55,13 @@ input[type="date"]::-webkit-date-and-time-value { min-width: 0; text-align: left
 .user-roles label { display: flex; align-items: center; gap: .65rem; }
 .user-roles input { width: 1.2rem; min-height: 1.2rem; flex: 0 0 1.2rem; }
 .admin-users-link { margin-bottom: 1rem; }
-.packaging-options { padding: 0; list-style: none; }
-.packaging-options li { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; justify-content: space-between; padding: .6rem 0; }
-.packaging-options span { min-width: 0; overflow-wrap: anywhere; }
+.product-packaging > .secondary { margin-top: .75rem; }
+.dialog .product-packaging .packaging-options-title { margin: 1rem 0 .35rem; font-weight: 700; color: var(--ink); }
+.packaging-options { margin: 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: .65rem; }
+.packaging-options li { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; justify-content: space-between; padding: .65rem .75rem; }
+.packaging-options li + li { border-top: 1px solid var(--line); }
+.packaging-options span { min-width: 0; flex: 1 1 12rem; overflow-wrap: anywhere; }
+.packaging-options button { flex: 0 0 auto; }
 textarea { resize: vertical; }
 input:disabled, select:disabled { background: #edf1f4; color: #667786; }
 label { display: grid; align-content: start; gap: .4rem; min-width: 0; color: #354d61; font-size: .88rem; font-weight: 700; }
@@ -271,6 +275,7 @@ dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font-weight: 700; }
 
 .dialog-backdrop { position: fixed; z-index: 50; inset: 0; display: grid; place-items: end center; padding: .5rem; background: rgb(12 28 37 / 55%); }
 .dialog { width: min(100%, 34rem); max-height: calc(100dvh - 1rem); overflow-y: auto; overscroll-behavior: contain; border-radius: .75rem; background: #fff; padding: 1.2rem; box-shadow: 0 1rem 3rem rgb(0 0 0 / 20%); }
+.dialog:has(#product-form-title) { width: min(100%, 40rem); }
 .dialog p:not(.eyebrow) { color: var(--muted); line-height: 1.5; }
 .dialog-actions { display: grid; gap: .55rem; }
 .dialog-error { border-radius: .5rem; background: #fde5e2; color: #8e2821 !important; padding: .7rem; font-weight: 700; }

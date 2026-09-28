@@ -4,7 +4,7 @@ import { Sector } from './shipments';
 export type { OperationalMode } from './api';
 
 export const operationalModeLabel: Record<OperationalMode, string> = {
-  ADMIN: 'Admin',
+  ADMIN: 'Admin geral',
   REVISAO: 'Revisão',
   PRODUCAO: 'Produção',
   EXPEDICAO: 'Expedição',
@@ -22,8 +22,16 @@ const permissionsByMode: Record<Sector, readonly string[]> = {
   PCP: ['pcp.movements.read', 'pcp.movements.execute', 'products.read', 'products.create', 'products.update', 'batches.read', 'stocks.read', 'stock-positions.read', 'shipments.read'],
 };
 
+export function allowedOperationalModes(user: UserSession): OperationalMode[] {
+  if (user.roles.includes('ADMIN')) return ['ADMIN', 'REVISAO', 'PRODUCAO', 'EXPEDICAO', 'PCP'];
+  if (user.roles.includes('ADMIN_REVISAO_EXPEDICAO')) return ['REVISAO', 'EXPEDICAO'];
+  if (user.roles.includes('ADMIN_PRODUCAO_PCP')) return ['PRODUCAO', 'PCP'];
+  return [user.sector ?? 'REVISAO'];
+}
+
 export function userForOperationalMode(user: UserSession, mode: OperationalMode): UserSession {
-  if (!user.roles.includes('ADMIN') || mode === 'ADMIN') return { ...user, sector: user.sector ?? 'REVISAO' };
+  if (!allowedOperationalModes(user).includes(mode)) throw new Error('Modo operacional não permitido.');
+  if (mode === 'ADMIN' || allowedOperationalModes(user).length === 1) return { ...user, sector: user.sector ?? 'REVISAO' };
   const allowed = permissionsByMode[mode];
   return {
     ...user,

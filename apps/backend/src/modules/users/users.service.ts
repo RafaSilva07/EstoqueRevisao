@@ -9,6 +9,7 @@ import { AuthSessionEntity } from '../auth/entities/auth-session.entity';
 import { UserEntity } from './entities/user.entity';
 import { RoleEntity } from './entities/role.entity';
 import { UserStatus } from './domain/user-status.enum';
+import { areaAdministratorModes } from '../auth/operational-modes';
 import { CreateUserDto, UpdateUserDto, UserQueryDto } from './dto/user.dto';
 import { UsersRepository } from './repositories/users.repository';
 
@@ -72,12 +73,17 @@ export class UsersService {
         const roleCodes = dto.roleCodes ?? user.roles?.map((role) => role.code) ?? [];
         const roles = await manager.getRepository(RoleEntity).findBy({ code: In(roleCodes) });
         if (!roles.length || roles.length !== roleCodes.length) throw new BadRequestException('Perfil inválido.');
+        const areaRole = roleCodes.find((code) => code in areaAdministratorModes) as keyof typeof areaAdministratorModes | undefined;
+        if (areaRole && roleCodes.length !== 1) throw new BadRequestException('O administrador de área deve utilizar apenas seu perfil administrativo.');
         if (roleCodes.includes('PCP') && roleCodes.length !== 1) throw new BadRequestException('O perfil PCP é exclusivo e não pode ser combinado com perfis operacionais.');
         const status = dto.status ?? user.status;
         const sector = dto.sector ?? user.sector;
+        if (areaRole && !(areaAdministratorModes[areaRole] as readonly string[]).includes(sector)) throw new BadRequestException('Setor inicial incompatível com o administrador de área.');
         if (roleCodes.includes('ADMIN') && sector !== 'REVISAO') throw new BadRequestException('Administrador deve pertencer à Revisão.');
         if (roleCodes.includes('REVISAO') && sector !== 'REVISAO') throw new BadRequestException('O perfil Revisão operacional deve pertencer ao setor Revisão.');
-        if (roleCodes.includes('PCP') !== (sector === 'PCP')) throw new BadRequestException('O setor PCP deve utilizar exclusivamente o perfil PCP.');
+        if ((roleCodes.includes('PCP') && sector !== 'PCP') || (sector === 'PCP' && !roleCodes.includes('PCP') && areaRole !== 'ADMIN_PRODUCAO_PCP')) {
+          throw new BadRequestException('O setor PCP exige o perfil PCP ou Admin Produção e PCP.');
+        }
         if (id === actor && (status !== UserStatus.Active || !roleCodes.includes('ADMIN'))) {
           throw new ConflictException('Você não pode desativar sua própria conta nem remover seu acesso administrativo.');
         }

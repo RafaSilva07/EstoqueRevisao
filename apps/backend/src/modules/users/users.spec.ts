@@ -5,7 +5,7 @@ import { AdminGuard } from './admin.guard';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 
 describe('Administração de usuários', () => {
-  it.each([undefined, [], ['PRODUCAO'], ['EXPEDICAO']])('nega acesso sem ADMIN: %s', (roles) => {
+  it.each([undefined, [], ['PRODUCAO'], ['EXPEDICAO'], ['ADMIN_REVISAO_EXPEDICAO'], ['ADMIN_PRODUCAO_PCP']])('nega acesso sem ADMIN: %s', (roles) => {
     const context = { switchToHttp: (): unknown => ({ getRequest: (): unknown => ({ user: roles ? { roles } : undefined }) }) } as unknown as ExecutionContext;
     expect(new AdminGuard().canActivate(context)).toBe(false);
   });

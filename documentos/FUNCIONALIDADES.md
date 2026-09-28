@@ -24,6 +24,8 @@ O frontend possui login, restauração da sessão pelo cookie HttpOnly e navega�
 
 Usuários `ADMIN` possuem no cabeçalho da aplicação o seletor **Modo operacional**, com as opções Admin, Revisão, Produção, Expedição e PCP. O login administrativo inicia em **Admin**, modo completo que usa a Revisão como contexto físico e reúne as ações exclusivas de administração. Ao selecionar um modo operacional, a interface e a API aplicam o escopo desse perfil: gestão de produtos continua disponível, enquanto gestão de usuários, entrada/saída direta, estorno e alteração dos demais cadastros ficam restritos ao modo Admin. A identidade real do administrador continua registrada no histórico e na auditoria.
 
+Administradores de área usam o mesmo seletor limitado a **Revisão + Expedição** ou **Produção + PCP**, conforme o perfil atribuído pelo admin geral. Iniciam no setor cadastrado, podem operar nos dois modos com as permissões já existentes e não acessam o modo Admin nem a gestão de usuários.
+
 ## Gerenciar usuários (ADMIN)
 
 No modo **Admin**, o menu **Menu > Gerenciar usuários** permite buscar/listar com paginação, ver detalhes, criar, editar e excluir por inativação. A gestão de usuários não aparece nem é autorizada nos modos operacionais Revisão, Produção, Expedição e PCP.
@@ -77,7 +79,7 @@ Somente a confirmação gera entradas/saídas nos relatórios existentes. Nas sa
 
 Produtos possuem listagem, busca, detalhe, criação, edição e exclusão por inativação em todos os perfis; cadastros inativos podem ser reativados. O formulário identifica código, descrição, tipo de unidade e prazo padrão em anos; o prazo apenas sugere a validade de novas operações. Conversões de unidade conservam suas permissões próprias. A auditoria de produtos pode ser consultada pelo administrador em `GET /api/v1/products/audit-history`.
 
-O tipo de unidade é uma seleção: Unidade (UN), Fardo (FD) ou Caixa (CX). Embalagens exigem **unidades por embalagem** e a vinculação de um ou mais códigos unitários existentes, pesquisáveis por código/descrição. A API recebe `unitsPerPackage` e `unitProductIds`; o filtro `defaultUnit=UN` restringe a busca às opções unitárias. As opções e o fator também aparecem nos detalhes. Valores antigos são preservados; configurações ausentes não são presumidas.
+O tipo de unidade é uma seleção: Unidade (UN), Fardo (FD) ou Caixa (CX). Embalagens exigem **unidades por embalagem** e a vinculação de um ou mais códigos unitários existentes, pesquisáveis por código/descrição. A busca serve apenas para adicionar vínculos: após vinculá-los, seus campos podem ficar vazios ao salvar. A API recebe `unitsPerPackage` e `unitProductIds`; o filtro `defaultUnit=UN` restringe a busca às opções unitárias. As opções e o fator também aparecem nos detalhes. Valores antigos são preservados; configurações ausentes não são presumidas.
 
 A consulta de produtos aceita `searchField=code|name` quando a interface precisa restringir as sugestões a um campo. Sem esse parâmetro, a busca geral continua considerando código e descrição.
 

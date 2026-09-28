@@ -40,6 +40,7 @@ import { ShipmentLifecyclePublicCodes1790208000000 } from './migrations/17902080
 import { ShipmentSenderCancellation1790294400000 } from './migrations/1790294400000-shipment-sender-cancellation';
 import { ProductManagementAllRoles1790380800000 } from './migrations/1790380800000-product-management-all-roles';
 import { MultipleShipmentPhotos1790467200000 } from './migrations/1790467200000-multiple-shipment-photos';
+import { AreaAdministrators1790553600000 } from './migrations/1790553600000-area-administrators';
 import { ReviewDestinationEntity } from '../modules/settings/review-destination.entity';
 
 export const databaseEntities = [
@@ -87,6 +88,7 @@ export const databaseMigrations = [
   ShipmentSenderCancellation1790294400000,
   ProductManagementAllRoles1790380800000,
   MultipleShipmentPhotos1790467200000,
+  AreaAdministrators1790553600000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {

@@ -42,6 +42,7 @@ export function HistoryPage({ user, initialMovementId, success, onOpenShipment, 
   onOpenShipment: (id: string) => void; onOpenPcp: (id: string) => void;
 }) {
   const [filters, setFilters] = useState({ ...initialFilters });
+  const [searchInput, setSearchInput] = useState('');
   const [page, setPage] = useState(1);
   const [result, setResult] = useState<Paginated<HistoryItem> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,6 +53,16 @@ export function HistoryPage({ user, initialMovementId, success, onOpenShipment, 
   const [cancelSuccess, setCancelSuccess] = useState('');
   const pcp = user.sector === 'PCP';
   const canCancel = user.roles.includes('ADMIN') && user.permissions.includes('movements.cancel');
+
+  useEffect(() => {
+    if (searchInput === filters.search) return;
+    const timer = window.setTimeout(() => {
+      setFilters((current) => ({ ...current, search: searchInput }));
+      setPage(1);
+      setLoading(true);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchInput, filters.search]);
 
   useEffect(() => {
     let active = true;
@@ -71,7 +82,7 @@ export function HistoryPage({ user, initialMovementId, success, onOpenShipment, 
   const update = (key: keyof typeof filters, value: string) => {
     setFilters((current) => ({ ...current, [key]: value })); setPage(1); setLoading(true);
   };
-  const clear = () => { setFilters({ ...initialFilters }); setPage(1); setLoading(true); };
+  const clear = () => { setSearchInput(''); setFilters({ ...initialFilters }); setPage(1); setLoading(true); };
   const activeFilters = Object.entries(filters).filter(([key, value]) => value && value !== 'ALL' && !(key === 'sort' && value === 'RECENT')).length;
 
   return <>
@@ -86,7 +97,7 @@ export function HistoryPage({ user, initialMovementId, success, onOpenShipment, 
       {!pcp && <label>Sentido<select value={filters.direction} onChange={(event) => update('direction', event.target.value)}><option value="ALL">Entradas, saídas e internos</option><option value="INCOMING">Entradas para meu setor</option><option value="OUTGOING">Saídas do meu setor</option>{user.sector === 'REVISAO' && <option value="INTERNAL">Movimentos internos</option>}</select></label>}
       <label>De<input type="date" value={filters.dateFrom} onChange={(event) => update('dateFrom', event.target.value)} /></label>
       <label>Até<input type="date" value={filters.dateTo} onChange={(event) => update('dateTo', event.target.value)} /></label>
-      <label>Buscar código ou produto<input type="search" maxLength={100} placeholder="ENT-000153, código ou nome" value={filters.search} onChange={(event) => update('search', event.target.value)} /></label>
+      <label>Buscar código ou produto<input type="search" maxLength={100} placeholder="ENT-000153, código ou nome" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></label>
       <label>Ordenar<select value={filters.sort} onChange={(event) => update('sort', event.target.value)}><option value="RECENT">Mais recentes</option><option value="OLDEST">Mais antigas</option></select></label>
     </div>{activeFilters > 0 && <button className="text-button" onClick={clear}>Limpar filtros</button>}</FilterPanel>
     {loading ? <LoadingState label="Carregando histórico" /> : !result?.items.length ? <EmptyState title="Nenhum registro encontrado" description="Ajuste ou limpe os filtros para ver outras movimentações." action={activeFilters ? <button className="secondary" onClick={clear}>Limpar filtros</button> : undefined} /> : <>

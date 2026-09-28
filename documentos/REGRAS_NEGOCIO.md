@@ -16,6 +16,7 @@ Este documento consolida o comportamento funcional vigente. Regras históricas s
 ## Administração de usuários
 
 - O perfil `REVISAO` (Revisão operacional) pertence ao setor Revisão e permite solicitações, revisão, transferência interna, consultas e gestão de produtos. Não concede administração de usuários nem escrita nos demais cadastros mestres.
+- `ADMIN_REVISAO_EXPEDICAO` opera nos modos Revisão e Expedição; `ADMIN_PRODUCAO_PCP` opera nos modos Produção e PCP. Cada modo mantém exatamente as permissões e o escopo operacional existentes, inclusive a leitura transversal da fila no PCP. Esses perfis não acumulam ações exclusivas do `ADMIN` geral e devem ser atribuídos isoladamente, com setor inicial pertencente ao respectivo par.
 - Todos os perfis podem cadastrar, editar, inativar e reativar produtos. Excluir um produto significa inativá-lo, preservando saldos, vínculos, histórico e auditoria. O log de alterações dos produtos é consultável somente por `ADMIN` no modo `ADMIN`.
 - Entrada e saída externas diretas, cancelamento/estorno de qualquer movimentação (inclusive revisão) e ativação/inativação de conversões e locais exigem `ADMIN`, além das permissões e restrições de setor existentes. Solicitações de envio/recebimento continuam disponíveis aos operadores autorizados.
 - Não há exclusão física de movimentações ou revisões. Administradores utilizam cancelamento com estorno, sujeito às validações já existentes; cadastros utilizam inativação. Vincular `ADMIN` a uma conta concede acesso administrativo mesmo se ela também possuir `REVISAO`.
@@ -26,7 +27,7 @@ Este documento consolida o comportamento funcional vigente. Regras históricas s
 - Excluir significa inativar a conta, encerrar suas sessões e preservar os vínculos com histórico/auditoria. Contas inativas permanecem consultáveis e podem ser reativadas.
 - Alterar uma conta encerra suas sessões anteriores. Ao editar a própria conta, o administrador precisa entrar novamente.
 - Não é permitido inativar a própria conta nem remover seu acesso administrativo. O último administrador ativo é preservado, inclusive sob alterações concorrentes.
-- Administradores pertencem ao setor Revisão e iniciam no modo `ADMIN`, que concentra o acesso completo. Ao selecionar Revisão, Produção, Expedição ou PCP, passam a obedecer exatamente ao escopo operacional do perfil escolhido, sem carregar ações exclusivas de administrador.
+- O `ADMIN` geral pertence ao setor Revisão e inicia no modo `ADMIN`, que concentra o acesso completo. Ao selecionar Revisão, Produção, Expedição ou PCP, obedece ao escopo operacional escolhido. Administradores de área iniciam no setor cadastrado e só podem alternar entre seus dois modos; a identidade real permanece na auditoria.
 - Alterações e auditoria são atômicas e nunca registram senhas ou hashes.
 
 ## Produtos e conversões
@@ -118,7 +119,7 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 - A soma das distribuições continua obrigatoriamente igual à quantidade revisada; a configuração dinâmica não flexibiliza essa invariante.
 
 - Usuários possuem setor `REVISAO`, `PRODUCAO`, `EXPEDICAO` ou `PCP`. O setor atribuído vem da sessão validada no banco, nunca de um campo operacional comum. PCP é um setor administrativo e não participa como origem ou destino de envios de mercadoria.
-- Somente usuários com função `ADMIN` podem alternar temporariamente entre o modo completo `ADMIN` e os modos Revisão, Produção, Expedição e PCP. O modo escolhido vale por requisição, aplica todas as restrições do perfil selecionado e não altera o setor cadastrado nem a identidade registrada em histórico e auditoria. Cabeçalhos de alternância enviados por não administradores ou com valor inválido são rejeitados.
+- Somente o `ADMIN` geral pode acessar o modo completo `ADMIN`. Administradores de área alternam apenas entre os dois setores de seu perfil. O modo escolhido vale por requisição, aplica todas as restrições operacionais do setor e não altera o setor cadastrado nem a identidade registrada em histórico e auditoria. Cabeçalhos de alternância fora dos modos atribuídos são rejeitados.
 - Produção/Expedição enviam somente para Revisão e decidem somente recebimentos destinados ao próprio setor. Não acessam operações, saldos ou relatórios internos da Revisão.
 - Revisão envia para Produção/Expedição e decide os envios desses setores. Permissões `shipments.read/create/decide` complementam a validação do setor.
 - Um envio tem vários itens e nasce `AGUARDANDO_RECEBIMENTO`. Os itens não são editáveis depois do envio. Somente o destinatário pode decidir uma única vez: `CONFIRMADO` ou `RECUSADO`; recusa exige motivo de até 1000 caracteres.

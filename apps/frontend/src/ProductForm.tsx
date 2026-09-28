@@ -46,17 +46,17 @@ export function ProductForm({ product, busy, onSave, onCancel }: {
     </select></label>
     <label>Prazo padrão de validade (anos) *<input name="shelfLifeYears" type="number" min="1" step="1" defaultValue={product?.shelfLifeYears ?? ''} required disabled={busy} /><small>Sugere a validade de novas operações. Não altera o histórico.</small></label>
     {unit === 'UN' && <label>Gramatura da unidade (g) *<input name="unitWeightGrams" type="number" inputMode="numeric" min="1" max="2147483647" step="1" defaultValue={product?.unitWeightGrams ?? ''} required disabled={busy} /><small>Peso, em gramas, de uma unidade deste código.</small></label>}
-    {packaging && <fieldset className="operational-lot wide" disabled={busy}>
+    {packaging && <fieldset className="operational-lot product-packaging wide" disabled={busy}>
       <legend>Conteúdo do fardo/caixa</legend>
       <label>Unidades por embalagem *<input name="unitsPerPackage" type="number" min="1" max="2147483647" step="1" defaultValue={product?.unitsPerPackage ?? ''} required /></label>
       <p>Vincule os produtos unitários possíveis. Na revisão será escolhido um único código por item.</p>
-      <ProductAutocomplete key={searchKey} defaultUnit="UN" onChange={setSelected} />
+      <ProductAutocomplete key={searchKey} defaultUnit="UN" required={false} legend="Produto unitário para vincular" onChange={setSelected} />
       <button className="secondary" type="button" disabled={!selected || options.some((option) => option.id === selected.id)} onClick={() => {
         if (!selected) return;
         setOptions([...options, selected]); setSelected(null); setSearchKey((value) => value + 1);
       }}>Vincular código unitário</button>
       {!options.length && <p>Cadastre primeiro um produto Unidade (UN) e vincule ao menos uma opção.</p>}
-      <ul className="packaging-options">{options.map((option) => <li key={option.id}><span>{option.code} — {option.name}{!option.active && ' (inativo)'}</span><button type="button" className="secondary" onClick={() => setOptions(options.filter((item) => item.id !== option.id))}>Remover vínculo</button></li>)}</ul>
+      {options.length > 0 && <><p className="packaging-options-title">Códigos vinculados ({options.length})</p><ul className="packaging-options">{options.map((option) => <li key={option.id}><span>{option.code} — {option.name}{!option.active && ' (inativo)'}</span><button type="button" className="secondary" onClick={() => setOptions(options.filter((item) => item.id !== option.id))}>Remover vínculo</button></li>)}</ul></>}
     </fieldset>}
     <div className="form-actions wide"><button type="button" className="secondary" disabled={busy} onClick={onCancel}>Voltar</button><button disabled={busy || Boolean(duplicate) || (packaging && !options.length)}>{busy ? 'Salvando...' : 'Salvar produto'}</button></div>
   </form>;

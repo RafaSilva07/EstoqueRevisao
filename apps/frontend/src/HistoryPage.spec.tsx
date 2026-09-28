@@ -50,4 +50,21 @@ describe('Histórico unificado', () => {
     await act(async () => { direction.value = 'INCOMING'; direction.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
     expect(requestedPaths.some((path) => path.includes('direction=INCOMING'))).toBe(true);
   });
+
+  it('aguarda a digitação terminar antes de consultar por código ou produto', async () => {
+    await act(async () => { root.render(<HistoryPage user={user} onOpenShipment={vi.fn()} onOpenPcp={vi.fn()} />); await Promise.resolve(); });
+    const search = host.querySelector<HTMLInputElement>('input[type="search"]')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(search, 'ENT');
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(search, 'ENT-000152');
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(requestedPaths.filter((path) => path.startsWith('/history?'))).toHaveLength(1);
+    await act(async () => { await new Promise((resolve) => window.setTimeout(resolve, 350)); });
+    const historyPaths = requestedPaths.filter((path) => path.startsWith('/history?'));
+    expect(historyPaths).toHaveLength(2);
+    expect(historyPaths[1]).toContain('search=ENT-000152');
+  });
 });

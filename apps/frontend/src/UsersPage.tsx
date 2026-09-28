@@ -44,10 +44,15 @@ export function UsersPage({ currentUserId, onOwnUpdate }: { currentUserId: strin
     if (submitting.current) return;
     const form = new FormData(event.currentTarget);
     const roleCodes = form.getAll('roleCodes').map(String);
+    const sector = form.get('sector');
     if (!roleCodes.length) { setError('Selecione ao menos um perfil.'); return; }
+    const areaRole = roleCodes.find((code) => code === 'ADMIN_REVISAO_EXPEDICAO' || code === 'ADMIN_PRODUCAO_PCP');
+    if (areaRole && roleCodes.length !== 1) { setError('O administrador de área deve utilizar apenas seu perfil administrativo.'); return; }
+    if (areaRole === 'ADMIN_REVISAO_EXPEDICAO' && sector !== 'REVISAO' && sector !== 'EXPEDICAO') { setError('Selecione Revisão ou Expedição como setor inicial.'); return; }
+    if (areaRole === 'ADMIN_PRODUCAO_PCP' && sector !== 'PRODUCAO' && sector !== 'PCP') { setError('Selecione Produção ou PCP como setor inicial.'); return; }
     if (roleCodes.includes('REVISAO') && form.get('sector') !== 'REVISAO') { setError('O perfil Revisão operacional deve pertencer ao setor Revisão.'); return; }
     if (roleCodes.includes('PCP') && roleCodes.length > 1) { setError('O perfil PCP deve ser usado sozinho.'); return; }
-    if (roleCodes.includes('PCP') !== (form.get('sector') === 'PCP')) { setError('O setor PCP deve utilizar exclusivamente o perfil PCP.'); return; }
+    if ((roleCodes.includes('PCP') && sector !== 'PCP') || (sector === 'PCP' && !roleCodes.includes('PCP') && areaRole !== 'ADMIN_PRODUCAO_PCP')) { setError('O setor PCP exige o perfil PCP ou Admin Produção e PCP.'); return; }
     submitting.current = true; setBusy(true); setError('');
     try {
       const password = form.get('password') as string;
@@ -98,8 +103,8 @@ export function UsersPage({ currentUserId, onOwnUpdate }: { currentUserId: strin
       <form className="form-grid" onSubmit={(event) => void save(event)}>
         <label>Login<input name="username" required maxLength={100} defaultValue={editing?.username} autoComplete="off" disabled={busy} /></label>
         <label>{editing ? 'Nova senha (opcional)' : 'Senha'}<input name="password" type="password" required={!editing} minLength={8} maxLength={128} autoComplete="new-password" disabled={busy} /><small>De 8 a 128 caracteres.{editing && ' Deixe em branco para manter a atual.'}</small></label>
-        <label>Setor<select name="sector" defaultValue={editing?.sector ?? 'REVISAO'} disabled={busy}>{Object.entries(sectorLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><small>Administradores pertencem à Revisão e podem alternar o modo operacional.</small></label>
-        <fieldset className="user-roles" disabled={busy}><legend>Perfis de acesso</legend>{roles.map((role) => <label key={role.code}><input type="checkbox" name="roleCodes" value={role.code} defaultChecked={editing?.roles.some((assigned) => assigned.code === role.code)} />{role.name}</label>)}<small>Revisão operacional permite solicitações, revisão, transferência e consultas. Entrada/saída direta, cancelamentos, inativação de cadastros e usuários exigem Administrador. Para acesso operacional, não marque Administrador junto.</small><small>O setor PCP utiliza exclusivamente o perfil PCP, com leitura global e execução administrativa.</small></fieldset>
+        <label>Setor inicial<select name="sector" defaultValue={editing?.sector ?? 'REVISAO'} disabled={busy}>{Object.entries(sectorLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><small>Admin geral inicia na Revisão; administradores de área escolhem um dos seus setores.</small></label>
+        <fieldset className="user-roles" disabled={busy}><legend>Perfis de acesso</legend>{roles.map((role) => <label key={role.code}><input type="checkbox" name="roleCodes" value={role.code} defaultChecked={editing?.roles.some((assigned) => assigned.code === role.code)} />{role.name}</label>)}<small>Escolha somente um perfil para novos administradores de área. Admin geral é o único que gerencia usuários e mantém as demais ações administrativas atuais.</small><small>O perfil PCP operacional deve ser usado sozinho e no setor PCP.</small></fieldset>
         {editing && <label>Status<select name="status" defaultValue={editing.status} disabled={busy}><option value="ACTIVE">Ativo</option><option value="INACTIVE">Inativo</option></select></label>}
         <div className="dialog-actions"><button type="button" className="secondary" disabled={busy} onClick={() => setEditing(undefined)}>Voltar</button><button disabled={busy}>{busy ? 'Salvando...' : 'Salvar usuário'}</button></div>
       </form>

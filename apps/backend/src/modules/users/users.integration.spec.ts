@@ -77,6 +77,18 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     await expect(service.create({ ...input('pcp-sem-perfil'), sector: 'PCP', roleCodes: ['PRODUCAO'] }, actor, metadata())).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('cria administradores de área somente no setor permitido e sem gestão de usuários', async () => {
+    const review = await service.create({ ...input('admin-review'), sector: 'REVISAO', roleCodes: ['ADMIN_REVISAO_EXPEDICAO'] }, actor, metadata());
+    const production = await service.create({ ...input('admin-production'), roleCodes: ['ADMIN_PRODUCAO_PCP'] }, actor, metadata());
+    const pcp = await service.create({ ...input('admin-pcp'), sector: 'PCP', roleCodes: ['ADMIN_PRODUCAO_PCP'] }, actor, metadata());
+    expect(review.roles.map((role) => role.code)).toEqual(['ADMIN_REVISAO_EXPEDICAO']);
+    expect(production.roles.map((role) => role.code)).toEqual(['ADMIN_PRODUCAO_PCP']);
+    expect(pcp.sector).toBe('PCP');
+    await expect(service.create(input('not-general'), review.id, metadata())).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.create({ ...input('wrong-area'), sector: 'REVISAO', roleCodes: ['ADMIN_PRODUCAO_PCP'] }, actor, metadata())).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.create({ ...input('mixed-area'), roleCodes: ['ADMIN_PRODUCAO_PCP', 'PCP'] }, actor, metadata())).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('edita credenciais/perfil, revoga sessões, inativa preservando registro e permite reativar', async () => {
     const created = await service.create(input(), actor, metadata());
     const session = Object.assign(new AuthSessionEntity(), { userId: created.id, refreshTokenHash: 'a'.repeat(64), expiresAt: new Date(Date.now() + 60000) });

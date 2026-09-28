@@ -43,4 +43,16 @@ describe('Permissões por setor', () => {
     expect(() => check('PRODUCAO', ['shipments.read'], ['shipments.read'], ['PRODUCAO'], 'REVISAO')).toThrow(ForbiddenException);
     expect(() => check('REVISAO', ['shipments.read'], ['shipments.read'], ['ADMIN'], 'INVALIDO')).toThrow(BadRequestException);
   });
+
+  it('restringe administradores de área aos setores atribuídos, sem modo Admin', () => {
+    const permissions = ['shipments.create', 'movements.create', 'pcp.movements.execute'];
+    expect(check('REVISAO', ['movements.create'], permissions, ['ADMIN_REVISAO_EXPEDICAO'], 'REVISAO')).toBe(true);
+    expect(check('REVISAO', ['shipments.create'], permissions, ['ADMIN_REVISAO_EXPEDICAO'], 'EXPEDICAO')).toBe(true);
+    expect(() => check('REVISAO', ['shipments.create'], permissions, ['ADMIN_REVISAO_EXPEDICAO'], 'PRODUCAO')).toThrow(ForbiddenException);
+    expect(() => check('REVISAO', ['shipments.create'], permissions, ['ADMIN_REVISAO_EXPEDICAO'], 'ADMIN')).toThrow(ForbiddenException);
+    expect(check('PRODUCAO', ['shipments.create'], permissions, ['ADMIN_PRODUCAO_PCP'], 'PRODUCAO')).toBe(true);
+    expect(check('PRODUCAO', ['pcp.movements.execute'], permissions, ['ADMIN_PRODUCAO_PCP'], 'PCP')).toBe(true);
+    expect(() => check('PRODUCAO', ['movements.create'], permissions, ['ADMIN_PRODUCAO_PCP'], 'REVISAO')).toThrow(ForbiddenException);
+    expect(() => check('PRODUCAO', ['shipments.create'], permissions, ['ADMIN_PRODUCAO_PCP'], 'ADMIN')).toThrow(ForbiddenException);
+  });
 });

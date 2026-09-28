@@ -169,3 +169,7 @@ O administrador passou a definir mínimo e máximo de fotos por item. Envios com
 ## Etapa 49 — Visibilidade da entrada líquida na separação
 
 A movimentação da diferença recebida já era gravada, mas ficava oculta pela unificação do histórico. O detalhe passou a exibir os itens creditados e o histórico da Revisão passou a mostrar entrada líquida e retorno como dois registros com referência ao envio original. Foi acrescentado filtro de sentido relativo ao setor, sem alterar saldos. Resumo em [relatórios/RELATORIO_ETAPA_49_ENTRADA_LIQUIDA_SEPARACAO.md](./relatorios/RELATORIO_ETAPA_49_ENTRADA_LIQUIDA_SEPARACAO.md).
+
+## Administradores de área
+
+Dois perfis novos permitem alternar entre Revisão/Expedição ou Produção/PCP sem ampliar as ações de cada modo. O `ADMIN` anterior continua como administrador geral e único gestor de usuários. Migration aditiva; contas existentes não são reclassificadas.
