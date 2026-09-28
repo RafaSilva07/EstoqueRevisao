@@ -59,9 +59,9 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
   beforeEach(async () => {
     jest.restoreAllMocks();
     await db.query('TRUNCATE audit_logs, products, movements, shipments, stock_positions CASCADE');
-    unit = await products.create({ code: 'UN-A', name: 'Produto unitário A', defaultUnit: 'UN', unitWeightGrams: 350, shelfLifeYears: 3 }, userId, meta());
-    alternative = await products.create({ code: 'UN-B', name: 'Produto unitário B', defaultUnit: 'UN', unitWeightGrams: 500, shelfLifeYears: 3 }, userId, meta());
-    pack = await products.create({ code: 'CX-A', name: 'Caixa A', defaultUnit: 'CX', shelfLifeYears: 3, unitsPerPackage: 12, unitProductIds: [unit.id, alternative.id] }, userId, meta());
+    unit = await products.create({ code: '100001', name: 'Produto unitário A', defaultUnit: 'UN', unitWeightGrams: 350, shelfLifeYears: 3 }, userId, meta());
+    alternative = await products.create({ code: '100002', name: 'Produto unitário B', defaultUnit: 'UN', unitWeightGrams: 500, shelfLifeYears: 3 }, userId, meta());
+    pack = await products.create({ code: '200001', name: 'Caixa A', defaultUnit: 'CX', shelfLifeYears: 3, unitsPerPackage: 12, unitProductIds: [unit.id, alternative.id] }, userId, meta());
     const entry = await movements.createExternalEntry({ requestKey: randomUUID(), originLocationId: external, destinationLocationId: source, items: [{ productId: pack.id, lot, quantity: 20 }] }, userId, meta());
     batch = entry.items[0].batch;
   });
@@ -79,15 +79,15 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     for (const [location, quantity] of [[lata,80],[varejo,30],[tuf,10]] as const) expect(await balance(unit.id, item.outputBatchId!, location)).toBe(quantity);
     const report = await reports.reviews({ page: 1, limit: 20, productId: unit.id });
     expect(report.totals.reviewedQuantityByUnit).toEqual([{ unit: 'UN', quantity: 120 }]);
-    expect(report.items).toHaveLength(3); expect(report.items[0]).toMatchObject({ productCode: 'UN-A', unit: 'UN', batchId: item.outputBatchId });
+    expect(report.items).toHaveLength(3); expect(report.items[0]).toMatchObject({ productCode: '100001', unit: 'UN', batchId: item.outputBatchId });
     const history = await reports.movements({ page: 1, limit: 20, productId: unit.id });
-    expect(history.items[0]).toMatchObject({ quantity: 10, unit: 'CX', outputQuantity: 120, outputProductCode: 'UN-A' });
+    expect(history.items[0]).toMatchObject({ quantity: 10, unit: 'CX', outputQuantity: 120, outputProductCode: '100001' });
   });
 
   it('seleciona a segunda opção e impede códigos não vinculados, ausentes ou embalagens', async () => {
     const result = await movements.createReview(review(alternative.id), userId, meta());
     expect(result.items[0].outputProductId).toBe(alternative.id);
-    const other = await products.create({ code: 'UN-C', name: 'Outro', defaultUnit: 'UN', unitWeightGrams: 250, shelfLifeYears: 3 }, userId, meta());
+    const other = await products.create({ code: '100003', name: 'Outro', defaultUnit: 'UN', unitWeightGrams: 250, shelfLifeYears: 3 }, userId, meta());
     for (const id of [other.id, pack.id, undefined]) {
       const dto = review(); dto.items[0].outputProductId = id;
       await expect(movements.createReview(dto, userId, meta())).rejects.toBeInstanceOf(BadRequestException);
@@ -149,7 +149,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
   });
 
   it('valida cadastro, vínculos e protege unidade/fator de produtos já utilizados', async () => {
-    await expect(products.create({ code: 'BAD', name: 'Sem conteúdo', defaultUnit: 'FD', shelfLifeYears: 3 }, userId, meta())).rejects.toBeInstanceOf(BadRequestException);
+    await expect(products.create({ code: '200002', name: 'Sem conteúdo', defaultUnit: 'FD', shelfLifeYears: 3 }, userId, meta())).rejects.toBeInstanceOf(BadRequestException);
     await expect(products.update(pack.id, { unitsPerPackage: 24 }, userId, meta())).rejects.toBeInstanceOf(ConflictException);
     await expect(products.update(unit.id, { defaultUnit: 'CX', unitsPerPackage: 6, unitProductIds: [alternative.id] }, userId, meta())).rejects.toBeInstanceOf(ConflictException);
     await expect(products.update(pack.id, { unitProductIds: [pack.id] }, userId, meta())).rejects.toBeInstanceOf(BadRequestException);

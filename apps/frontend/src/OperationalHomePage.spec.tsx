@@ -14,9 +14,15 @@ const movement = {
   pcpExecutionStatus: 'PENDENTE', requiresPcpExecution: true, occurredAt: '2026-09-01T12:00:00Z',
   originLocation: { name: 'Expedição' }, destinationLocation: { name: 'Revisar' }, responsibleUser: { username: 'Operador' }, items: [],
 } as unknown as Movement;
-const finished = { id: 'movement-2', kind: 'MOVEMENT', code: 'REV-000154', type: 'REVISAO',
+const open = { id: 'shipment-item-1', groupId: 'shipment-1', recordId: 'shipment-item-1', kind: 'SHIPMENT', code: 'ENT-000152-A', groupCode: 'ENT-000152', type: 'ENVIO',
+  origin: 'Expedição', destination: 'Revisão', responsible: 'Expedição', occurredAt: '2026-09-01T12:00:00Z',
+  status: 'AGUARDANDO_RECEBIMENTO', scope: 'OPEN', productName: 'Produto teste', batchCode: 'COCINV', quantity: 10, productUnit: 'UN' };
+const pending = { id: 'record-1', groupId: 'movement-1', recordId: 'record-1', kind: 'MOVEMENT', code: 'ENT-000153-A', groupCode: 'ENT-000153', type: 'ENTRADA_EXTERNA',
+  origin: 'Expedição', destination: 'Revisar', responsible: 'Operador', occurredAt: '2026-09-01T12:00:00Z',
+  status: 'EFETIVADA', scope: 'PENDING_PCP', productName: 'Produto teste', batchCode: 'COCINV', quantity: 10, productUnit: 'UN', pcpExecutionStatus: 'PENDENTE' };
+const finished = { id: 'record-2', groupId: 'movement-2', recordId: 'record-2', kind: 'MOVEMENT', code: 'REV-000154-A', groupCode: 'REV-000154', type: 'REVISAO',
   origin: 'Revisar', destination: 'Lata Boa', responsible: 'Operador', occurredAt: '2026-09-01T11:00:00Z',
-  status: 'EFETIVADA', scope: 'DONE', itemCount: 1 };
+  status: 'EFETIVADA', scope: 'DONE', itemCount: 1, productName: 'Produto revisado', batchCode: 'COCINV', quantity: 5, productUnit: 'UN' };
 const user: UserSession = { id: 'u', username: 'Operador', sector: 'REVISAO', roles: ['REVISAO'], permissions: ['shipments.read', 'shipments.decide', 'movements.read'] };
 let host: HTMLDivElement; let root: Root;
 const navigate = vi.fn(); const onOpenRecord = vi.fn();
@@ -33,6 +39,9 @@ describe('Resumo operacional da Home', () => {
     host = document.createElement('div'); document.body.append(host); root = createRoot(host);
     vi.spyOn(api, 'get').mockImplementation(async (path) => { await Promise.resolve();
       if (path === '/shipments/shipment-1') return shipment;
+      if (path === '/movements/movement-1') return movement;
+      if (path.startsWith('/history?scope=OPEN')) return result([open]);
+      if (path.startsWith('/history?scope=PENDING_PCP')) return result([pending]);
       if (path.startsWith('/history?scope=DONE')) return result([finished]);
       if (path.startsWith('/shipments')) return result([shipment]);
       if (path === '/pcp/movements/movement-1') return { ...movement, shipmentEvidence: [] };
@@ -48,7 +57,7 @@ describe('Resumo operacional da Home', () => {
     expect(host.querySelector('[role="dialog"]')?.textContent).toContain('ENT-000153');
     expect(navigate).not.toHaveBeenCalled();
     await click('Ver detalhes completos');
-    expect(onOpenRecord).toHaveBeenCalledWith('movements', 'movement-1');
+    expect(onOpenRecord).toHaveBeenCalledWith('history', 'movement-1', 'record-1');
     expect(host.querySelector('[role="dialog"]')).toBeNull();
   });
   it('abre envio com aceite autorizado e fecha com ESC', async () => { await Promise.resolve();
@@ -70,8 +79,8 @@ describe('Resumo operacional da Home', () => {
   it('consulta resumo PCP e encaminha execução para a tela existente', async () => { await Promise.resolve();
     await act(async () => { root.render(<OperationalHomePage user={{ ...user, sector: 'PCP', permissions: ['pcp.movements.read', 'pcp.movements.execute'] }} navigate={navigate} onOpenRecord={onOpenRecord} />); await Promise.resolve(); });
     await click('Entrada externa');
-    await click('Marcar como executada');
-    expect(onOpenRecord).toHaveBeenCalledWith('pcp-all', 'movement-1');
+    await click('Executar registro no PCP');
+    expect(onOpenRecord).toHaveBeenCalledWith('pcp-all', 'record-1');
   });
   it('carrega fotos privadas no resumo e permite ampliar', async () => {
     const getPhoto = vi.spyOn(api, 'getBlob').mockResolvedValue(new Blob(['photo'], { type: 'image/jpeg' }));
@@ -79,12 +88,12 @@ describe('Resumo operacional da Home', () => {
     Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
     const originalGet = api.get.bind(api);
     vi.spyOn(api, 'get').mockImplementation(async (path) => {
-      if (path === '/shipments/shipment-1') return { ...shipment, items: [{ id: 'item-1', quantity: 10, productSnapshot: { code: 'P1', name: 'Produto teste', defaultUnit: 'UN' }, batch: { code: 'COCINV', manufacturingDate: '2026-09-01', expirationDate: '2027-09-01' }, photoMimeType: 'image/jpeg' }] };
+      if (path === '/shipments/shipment-1') return { ...shipment, items: [{ id: 'shipment-item-1', codigoRegistro: 'ENT-000152-A', quantity: 10, productSnapshot: { code: 'P1', name: 'Produto teste', defaultUnit: 'UN' }, batch: { code: 'COCINV', manufacturingDate: '2026-09-01', expirationDate: '2027-09-01' }, photoMimeType: 'image/jpeg' }] };
       return await originalGet(path);
     });
     await act(async () => { root.render(<OperationalHomePage user={user} navigate={navigate} onOpenRecord={onOpenRecord} />); await Promise.resolve(); });
     await click('Expedição → Revisão');
-    expect(getPhoto).toHaveBeenCalledWith('/shipments/shipment-1/items/item-1/photo');
+    expect(getPhoto).toHaveBeenCalledWith('/shipments/shipment-1/items/shipment-item-1/photo');
     expect(host.querySelector('img')?.getAttribute('src')).toBe('blob:test-photo');
     expect(host.textContent).toContain('Produto teste');
     await act(async () => { host.querySelector('img')!.closest('button')!.click(); await Promise.resolve(); });

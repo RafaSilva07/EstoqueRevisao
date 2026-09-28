@@ -14,6 +14,15 @@ export class PcpMovementsController {
   @Get() @RequirePermissions('pcp.movements.read')
   list(@Query() query: PcpMovementQueryDto): ReturnType<PcpMovementsService['list']> { return this.service.list(query); }
 
+  @Get('records/:id') @RequirePermissions('pcp.movements.read')
+  getRecord(@Param('id', new ParseUUIDPipe()) id: string): ReturnType<PcpMovementsService['getRecord']> { return this.service.getRecord(id); }
+
+  @Post('records/:id/execution') @RequirePermissions('pcp.movements.execute')
+  executeRecord(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: ExecutePcpMovementDto, @Req() request: Request): ReturnType<PcpMovementsService['executeRecord']> {
+    const user = request.user as AuthenticatedUser;
+    return this.service.executeRecord(id, dto, user.id, getAuditRequestMetadata(request));
+  }
+
   @Get(':id') @RequirePermissions('pcp.movements.read')
   get(@Param('id', new ParseUUIDPipe()) id: string): ReturnType<PcpMovementsService['get']> { return this.service.get(id); }
 

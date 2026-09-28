@@ -5,6 +5,7 @@ import { MovementType } from '../../movements/domain/movement-type.enum';
 import { PcpExecutionStatus } from '../domain/pcp-execution-status.enum';
 
 export class PcpMovementQueryDto extends PaginationQueryDto {
+  @IsOptional() @IsIn(['RECORD', 'GROUP']) view?: 'RECORD' | 'GROUP' = 'RECORD';
   @IsOptional() @IsISO8601({ strict: true }) dateFrom?: string;
   @IsOptional() @IsISO8601({ strict: true }) dateTo?: string;
   @IsOptional() @IsIn(['CONCLUIDA', 'CANCELADA']) operationalStatus?: 'CONCLUIDA' | 'CANCELADA';

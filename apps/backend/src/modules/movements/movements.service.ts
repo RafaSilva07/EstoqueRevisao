@@ -23,7 +23,7 @@ import { MovementQueryDto } from './dto/movement-query.dto';
 import { MovementItemEntity } from './entities/movement-item.entity';
 import { MovementItemDistributionEntity } from './entities/movement-item-distribution.entity';
 import { MovementEntity } from './entities/movement.entity';
-import { MovementsRepository } from './movements.repository';
+import { MovementListEntry, MovementsRepository } from './movements.repository';
 import { SettingsService } from '../settings/settings.service';
 
 type EffectiveMovementItem = CreateEffectiveMovementDto['items'][number] & {
@@ -67,9 +67,11 @@ export class MovementsService {
     @Optional() private readonly settings?: SettingsService,
   ) {}
 
-  async list(query: MovementQueryDto): Promise<PaginatedResult<MovementEntity>> {
-    const [items, total] = await this.repository.findAndCount(query);
-    return paginate(items, total, query.page, query.limit);
+  async list(query: MovementQueryDto): Promise<PaginatedResult<MovementListEntry>> {
+    const [items, total] = query.view === 'GROUP'
+      ? await this.repository.findAndCount(query)
+      : await this.repository.findRecordsAndCount(query);
+    return paginate<MovementListEntry>(items, total, query.page, query.limit);
   }
 
   async getById(id: string): Promise<MovementEntity> {

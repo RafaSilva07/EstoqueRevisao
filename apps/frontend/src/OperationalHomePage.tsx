@@ -1,30 +1,21 @@
 import { ReactNode, useEffect, useState } from 'react';
-import { api, Movement, Paginated, PcpMovementSummary, UserSession } from './api';
+import { api, Movement, Paginated, UserSession } from './api';
 import { EmptyState, LoadingState, Notice } from './components';
 import { formatDateTime } from './format';
 import { MovementDetailModal } from './MovementDetailModal';
 import { ShipmentSummaryModal } from './ShipmentSummaryModal';
 import { SectionMenu } from './Navigation';
 import { Page } from './navigation-model';
-import { sectorLabel, Shipment, shipmentStatusLabel } from './shipments';
+import { Shipment, shipmentStatusLabel } from './shipments';
 import { HistoryItem } from './HistoryPage';
 
-type OperationalHomePageProps = { user: UserSession; navigate: (page: Page) => void; onOpenRecord: (page: Page, id: string) => void };
-type MovementSummary = Movement | PcpMovementSummary;
+type OperationalHomePageProps = { user: UserSession; navigate: (page: Page) => void; onOpenRecord: (page: Page, id: string, recordId?: string) => void };
 
 const movementLabels: Record<Movement['type'], string> = {
   ENTRADA_EXTERNA: 'Entrada externa', SAIDA_EXTERNA: 'Saída externa',
   TRANSFERENCIA_INTERNA: 'Transferência interna', REVISAO: 'Revisão',
 };
 
-function movementRoute(movement: MovementSummary) {
-  if (movement.type === 'ENTRADA_EXTERNA') return `Entrada em ${movement.destinationLocation?.name ?? 'estoque'}`;
-  if (movement.type === 'SAIDA_EXTERNA') return `Saída de ${movement.originLocation?.name ?? 'estoque'}`;
-  return `${movement.originLocation?.name ?? 'Origem'} → ${movement.destinationLocation?.name ?? 'múltiplos destinos'}`;
-}
-
-function itemCount(movement: MovementSummary) { return 'itemCount' in movement ? movement.itemCount : movement.items.length; }
-function shipmentRoute(shipment: Shipment) { return `${sectorLabel[shipment.originSector]} → ${sectorLabel[shipment.destinationSector]}`; }
 function PanelHeading({ id, eyebrow, title, action }: { id: string; eyebrow: string; title: string; action?: ReactNode }) {
   return <div className="dashboard-section-heading"><div><span className="eyebrow">{eyebrow}</span><h2 id={id}>{title}</h2></div>{action}</div>;
 }
@@ -34,16 +25,17 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
   const canReadShipments = sector !== 'PCP' && user.permissions.includes('shipments.read');
   const canReadMovements = user.permissions.includes('movements.read');
   const canReadPcp = sector === 'PCP' && user.permissions.includes('pcp.movements.read');
-  const [openShipments, setOpenShipments] = useState<Shipment[]>([]);
+  const [openShipments, setOpenShipments] = useState<HistoryItem[]>([]);
   const [pendingAcceptance, setPendingAcceptance] = useState(0);
   const [inSeparation, setInSeparation] = useState(0);
-  const [pendingPcp, setPendingPcp] = useState<MovementSummary[]>([]);
+  const [pendingPcp, setPendingPcp] = useState<HistoryItem[]>([]);
   const [recentFinished, setRecentFinished] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedMovement, setSelectedMovement] = useState<MovementSummary | null>(null);
+  const [selectedMovement, setSelectedMovement] = useState<HistoryItem | null>(null);
 
   const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
+  const [selectedShipmentRecordId, setSelectedShipmentRecordId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -51,14 +43,12 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
       setLoading(true);
       try {
         const shipmentRequests = canReadShipments ? Promise.all([
-          api.get<Paginated<Shipment>>('/shipments?view=open&page=1&limit=10'),
+          api.get<Paginated<HistoryItem>>('/history?scope=OPEN&kind=SHIPMENT&page=1&limit=10'),
           api.get<Paginated<Shipment>>('/shipments?view=pending&status=AGUARDANDO_RECEBIMENTO&page=1&limit=1'),
           api.get<Paginated<Shipment>>('/shipments?view=open&status=EM_SEPARACAO&page=1&limit=1'),
         ]) : Promise.resolve(null);
-        const movementRequests = canReadMovements ? Promise.all([
-          api.get<Paginated<Movement>>('/movements?status=EFETIVADA&pcpStatus=PENDENTE&page=1&limit=5'),
-        ]) : canReadPcp ? Promise.all([
-          api.get<Paginated<PcpMovementSummary>>('/pcp/movements?operationalStatus=CONCLUIDA&pcpStatus=PENDENTE&sort=ASC&page=1&limit=5'),
+        const movementRequests = canReadMovements || canReadPcp ? Promise.all([
+          api.get<Paginated<HistoryItem>>('/history?scope=PENDING_PCP&sort=OLDEST&page=1&limit=5'),
         ]) : Promise.resolve(null);
         const finishedRequest = canReadShipments || canReadMovements || canReadPcp
           ? api.get<Paginated<HistoryItem>>('/history?scope=DONE&page=1&limit=5') : Promise.resolve(null);
@@ -78,8 +68,11 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
     return () => { active = false; };
   }, [canReadMovements, canReadPcp, canReadShipments]);
 
-  function openMovement(movement: MovementSummary) {
-    setSelectedMovement(movement);
+  function openMovement(movement: HistoryItem) {
+    if (movement.kind === 'SHIPMENT') {
+      setSelectedShipmentId(movement.groupId ?? movement.id);
+      setSelectedShipmentRecordId(movement.recordId ?? null);
+    } else setSelectedMovement(movement);
   }
 
   const showAttention = !loading && !error && (pendingAcceptance > 0 || inSeparation > 0);
@@ -98,19 +91,19 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
 
     {!loading && !error && canReadShipments && <section className="surface dashboard-section home-operation-panel" aria-labelledby="open-shipments-title">
       <PanelHeading id="open-shipments-title" eyebrow="Prioridade" title="Envios em aberto" action={<button className="text-button" onClick={() => navigate('shipments')}>Ver envios</button>} />
-      {openShipments.length === 0 ? <EmptyState title="Nenhuma movimentação em aberto" description="Não há envios aguardando aceite, recebimento ou separação neste setor." /> : <div className="home-operation-list">{openShipments.map((shipment) => <button type="button" className="home-operation-card" key={shipment.id} onClick={() => setSelectedShipmentId(shipment.id)}><span className={`badge ${shipment.status === 'EM_SEPARACAO' ? 'pending' : 'warning'}`}>{shipmentStatusLabel[shipment.status]}</span><strong>{shipmentRoute(shipment)}</strong><span>{shipment.items.length} {shipment.items.length === 1 ? 'produto' : 'produtos'} · {shipment.createdBy.username}</span><small>{formatDateTime(shipment.createdAt)} · {shipment.codigoMovimentacao}</small></button>)}</div>}
+      {openShipments.length === 0 ? <EmptyState title="Nenhuma movimentação em aberto" description="Não há envios aguardando aceite, recebimento ou separação neste setor." /> : <div className="home-operation-list">{openShipments.map((item) => <button type="button" className="home-operation-card" key={item.id} onClick={() => openMovement(item)}><span className={`badge ${item.status === 'EM_SEPARACAO' ? 'pending' : 'warning'}`}>{shipmentStatusLabel[item.status as keyof typeof shipmentStatusLabel]}</span><strong>{item.productName ?? 'Produto'} · lote {item.batchCode}</strong><span>{item.origin} → {item.destination} · {item.quantity} {item.productUnit}</span><small>{formatDateTime(item.occurredAt)} · {item.code ?? 'Sem código público'}</small></button>)}</div>}
     </section>}
 
     {!loading && !error && (canReadMovements || canReadPcp) && <section className="surface dashboard-section home-operation-panel" aria-labelledby="pending-pcp-title">
       <PanelHeading id="pending-pcp-title" eyebrow="PCP" title="Concluídas no estoque · aguardando PCP" action={<button className="text-button" onClick={() => navigate(canReadPcp ? 'pcp' : 'history')}>Ver todas</button>} />
-      {pendingPcp.length === 0 ? <EmptyState title="Nenhuma movimentação aguardando o PCP" description="As movimentações concluídas pendentes de execução aparecerão aqui." /> : <div className="home-operation-list">{pendingPcp.map((movement) => <button type="button" className="home-operation-card" key={movement.id} onClick={() => openMovement(movement)}><span className="badge pending">PCP pendente</span><strong>{movementLabels[movement.type]}</strong><span>{movementRoute(movement)} · {itemCount(movement)} {itemCount(movement) === 1 ? 'item' : 'itens'}</span><small>{formatDateTime(movement.occurredAt)} · {movement.codigoMovimentacao ?? 'Sem código público'}</small></button>)}</div>}
+      {pendingPcp.length === 0 ? <EmptyState title="Nenhuma movimentação aguardando o PCP" description="As movimentações concluídas pendentes de execução aparecerão aqui." /> : <div className="home-operation-list">{pendingPcp.map((item) => <button type="button" className="home-operation-card" key={item.id} onClick={() => openMovement(item)}><span className="badge pending">PCP pendente</span><strong>{movementLabels[item.type as Movement['type']] ?? item.type} · {item.productName ?? 'Produto'} · lote {item.batchCode}</strong><span>{item.origin} → {item.destination} · {item.quantity} {item.productUnit}</span><small>{formatDateTime(item.occurredAt)} · {item.code ?? 'Sem código público'}</small></button>)}</div>}
     </section>}
 
     {!loading && !error && (canReadShipments || canReadMovements || canReadPcp) && <section className="surface dashboard-section home-operation-panel" aria-labelledby="recent-finished-title">
       <PanelHeading id="recent-finished-title" eyebrow="Histórico" title="Últimas movimentações finalizadas" action={<button className="text-button" onClick={() => navigate('history')}>Ver histórico</button>} />
-      {recentFinished.length === 0 ? <EmptyState title="Nenhuma movimentação finalizada" description="Somente operações sem ação pendente aparecerão aqui." /> : <div className="home-operation-list">{recentFinished.map((item) => <button type="button" className="home-operation-card" key={`${item.kind}:${item.id}`} onClick={() => item.kind === 'SHIPMENT' ? setSelectedShipmentId(item.id) : onOpenRecord(canReadPcp ? 'pcp-all' : 'history', item.id)}><span className="badge active">Finalizada</span><strong>{item.kind === 'SHIPMENT' ? 'Envio entre setores' : movementLabels[item.type as Movement['type']] ?? item.type}</strong><span>{item.origin} → {item.destination} · {item.itemCount} {item.itemCount === 1 ? 'item' : 'itens'}</span><small>{formatDateTime(item.occurredAt)} · {item.code ?? 'Sem código público'}</small></button>)}</div>}
+      {recentFinished.length === 0 ? <EmptyState title="Nenhuma movimentação finalizada" description="Somente operações sem ação pendente aparecerão aqui." /> : <div className="home-operation-list">{recentFinished.map((item) => <button type="button" className="home-operation-card" key={`${item.kind}:${item.id}`} onClick={() => openMovement(item)}><span className="badge active">Finalizada</span><strong>{item.productName ?? (item.kind === 'SHIPMENT' ? 'Envio entre setores' : movementLabels[item.type as Movement['type']] ?? item.type)} · lote {item.batchCode}</strong><span>{item.origin} → {item.destination} · {item.quantity} {item.productUnit}</span><small>{formatDateTime(item.occurredAt)} · {item.code ?? 'Sem código público'}</small></button>)}</div>}
     </section>}
-    {selectedMovement && <MovementDetailModal movementId={selectedMovement.id} initialMovement={'items' in selectedMovement ? selectedMovement : undefined} pcp={canReadPcp} onClose={() => setSelectedMovement(null)}>{(movement) => <button className="button-wide" onClick={() => { setSelectedMovement(null); onOpenRecord(canReadPcp ? 'pcp-all' : 'movements', movement.id); }}>{canReadPcp && user.permissions.includes('pcp.movements.execute') && movement.status === 'EFETIVADA' && movement.requiresPcpExecution && movement.pcpExecutionStatus === 'PENDENTE' ? 'Marcar como executada' : 'Ver detalhes completos'}</button>}</MovementDetailModal>}
-    {selectedShipmentId && <ShipmentSummaryModal id={selectedShipmentId} user={user} onClose={() => setSelectedShipmentId(null)} onOpen={(id) => { setSelectedShipmentId(null); onOpenRecord('shipments', id); }} />}
+    {selectedMovement && <MovementDetailModal movementId={selectedMovement.groupId ?? selectedMovement.id} recordId={selectedMovement.recordId} onSelectRecord={(id) => setSelectedMovement((current) => current ? { ...current, recordId: id } : null)} onViewGroup={() => setSelectedMovement((current) => current ? { ...current, recordId: undefined } : null)} pcp={canReadPcp} onClose={() => setSelectedMovement(null)}>{(movement) => <button className="button-wide" onClick={() => { const recordId = selectedMovement.recordId; setSelectedMovement(null); if (canReadPcp) onOpenRecord('pcp-all', recordId ?? movement.id); else onOpenRecord('history', movement.id, recordId); }}>{canReadPcp && user.permissions.includes('pcp.movements.execute') && movement.status === 'EFETIVADA' && movement.requiresPcpExecution && selectedMovement.pcpExecutionStatus === 'PENDENTE' ? 'Executar registro no PCP' : 'Ver detalhes completos'}</button>}</MovementDetailModal>}
+    {selectedShipmentId && <ShipmentSummaryModal id={selectedShipmentId} user={user} recordId={selectedShipmentRecordId} onSelectRecord={setSelectedShipmentRecordId} onViewGroup={() => setSelectedShipmentRecordId(null)} onClose={() => { setSelectedShipmentId(null); setSelectedShipmentRecordId(null); }} onOpen={(id) => { setSelectedShipmentId(null); onOpenRecord('shipments', id); }} />}
   </section>;
 }

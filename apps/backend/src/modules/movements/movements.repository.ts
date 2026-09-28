@@ -8,6 +8,17 @@ import { MovementEntity } from './entities/movement.entity';
 import { MovementItemDistributionEntity } from './entities/movement-item-distribution.entity';
 import { PcpExecutionStatus } from '../pcp/domain/pcp-execution-status.enum';
 
+export type MovementListEntry = MovementEntity & {
+  recordId?: string;
+  codigoGrupo?: string | null;
+  codigoRegistro?: string | null;
+  product?: ProductEntity;
+  batch?: MovementItemEntity['batch'];
+  quantity?: number;
+  itemCount?: number;
+  executedCount?: number;
+};
+
 @Injectable()
 export class MovementsRepository {
   constructor(
@@ -25,9 +36,10 @@ export class MovementsRepository {
   async saveItems(items: MovementItemEntity[], manager: EntityManager): Promise<MovementItemEntity[]> {
     const products = await manager.getRepository(ProductEntity).findBy({ id: In([...new Set(items.map((item) => item.productId))]) });
     const byId = new Map(products.map((product) => [product.id, product]));
-    for (const item of items) {
+    for (const [index, item] of items.entries()) {
       const product = byId.get(item.productId)!;
       item.productSnapshot ??= { code: product.code, name: product.name, defaultUnit: product.defaultUnit };
+      item.recordOrdinal ??= index + 1;
     }
     return manager.getRepository(MovementItemEntity).save(items);
   }
@@ -71,6 +83,7 @@ export class MovementsRepository {
       .leftJoinAndSelect('item.destinationBatch', 'destinationBatch')
       .leftJoinAndSelect('item.outputProduct', 'outputProduct')
       .leftJoinAndSelect('item.outputBatch', 'outputBatch')
+      .leftJoinAndSelect('item.pcpExecutedByUser', 'itemPcpExecutedBy')
       .leftJoinAndSelect('item.distributions', 'distribution')
       .leftJoinAndSelect('distribution.destinationLocation', 'distributionDestination')
       .distinct(true);
@@ -78,7 +91,9 @@ export class MovementsRepository {
     if (query.dateFrom) builder.andWhere('movement.occurredAt >= :dateFrom', { dateFrom: query.dateFrom });
     if (query.dateTo) builder.andWhere('movement.occurredAt <= :dateTo', { dateTo: query.dateTo });
     if (query.type) builder.andWhere('movement.type = :type', { type: query.type });
-    if (query.codigoMovimentacao) builder.andWhere('movement.codigoMovimentacao = :codigo', { codigo: query.codigoMovimentacao.trim().toUpperCase() });
+    if (query.codigoMovimentacao) builder.andWhere(`(movement.codigoMovimentacao = :codigo OR EXISTS (
+      SELECT 1 FROM movement_items searched_item WHERE searched_item.movement_id = movement.id
+        AND searched_item.codigo_registro = :codigo))`, { codigo: query.codigoMovimentacao.trim().toUpperCase() });
     if (query.status) builder.andWhere('movement.status = :status', { status: query.status });
     if (query.pcpStatus) builder.andWhere('movement.pcpExecutionStatus = :pcpStatus', { pcpStatus: query.pcpStatus });
     if (query.pcpStatus === PcpExecutionStatus.Pending) builder.andWhere('movement.requiresPcpExecution = true');
@@ -121,6 +136,45 @@ export class MovementsRepository {
       .getManyAndCount();
   }
 
+  async findRecordsAndCount(query: MovementQueryDto): Promise<[MovementListEntry[], number]> {
+    const builder = this.repository.manager.getRepository(MovementItemEntity).createQueryBuilder('item')
+      .innerJoinAndSelect('item.movement', 'movement')
+      .innerJoinAndSelect('movement.originLocation', 'origin')
+      .leftJoinAndSelect('movement.destinationLocation', 'destination')
+      .innerJoinAndSelect('movement.responsibleUser', 'responsible')
+      .leftJoinAndSelect('movement.canceledByUser', 'canceledBy')
+      .innerJoinAndSelect('item.product', 'product')
+      .innerJoinAndSelect('item.batch', 'batch')
+      .leftJoinAndSelect('item.destinationBatch', 'destinationBatch')
+      .leftJoinAndSelect('item.outputProduct', 'outputProduct')
+      .leftJoinAndSelect('item.outputBatch', 'outputBatch')
+      .leftJoinAndSelect('item.pcpExecutedByUser', 'itemPcpExecutedBy')
+      .leftJoinAndSelect('item.distributions', 'distribution')
+      .leftJoinAndSelect('distribution.destinationLocation', 'distributionDestination');
+    if (query.dateFrom) builder.andWhere('movement.occurredAt >= :dateFrom', { dateFrom: query.dateFrom });
+    if (query.dateTo) builder.andWhere('movement.occurredAt <= :dateTo', { dateTo: query.dateTo });
+    if (query.type) builder.andWhere('movement.type = :type', { type: query.type });
+    if (query.codigoMovimentacao) builder.andWhere('(movement.codigo_movimentacao = :codigo OR item.codigo_registro = :codigo)',
+      { codigo: query.codigoMovimentacao.trim().toUpperCase() });
+    if (query.status) builder.andWhere('movement.status = :status', { status: query.status });
+    if (query.pcpStatus) builder.andWhere('item.pcpExecutionStatus = :pcpStatus', { pcpStatus: query.pcpStatus });
+    if (query.pcpStatus === PcpExecutionStatus.Pending) builder.andWhere('movement.requiresPcpExecution = true');
+    if (query.originLocationId) builder.andWhere('movement.originLocationId = :originLocationId', { originLocationId: query.originLocationId });
+    if (query.destinationLocationId) builder.andWhere(`(movement.destinationLocationId = :destinationLocationId
+      OR EXISTS (SELECT 1 FROM movement_item_distributions part WHERE part.movement_item_id = item.id
+        AND part.destination_location_id = :destinationLocationId))`, { destinationLocationId: query.destinationLocationId });
+    if (query.productId) builder.andWhere('(item.productId = :productId OR item.outputProductId = :productId)', { productId: query.productId });
+    const primary = query.sort === 'TYPE' ? 'movement.type' : 'movement.occurredAt';
+    const direction = query.sort === 'OLDEST' || query.sort === 'TYPE' ? 'ASC' : 'DESC';
+    const [items, total] = await builder.orderBy(primary, direction).addOrderBy('movement.createdAt', direction)
+      .addOrderBy('item.recordOrdinal', direction).addOrderBy('item.id', direction)
+      .skip((query.page - 1) * query.limit).take(query.limit).getManyAndCount();
+    return [items.map((item) => ({ ...item.movement, recordId: item.id,
+      codigoGrupo: item.movement.codigoMovimentacao, codigoRegistro: item.codigoRegistro,
+      product: item.product, batch: item.batch, quantity: item.quantity,
+      pcpExecutionStatus: item.pcpExecutionStatus, items: [item] })), total];
+  }
+
   private detailBuilder(repository = this.repository): SelectQueryBuilder<MovementEntity> {
     return repository.createQueryBuilder('movement')
       .innerJoinAndSelect('movement.originLocation', 'origin')
@@ -134,9 +188,11 @@ export class MovementsRepository {
       .leftJoinAndSelect('item.destinationBatch', 'destinationBatch')
       .leftJoinAndSelect('item.outputProduct', 'outputProduct')
       .leftJoinAndSelect('item.outputBatch', 'outputBatch')
+      .leftJoinAndSelect('item.pcpExecutedByUser', 'itemPcpExecutedBy')
       .leftJoinAndSelect('item.distributions', 'distribution')
       .leftJoinAndSelect('distribution.destinationLocation', 'distributionDestination')
-      .orderBy('item.id', 'ASC')
+      .orderBy('item.recordOrdinal', 'ASC')
+      .addOrderBy('item.id', 'ASC')
       .addOrderBy('distributionDestination.name', 'ASC');
   }
 }

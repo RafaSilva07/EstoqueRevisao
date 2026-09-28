@@ -33,7 +33,7 @@ Este documento consolida o comportamento funcional vigente. Regras históricas s
 ## Produtos e conversões
 
 - Produto é o cadastro mestre: código único, descrição (`name`), tipo de unidade (`defaultUnit`), prazo padrão de validade em anos inteiros positivos e estado ativo/inativo. Produtos `UN` também possuem gramatura, correspondente ao peso positivo e inteiro, em gramas, de uma unidade. Novos cadastros exigem prazo e, para `UN`, gramatura; produtos antigos sem essas informações permanecem pendentes até serem configurados, sem inventar valores.
-- O código do produto é único sem diferenciação entre maiúsculas e minúsculas.
+- O código do produto deve ser formado por exatamente seis dígitos (`123456`) ou seis dígitos, ponto e mais dois dígitos (`123456.78`). Zeros à esquerda são preservados. O código continua único; esta regra não se aplica ao código de lote, local ou movimentação, que têm formatos próprios.
 - Cadastros referenciados são inativados em vez de excluídos.
 - Conversões pertencem a um produto, possuem fator positivo e não podem repetir o mesmo par de unidades.
 - Unidade de origem e destino de uma conversão devem ser diferentes.
@@ -85,6 +85,8 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 
 - O UUID permanece técnico nas relações e rotas. `codigoMovimentacao` é público, único e imutável: `ENT-000001` para entrada externa, `SAI-000001` para saída externa e `REV-000001` para revisão. Cada prefixo tem sequência independente; transferências internas permanecem sem código.
 - Nos envios entre setores, o código nasce no backend/banco junto com o envio e permanece igual durante `AGUARDANDO_RECEBIMENTO`, separação, confirmação, recusa e histórico. A movimentação de estoque criada na confirmação herda esse mesmo código; se um envio com várias origens gerar mais de um registro técnico de movimentação, todos pertencem ao mesmo código público. Cancelamentos preservam o código original. Entradas/saídas diretas e revisões recebem o código quando são criadas.
+- O código acima identifica o **grupo**, criado/confirmado de uma vez. Cada item é um **registro individual** (produto, lote, quantidade e rota) com UUID próprio e, quando o grupo possui código público, código filho imutável: `ENT-000001-A`, `ENT-000001-B` etc. Um único item também recebe `-A`; após `-Z` seguem `-AA`, `-AB` e assim por diante, sem sequência independente. Em envios, o filho nasce com o item enviado e é preservado no movimento de estoque após o recebimento. A transferência mantém a regra anterior de não possuir código público; seus itens continuam identificados tecnicamente por UUID.
+- Consultas operacionais mostram e paginam **registros** por padrão; a opção **Por grupo** pagina operações completas e permite abrir cada filho. Buscar o código do grupo retorna os filhos; buscar o código filho retorna somente ele. O status PCP pode variar entre filhos, mas criação, aceite de envio, cancelamento/estorno e efeitos de estoque continuam sendo da operação inteira conforme suas regras anteriores.
 - Lacunas por rollback são aceitáveis. Utilizam-se no mínimo seis dígitos, crescendo sem truncamento. Legados recebem códigos por ocorrência, criação e UUID como desempate, sem alterar seus dados operacionais.
 
 - Tipos implementados: `ENTRADA_EXTERNA`, `SAIDA_EXTERNA`, `TRANSFERENCIA_INTERNA` e `REVISAO`.
@@ -218,8 +220,8 @@ Reversões:
 
 ## Execução administrativa pelo PCP
 
-- O estado operacional e o estado de execução PCP são dimensões independentes. Uma movimentação efetivada equivale a `CONCLUIDA` para o PCP e nasce com `status_execucao_pcp = PENDENTE`.
-- Somente movimentações concluídas podem transitar uma única vez de `PENDENTE` para `EXECUTADA`. Canceladas, recusadas, aguardando aceite ou incompletas não podem ser executadas.
+- O estado operacional e o estado de execução PCP são dimensões independentes. Cada registro de uma movimentação efetivada nasce `PENDENTE` no PCP; o grupo fica `EXECUTADA` somente quando todos os seus registros exigíveis forem executados.
+- Somente registros de movimentações concluídas podem transitar uma única vez de `PENDENTE` para `EXECUTADA`. Os demais registros do grupo permanecem pendentes. Canceladas, recusadas, aguardando aceite ou incompletas não podem ser executadas.
 - Envios somente entram na fila depois do aceite, quando geram a movimentação efetiva vinculada. Solicitações pendentes ou recusadas não geram item executável.
 - A execução registra o usuário autenticado, data/hora e observação opcional própria, sem alterar observação, itens, lote, datas, quantidade, origem, destino, foto ou qualquer dado operacional.
 - Concorrência é serializada por lock pessimista. A primeira confirmação vence; tentativas posteriores recebem conflito e não reabrem a execução.

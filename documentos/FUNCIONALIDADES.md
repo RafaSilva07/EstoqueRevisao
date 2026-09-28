@@ -83,7 +83,7 @@ O tipo de unidade é uma seleção: Unidade (UN), Fardo (FD) ou Caixa (CX). Emba
 
 A consulta de produtos aceita `searchField=code|name` quando a interface precisa restringir as sugestões a um campo. Sem esse parâmetro, a busca geral continua considerando código e descrição.
 
-Cadastro e edição abrem em modal. Ao digitar o código, um aviso abaixo do campo identifica duplicidade, inclusive em produto inativo, e impede salvar enquanto ela estiver presente. A consulta usa o filtro exato `code` de `GET /products`, sem diferenciar maiúsculas/minúsculas; respostas antigas da digitação são descartadas. Falhas de consulta são informadas e a API continua validando a unicidade ao salvar.
+Cadastro e edição abrem em modal. O código exige `123456` ou `123456.78`; o formulário orienta e bloqueia o formato inválido, e a API/banco também o validam. Ao digitar o código, um aviso abaixo do campo identifica duplicidade, inclusive em produto inativo, e impede salvar enquanto ela estiver presente. A consulta usa o filtro exato `code` de `GET /products`; respostas antigas da digitação são descartadas. Falhas de consulta são informadas e a API continua validando a unicidade ao salvar.
 
 Rotas principais:
 
@@ -195,7 +195,7 @@ GET             /api/v1/movements/:id
 GET             /api/v1/history
 ```
 
-A entrada principal **Histórico** reúne, em uma lista paginada, envios e movimentações diretas. Em geral, não duplica o envio confirmado pelo movimento de estoque; a separação imediata com retorno é a exceção descrita acima. Filtra por etapa, origem do registro, tipo, período, código/produto e **sentido relativo ao setor logado** (recebidas, enviadas ou internas); ordena por data. A Revisão vê também operações diretas; PCP vê as movimentações de sua competência, sem filtro de sentido por atuar transversalmente. Os cards abrem os detalhes existentes. `GET /api/v1/history` fornece essa consulta somente de leitura. Relatórios de totais/CSV continuam acessíveis em **Menu e conta**.
+A entrada principal **Histórico** reúne envios e movimentações diretas, sem duplicar em geral o envio confirmado pelo movimento de estoque; a separação imediata com retorno mantém sua exceção. **Por registro** é a visão padrão, paginada no backend, com produto/lote/quantidade, rota e código filho. **Por grupo** pagina a operação inteira e lista os filhos clicáveis no detalhe. A busca pelo código do grupo encontra seus filhos; pelo filho, apenas esse registro. Os filtros de etapa, tipo, período, produto/código e sentido relativo ao setor continuam disponíveis. `GET /api/v1/history?view=RECORD|GROUP` fornece a consulta somente de leitura. Relatórios de totais/CSV continuam em **Menu e conta**.
 
 O detalhe de movimentação apresenta identificador, tipo, estados operacional e PCP, data/hora, responsável, rota, observação, itens, lotes, fabricação, validade, quantidades e distribuições. Os dados do produto confirmados em novos itens são preservados por snapshot; datas são preservadas nas variantes imutáveis. Relatórios históricos e CSVs existentes também mostram as datas de origem/destino. Registros efetivados e cancelados permanecem consultáveis.
 
@@ -239,7 +239,7 @@ A interface principal **Estoque e validades** apresenta saldo, lote, fabricaçã
 
 Todos os cards das listas da Home abrem um resumo sem navegação imediata. Reutiliza Modal acessível, itens e visualizador privado de fotos; mostra código, rota, responsável, estados, datas, observações e, para envios, separação e vínculos de retorno. Fechar/ESC retornam à Home. Ações encaminham ao registro específico na página existente: confirmar recebimento/retorno, continuar separação, ver retorno, executar PCP ou ver detalhes completos. O resumo não executa operações.
 
-`codigoMovimentacao` aparece desde a criação do envio e permanece igual no recebimento, separação, confirmação/recusa, movimentação de estoque, PCP e histórico. Busque o código em **Histórico**, na fila do PCP ou nos envios em aberto. `GET /history` aceita busca parcial por código/produto; `GET /movements` e `GET /shipments` aceitam `codigoMovimentacao`; `GET /pcp/movements` aceita o código no `search`. Transferências não recebem código nem usam UUID como substituto público.
+`codigoMovimentacao` identifica o grupo desde a criação do envio e permanece igual durante todo o ciclo. Cada item recebe `codigoRegistro` (`-A`, `-B`, …, `-AA`) e conserva-o no recebimento. Histórico, `GET /movements` e PCP buscam grupo ou filho; `view=RECORD|GROUP` controla a paginação. Transferências não recebem código público nem usam UUID como substituto público.
 
 A Home exibe, antes dos atalhos, um ponto de atenção quando o setor ativo possui solicitações aguardando seu aceite ou envios em separação. Os totais vêm das consultas de envios, com escopo do setor e atualização ao entrar ou alternar o modo operacional.
 
@@ -262,9 +262,9 @@ Envios, entradas, saídas, transferências e revisões apresentam a lista e o bo
 
 ## Perfil e fila PCP
 
-Usuários do setor e perfil exclusivo `PCP` entram em uma interface própria, sem menus de criação, edição, cancelamento ou aceite. Administradores acessam a mesma interface ao selecionar PCP no modo operacional. A fila inicia em movimentações concluídas e pendentes para o PCP, das mais antigas para as mais novas, e permite combinar período, estado operacional, estado PCP, tipo, origem, destino, produto/lote e ordenação. Os resultados são paginados no backend; a linha/card inteiro abre o detalhe em modal.
+Usuários do setor e perfil exclusivo `PCP` entram em uma interface própria, sem menus de criação, edição, cancelamento ou aceite. Administradores acessam a mesma interface ao selecionar PCP no modo operacional. A fila inicia em registros concluídos e pendentes, das mais antigas para as mais novas, e permite combinar período, estado operacional, estado PCP, tipo, origem, destino, produto/lote e ordenação. **Por registro** é o padrão; **Por grupo** mostra a operação completa e o progresso de seus filhos. Ambas as visões são paginadas no backend.
 
-O detalhe apresenta rota, responsável, observações, itens, lotes, fabricação, validade, distribuições, eventos auditáveis e fotos privadas de envios confirmados. Eventos de auditoria no PCP e nos detalhes administrativos dos envios usam descrições legíveis; os códigos técnicos permanecem preservados. Enquanto aguarda execução do PCP, cada produto com foto apresenta seu próprio botão **Mostrar/Ocultar fotos** dentro do card; a foto fica recolhida por padrão, expande apenas aquele card e só é carregada quando aberta. Uma movimentação efetivada permanece efetivada no estoque; inicialmente ela está pendente no PCP e, após **Marcar como executada**, somente o estado PCP muda para executada. O modal aceita observação opcional, impede duplo envio e atualiza a fila após sucesso. A API revalida o estado sob transação e lock, grava usuário/data/observação em campos próprios e não altera dados operacionais.
+O detalhe apresenta rota, responsável, observações, lote, fabricação, validade, distribuições, eventos auditáveis e fotos privadas do item vinculado. Cada produto com foto mantém seu próprio botão **Mostrar/Ocultar fotos**. **Marcar registro como executado** muda somente o status PCP daquele filho; outros ficam pendentes e o grupo só conclui quando todos forem executados. O modal aceita observação opcional, impede duplo envio e atualiza a fila. A API revalida o estado sob transação e lock, grava usuário/data/observação no filho e não altera dados operacionais.
 
 ## Ainda não implementado
 

@@ -1,12 +1,11 @@
 import { Transform } from 'class-transformer';
-import { ArrayMaxSize, ArrayUnique, IsArray, IsIn, IsInt, IsOptional, IsUUID, Max, Min, IsString, MaxLength, MinLength } from 'class-validator';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsIn, IsInt, IsOptional, IsUUID, Matches, Max, Min, IsString, MaxLength, MinLength } from 'class-validator';
 import { trimString, uppercaseString } from '../../../shared/validation/transforms';
 
 export class CreateProductDto {
   @Transform(trimString)
   @IsString()
-  @MinLength(1)
-  @MaxLength(60)
+  @Matches(/^[0-9]{6}(?:\.[0-9]{2})?$/, { message: 'O código deve ter 6 dígitos, com ponto e 2 dígitos opcionais (ex.: 123456 ou 123456.78).' })
   code!: string;
 
   @Transform(trimString)

@@ -4,6 +4,8 @@ import { BatchEntity } from '../../batches/entities/batch.entity';
 import { ProductEntity } from '../../products/entities/product.entity';
 import { MovementEntity } from './movement.entity';
 import { MovementItemDistributionEntity } from './movement-item-distribution.entity';
+import { PcpExecutionStatus } from '../../pcp/domain/pcp-execution-status.enum';
+import { UserEntity } from '../../users/entities/user.entity';
 
 const numericTransformer: ValueTransformer = {
   to: (value: number): number => value,
@@ -17,6 +19,31 @@ export class MovementItemEntity {
 
   @Column({ name: 'movement_id', type: 'uuid' })
   movementId!: string;
+
+  @Column({ name: 'record_ordinal', type: 'integer' })
+  recordOrdinal!: number;
+
+  @Column({ name: 'codigo_registro', type: 'varchar', length: 50, nullable: true, insert: false, update: false })
+  codigoRegistro!: string | null;
+
+  @Column({ name: 'shipment_item_id', type: 'uuid', nullable: true })
+  shipmentItemId!: string | null;
+
+  @Column({ name: 'pcp_execution_status', type: 'varchar', length: 20, default: PcpExecutionStatus.Pending })
+  pcpExecutionStatus!: PcpExecutionStatus;
+
+  @Column({ name: 'pcp_executed_by_user_id', type: 'uuid', nullable: true })
+  pcpExecutedByUserId!: string | null;
+
+  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'pcp_executed_by_user_id' })
+  pcpExecutedByUser!: UserEntity | null;
+
+  @Column({ name: 'pcp_executed_at', type: 'timestamptz', nullable: true })
+  pcpExecutedAt!: Date | null;
+
+  @Column({ name: 'pcp_execution_observation', type: 'varchar', length: 1000, nullable: true })
+  pcpExecutionObservation!: string | null;
 
   @ManyToOne(() => MovementEntity, (movement) => movement.items, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'movement_id' })

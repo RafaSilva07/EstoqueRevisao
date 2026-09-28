@@ -28,6 +28,15 @@ import { MovementsService } from './movements.service';
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const describeWithDatabase = databaseUrl ? describe : describe.skip;
 
+async function expectProtectedDelete(operation: Promise<unknown>): Promise<void> {
+  try { await operation; }
+  catch (error) {
+    expect(['23503', '23001']).toContain((error as { code?: string }).code);
+    return;
+  }
+  throw new Error('O histórico não pode ser excluído fisicamente.');
+}
+
 describeWithDatabase('MovementsService (PostgreSQL)', () => {
   let dataSource: DataSource; let service: MovementsService; let stockService: StockPositionsService;
   let userId: string; let originId: string; let destinationId: string; let transferDestinationId: string; let lataBoaId: string; let varejoId: string; let productAId: string; let batchAId: string; let batchAEmptyId: string; let productBId: string; let batchBId: string;
@@ -43,7 +52,7 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     service = new MovementsService(new MovementsRepository(dataSource.getRepository(MovementEntity)), locations, stockService, new AuditService(new AuditRepository(dataSource.getRepository(AuditLogEntity))), dataSource, new OperationalLotsService(dataSource, new BatchCodeCodec()));
     userId = randomUUID(); productAId = randomUUID(); batchAId = randomUUID(); batchAEmptyId = randomUUID(); productBId = randomUUID(); batchBId = randomUUID();
     await dataSource.query(`INSERT INTO users (id, username, password_hash, status) VALUES ($1, 'movement-integration', '$argon2id$integration-test-placeholder', 'ACTIVE')`, [userId]);
-    await dataSource.query(`INSERT INTO products (id, code, name, default_unit, created_by, updated_by) VALUES ($1, 'MOV-A', 'Produto A', 'UN', $3, $3), ($2, 'MOV-B', 'Produto B', 'KG', $3, $3)`, [productAId, productBId, userId]);
+    await dataSource.query(`INSERT INTO products (id, code, name, default_unit, created_by, updated_by) VALUES ($1, '600001', 'Produto A', 'UN', $3, $3), ($2, '600002', 'Produto B', 'KG', $3, $3)`, [productAId, productBId, userId]);
     await dataSource.query(`INSERT INTO batches (id, product_id, code, manufacturing_date, expiration_date, created_by, updated_by) VALUES ($1, $2, 'SOCDNV', '2026-08-31', '2027-08-31', $5, $5), ($3, $4, 'SOCDNV', '2026-08-31', '2027-08-31', $5, $5)`, [batchAId, productAId, batchBId, productBId, userId]);
     await dataSource.query(`INSERT INTO batches (id, product_id, code, manufacturing_date, expiration_date, created_by, updated_by) VALUES ($1, $2, 'COCINV', '2026-09-01', '2027-09-01', $3, $3)`, [batchAEmptyId, productAId, userId]);
     originId = randomUUID();
@@ -133,7 +142,7 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     const history = await service.list({ page: 1, limit: 20, type: MovementType.ExternalEntry, originLocationId: originId, destinationLocationId: destinationId, productId: productAId });
     expect(history.meta.total).toBe(1);
     expect((await service.getById(first.id)).items).toHaveLength(2);
-    await expect(dataSource.getRepository(MovementEntity).delete(first.id)).rejects.toMatchObject({ code: '23503' });
+    await expectProtectedDelete(dataSource.getRepository(MovementEntity).delete(first.id));
   });
 
   it('realiza saida parcial e saida total sem criar saldo externo', async () => {
@@ -448,8 +457,7 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
       entityId: created.id,
       action: 'INTERNAL_TRANSFER_CREATE',
     })).toBe(1);
-    await expect(dataSource.getRepository(MovementEntity).delete(created.id))
-      .rejects.toMatchObject({ code: '23503' });
+    await expectProtectedDelete(dataSource.getRepository(MovementEntity).delete(created.id));
   });
 
   it('realiza revisao parcial para um, dois e tres destinos preservando o total', async () => {
@@ -705,8 +713,7 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
       expect.objectContaining({ destinationLocationId: varejoId, quantity: 1 }),
     ]));
     expect(await dataSource.getRepository(MovementEntity).count()).toBe(1);
-    await expect(dataSource.getRepository(MovementEntity).delete(created.id))
-      .rejects.toMatchObject({ code: '23503' });
+    await expectProtectedDelete(dataSource.getRepository(MovementEntity).delete(created.id));
   });
 
   describe('cancelamento e estorno', () => {
@@ -875,7 +882,7 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
         stockLocationId,
       })))).toEqual([0, 0, 0, 0, 0, 0]);
 
-      const history = await service.list({ page: 1, limit: 20 });
+      const history = await service.list({ view: 'GROUP', page: 1, limit: 20 });
       expect(history.meta.total).toBe(4);
       expect(history.items.every((movement) => movement.status === MovementStatus.Canceled)).toBe(true);
       expect((await service.getById(review.id)).items[0].distributions).toHaveLength(3);
@@ -888,10 +895,11 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     const lot = { code: 'SOCDNV', manufacturingDate: '2026-08-31', expirationDate: '2029-08-31' };
     const otherLot = { code: 'COCINV', manufacturingDate: '2026-09-01', expirationDate: '2029-09-01' };
     let productId: string;
+    let productCodeSequence = 0;
     beforeEach(async () => {
       productId = randomUUID();
       await dataSource.getRepository(ProductEntity).save(Object.assign(new ProductEntity(), {
-        id: productId, code: productId, name: 'Produto operacional', defaultUnit: 'UN',
+        id: productId, code: String(900000 + ++productCodeSequence), name: 'Produto operacional', defaultUnit: 'UN',
         shelfLifeYears: 3, createdById: userId, updatedById: userId,
       }));
     });

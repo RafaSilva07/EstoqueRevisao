@@ -21,6 +21,16 @@ export interface HistoryItem {
   direction: 'INCOMING' | 'OUTGOING' | 'INTERNAL';
   parentShipmentId: string | null;
   parentCode: string | null;
+  groupId?: string;
+  groupCode?: string | null;
+  recordId?: string;
+  groupItemCount?: number;
+  productCode?: string | null;
+  productName?: string | null;
+  productUnit?: string | null;
+  batchCode?: string | null;
+  quantity?: number | null;
+  pcpExecutionStatus?: string | null;
 }
 
 const scopeLabel: Record<HistoryItem['scope'], string> = {
@@ -30,15 +40,15 @@ const typeLabel: Record<string, string> = {
   ENVIO: 'Envio entre setores', ENTRADA_EXTERNA: 'Entrada externa', SAIDA_EXTERNA: 'Saída externa',
   TRANSFERENCIA_INTERNA: 'Transferência interna', REVISAO: 'Revisão',
 };
-const initialFilters = { scope: 'ALL', kind: 'ALL', type: 'ALL', direction: 'ALL', dateFrom: '', dateTo: '', search: '', sort: 'RECENT' };
+const initialFilters = { view: 'RECORD', scope: 'ALL', kind: 'ALL', type: 'ALL', direction: 'ALL', dateFrom: '', dateTo: '', search: '', sort: 'RECENT' };
 const stateLabel: Record<string, string> = {
   AGUARDANDO_RECEBIMENTO: 'Aguardando recebimento', EM_SEPARACAO: 'Em separação',
   CONFIRMADO: 'Recebimento confirmado', RECUSADO: 'Recusado', CANCELADO: 'Cancelado',
   EFETIVADA: 'Efetivada', CANCELADA: 'Cancelada',
 };
 
-export function HistoryPage({ user, initialMovementId, success, onOpenShipment, onOpenPcp }: {
-  user: UserSession; initialMovementId?: string; success?: string;
+export function HistoryPage({ user, initialMovementId, initialRecordId, success, onOpenShipment, onOpenPcp }: {
+  user: UserSession; initialMovementId?: string; initialRecordId?: string; success?: string;
   onOpenShipment: (id: string) => void; onOpenPcp: (id: string) => void;
 }) {
   const [filters, setFilters] = useState({ ...initialFilters });
@@ -49,6 +59,7 @@ export function HistoryPage({ user, initialMovementId, success, onOpenShipment, 
   const [error, setError] = useState('');
   const [selectedMovementId, setSelectedMovementId] = useState<string | null>(initialMovementId ?? null);
   const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(initialRecordId && initialRecordId !== initialMovementId ? initialRecordId : null);
   const [cancelTarget, setCancelTarget] = useState<Movement | null>(null);
   const [cancelSuccess, setCancelSuccess] = useState('');
   const pcp = user.sector === 'PCP';
@@ -83,7 +94,8 @@ export function HistoryPage({ user, initialMovementId, success, onOpenShipment, 
     setFilters((current) => ({ ...current, [key]: value })); setPage(1); setLoading(true);
   };
   const clear = () => { setSearchInput(''); setFilters({ ...initialFilters }); setPage(1); setLoading(true); };
-  const activeFilters = Object.entries(filters).filter(([key, value]) => value && value !== 'ALL' && !(key === 'sort' && value === 'RECENT')).length;
+  const activeFilters = Object.entries(filters).filter(([key, value]) => value && value !== 'ALL'
+    && !(key === 'sort' && value === 'RECENT') && !(key === 'view' && value === 'RECORD')).length;
 
   return <>
     <PageHeader eyebrow="Consulta" title="Histórico de movimentações" description="Envios e operações de estoque em uma única lista. Use o status para encontrar o que ainda precisa de ação." />
@@ -91,6 +103,7 @@ export function HistoryPage({ user, initialMovementId, success, onOpenShipment, 
     {cancelSuccess && <Notice kind="success">{cancelSuccess}</Notice>}
     {error && <Notice kind="error">{error}</Notice>}
     <FilterPanel count={activeFilters}><div className="filter-grid">
+      <label>Visualização<select value={filters.view} onChange={(event) => update('view', event.target.value)}><option value="RECORD">Por registro</option><option value="GROUP">Por grupo</option></select></label>
       <label>Status<select value={filters.scope} onChange={(event) => update('scope', event.target.value)}><option value="ALL">Todos</option><option value="OPEN">Em andamento</option><option value="PENDING_PCP">Aguardando PCP</option><option value="DONE">Finalizadas</option><option value="CLOSED">Encerradas sem conclusão</option></select></label>
       <label>Origem do registro<select value={filters.kind} onChange={(event) => update('kind', event.target.value)}><option value="ALL">Envios e operações</option>{!pcp && <option value="SHIPMENT">Envios entre setores</option>}<option value="MOVEMENT">Operações de estoque</option></select></label>
       <label>Tipo<select value={filters.type} onChange={(event) => update('type', event.target.value)}><option value="ALL">Todos</option>{!pcp && <option value="ENVIO">Envio entre setores</option>}<option value="ENTRADA_EXTERNA">Entrada externa</option><option value="SAIDA_EXTERNA">Saída externa</option><option value="TRANSFERENCIA_INTERNA">Transferência interna</option><option value="REVISAO">Revisão</option></select></label>
@@ -101,21 +114,22 @@ export function HistoryPage({ user, initialMovementId, success, onOpenShipment, 
       <label>Ordenar<select value={filters.sort} onChange={(event) => update('sort', event.target.value)}><option value="RECENT">Mais recentes</option><option value="OLDEST">Mais antigas</option></select></label>
     </div>{activeFilters > 0 && <button className="text-button" onClick={clear}>Limpar filtros</button>}</FilterPanel>
     {loading ? <LoadingState label="Carregando histórico" /> : !result?.items.length ? <EmptyState title="Nenhum registro encontrado" description="Ajuste ou limpe os filtros para ver outras movimentações." action={activeFilters ? <button className="secondary" onClick={clear}>Limpar filtros</button> : undefined} /> : <>
-      <div className="history-list">{result.items.map((item) => <button type="button" className="surface history-card" key={`${item.kind}:${item.id}`} onClick={() => item.kind === 'SHIPMENT' ? setSelectedShipmentId(item.id) : setSelectedMovementId(item.id)}>
+      <div className="history-list">{result.items.map((item) => <button type="button" className="surface history-card" key={`${item.kind}:${item.id}`} onClick={() => { setSelectedRecordId(item.recordId ?? null); if (item.kind === 'SHIPMENT') setSelectedShipmentId(item.groupId ?? item.id); else setSelectedMovementId(item.groupId ?? item.id); }}>
         <span className={`badge ${item.scope === 'DONE' ? 'active' : item.scope === 'CLOSED' ? 'canceled' : 'pending'}`}>{scopeLabel[item.scope]}</span>
-        <strong>{item.code ?? 'Sem código público'} · {typeLabel[item.type] ?? item.type}</strong>
+        <strong>{item.code ?? 'Sem código público'} · {item.recordId ? item.productName ?? 'Produto' : typeLabel[item.type] ?? item.type}</strong>
+        {item.recordId && <span>{item.productCode} · lote {item.batchCode} · {item.quantity} {item.productUnit} · Grupo {item.groupCode ?? 'sem código público'}</span>}
         <span>{item.origin} → {item.destination}</span>
         {item.parentCode && <span>Parte do envio original {item.parentCode}</span>}
-        <small>{stateLabel[item.status] ?? item.status} · {formatDateTime(item.occurredAt)} · {item.responsible} · {item.itemCount} {item.itemCount === 1 ? 'item' : 'itens'}</small>
+        <small>{stateLabel[item.status] ?? item.status} · {formatDateTime(item.occurredAt)} · {item.responsible}{!item.recordId && ` · ${item.itemCount} ${item.itemCount === 1 ? 'registro' : 'registros'}`}</small>
         <span className="history-card-action">Ver detalhes →</span>
       </button>)}</div>
       <div className="shipment-pagination"><button className="secondary" disabled={page <= 1} onClick={() => { setPage((current) => current - 1); setLoading(true); }}>Anterior</button><span>Página {page} de {result.meta.totalPages} · {result.meta.total} registros</span><button className="secondary" disabled={page >= result.meta.totalPages} onClick={() => { setPage((current) => current + 1); setLoading(true); }}>Próxima</button></div>
     </>}
-    {selectedShipmentId && <ShipmentSummaryModal id={selectedShipmentId} user={user} onClose={() => setSelectedShipmentId(null)} onOpen={(id) => { setSelectedShipmentId(null); onOpenShipment(id); }} onOpenMovement={user.sector === 'REVISAO' && user.permissions.includes('movements.read') ? (id) => { setSelectedShipmentId(null); setSelectedMovementId(id); } : undefined} />}
-    {selectedMovementId && <MovementDetailModal movementId={selectedMovementId} pcp={pcp} onClose={() => setSelectedMovementId(null)}>{(movement) => <>
+    {selectedShipmentId && <ShipmentSummaryModal id={selectedShipmentId} user={user} recordId={selectedRecordId} onSelectRecord={setSelectedRecordId} onViewGroup={() => setSelectedRecordId(null)} onClose={() => { setSelectedShipmentId(null); setSelectedRecordId(null); }} onOpen={(id) => { setSelectedShipmentId(null); onOpenShipment(id); }} onOpenMovement={user.sector === 'REVISAO' && user.permissions.includes('movements.read') ? (id) => { setSelectedShipmentId(null); setSelectedMovementId(id); setSelectedRecordId(null); } : undefined} />}
+    {selectedMovementId && <MovementDetailModal movementId={selectedMovementId} recordId={selectedRecordId} onSelectRecord={setSelectedRecordId} onViewGroup={() => setSelectedRecordId(null)} pcp={pcp} onClose={() => { setSelectedMovementId(null); setSelectedRecordId(null); }}>{(movement) => <>
       {movement.shipmentId && !pcp && <button className="secondary button-wide" onClick={() => { setSelectedMovementId(null); setSelectedShipmentId(movement.shipmentId!); }}>Ver envio original</button>}
       {canCancel && !movement.shipmentId && movement.status === 'EFETIVADA' && <button className="danger button-wide" onClick={() => setCancelTarget(movement)}>Cancelar movimentação</button>}
-      {pcp && movement.status === 'EFETIVADA' && movement.requiresPcpExecution && movement.pcpExecutionStatus === 'PENDENTE' && <button className="button-wide" onClick={() => { setSelectedMovementId(null); onOpenPcp(movement.id); }}>Executar no PCP</button>}
+      {pcp && movement.status === 'EFETIVADA' && movement.requiresPcpExecution && (selectedRecordId ? movement.items.find((item) => item.id === selectedRecordId)?.pcpExecutionStatus === 'PENDENTE' : movement.pcpExecutionStatus === 'PENDENTE') && <button className="button-wide" onClick={() => { setSelectedMovementId(null); onOpenPcp(selectedRecordId ?? movement.id); }}>Executar no PCP</button>}
     </>}</MovementDetailModal>}
     {cancelTarget && <MovementCancellationDialog movement={cancelTarget} onClose={() => setCancelTarget(null)} onCanceled={() => { setCancelTarget(null); setSelectedMovementId(null); setCancelSuccess('Movimentação cancelada e estoque estornado.'); }} />}
   </>;

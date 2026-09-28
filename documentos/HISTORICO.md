@@ -1,5 +1,13 @@
 # Histórico de desenvolvimento
 
+## Grupos e registros individuais de movimentação
+
+`MovementRecords1790726400000` atribui a cada item um código filho do grupo (`-A` até `-Z`, depois `-AA`...), inclusive em operações com um único item. Envios preservam o código do filho após confirmação. Histórico, movimentos, Home e PCP passam a consultar registros por padrão, com visão opcional por grupo; PCP executa filhos independentemente, mantendo o cabeçalho como resumo. A migration preserva saldos e dados antigos, preenche códigos legados e transporta o estado PCP anterior para cada filho. Transferências mantêm a ausência de código público documentada anteriormente.
+
+## Formato do código de produto
+
+`ProductCodeFormat1790640000000` exige seis dígitos, com sufixo opcional de ponto e mais dois dígitos, no cadastro e no PostgreSQL. A migration verifica registros anteriores e não altera códigos nem histórico automaticamente; se encontrar incompatibilidades, exige correção consciente antes de aplicar a constraint.
+
 ## Navegação e histórico unificados em branch de avaliação
 
 Branch `feat/navegacao-simplificada`: menus intermediários foram retirados da navegação principal. Histórico passou a reunir envios e movimentações em uma consulta paginada, sem duplicar a operação confirmada. Estoque e validades tornou-se a entrada principal para saldos; a Home passou a chamar de finalizadas somente operações sem ação pendente. Não há migration nesta etapa. Ver [relatório da etapa 46](./relatorios/RELATORIO_ETAPA_46_NAVEGACAO_SIMPLIFICADA.md).

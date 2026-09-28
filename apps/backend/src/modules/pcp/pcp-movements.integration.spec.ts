@@ -6,6 +6,7 @@ import { AuditService } from '../audit/audit.service';
 import { AuditLogEntity } from '../audit/entities/audit-log.entity';
 import { MovementType } from '../movements/domain/movement-type.enum';
 import { MovementEntity } from '../movements/entities/movement.entity';
+import { MovementItemEntity } from '../movements/entities/movement-item.entity';
 import { MovementsRepository } from '../movements/movements.repository';
 import { ShipmentEntity, ShipmentItemEntity } from '../shipments/shipment.entity';
 import { PcpExecutionStatus } from './domain/pcp-execution-status.enum';
@@ -30,12 +31,12 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     await db.initialize();
     const movements = new MovementsRepository(db.getRepository(MovementEntity));
     service = new PcpMovementsService(
-      new PcpMovementsRepository(db.getRepository(MovementEntity), db.getRepository(AuditLogEntity), db.getRepository(ShipmentItemEntity), db.getRepository(ShipmentEntity)),
+      new PcpMovementsRepository(db.getRepository(MovementEntity), db.getRepository(MovementItemEntity), db.getRepository(AuditLogEntity), db.getRepository(ShipmentItemEntity), db.getRepository(ShipmentEntity)),
       movements, db, new AuditService(new AuditRepository(db.getRepository(AuditLogEntity))),
     );
     userId = randomUUID(); productId = randomUUID(); batchId = randomUUID(); originId = randomUUID();
     await db.query("INSERT INTO users(id,username,password_hash) VALUES ($1,'pcp-integration','$argon2id$test')", [userId]);
-    await db.query("INSERT INTO products(id,code,name,default_unit,created_by,updated_by) VALUES ($1,'PCP-001','Produto PCP','UN',$2,$2)", [productId, userId]);
+    await db.query("INSERT INTO products(id,code,name,default_unit,created_by,updated_by) VALUES ($1,'800001','Produto PCP','UN',$2,$2)", [productId, userId]);
     await db.query("INSERT INTO batches(id,product_id,code,manufacturing_date,expiration_date,created_by,updated_by) VALUES ($1,$2,'SOCDNV','2026-01-01','2028-01-01',$3,$3)", [batchId, productId, userId]);
     await db.query("INSERT INTO stock_locations(id,code,name,kind,created_by,updated_by) VALUES ($1,'PCP_ORIGIN','Origem PCP','EXTERNAL',$2,$2)", [originId, userId]);
     destinationId = (await db.query<Array<{ id: string }>>("SELECT id FROM stock_locations WHERE code='REVISAR'"))[0].id;
@@ -51,7 +52,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
       await db.query(`INSERT INTO movements(id,request_key,type,origin_location_id,destination_location_id,responsible_user_id,occurred_at,status)
         VALUES ($1,$2,$3,$4,$5,$6,$7,'EFETIVADA')`, [id, randomUUID(), types[index], originId, movementDestinationId, userId, new Date(Date.UTC(2026, 8, index + 1))]);
       await db.query(`INSERT INTO movement_items(id,movement_id,product_id,batch_id,quantity,product_snapshot)
-        VALUES ($1,$2,$3,$4,$5,$6)`, [randomUUID(), id, productId, batchId, index + 1, { code: 'PCP-001', name: 'Produto PCP', defaultUnit: 'UN' }]);
+        VALUES ($1,$2,$3,$4,$5,$6)`, [randomUUID(), id, productId, batchId, index + 1, { code: '800001', name: 'Produto PCP', defaultUnit: 'UN' }]);
     }
     const canceledId = randomUUID(); movementIds.push(canceledId);
     await db.query(`INSERT INTO movements(id,request_key,type,origin_location_id,destination_location_id,responsible_user_id,occurred_at,status,canceled_by_user_id,canceled_at,cancellation_reason)
@@ -61,20 +62,47 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
   afterAll(async () => { if (db?.isInitialized) await db.destroy(); });
 
   it('combina filtros, busca, ordenacao e paginacao no backend', async () => {
-    const filtered = await service.list({ page: 1, limit: 20, operationalStatus: 'CONCLUIDA', pcpStatus: PcpExecutionStatus.Pending,
+    const filtered = await service.list({ view: 'GROUP', page: 1, limit: 20, operationalStatus: 'CONCLUIDA', pcpStatus: PcpExecutionStatus.Pending,
       type: MovementType.InternalTransfer, originLocationId: originId, destinationLocationId: destinationId, search: 'SOCDNV',
       dateFrom: '2026-09-03T00:00:00.000Z', dateTo: '2026-09-03T23:59:59.999Z', sort: 'ASC' });
     expect(filtered.meta.total).toBe(1);
     expect(filtered.items[0].type).toBe(MovementType.InternalTransfer);
 
-    const ascending = await service.list({ page: 1, limit: 1, operationalStatus: 'CONCLUIDA', sort: 'ASC' });
-    const descending = await service.list({ page: 1, limit: 1, operationalStatus: 'CONCLUIDA', sort: 'DESC' });
+    const ascending = await service.list({ view: 'GROUP', page: 1, limit: 1, operationalStatus: 'CONCLUIDA', sort: 'ASC' });
+    const descending = await service.list({ view: 'GROUP', page: 1, limit: 1, operationalStatus: 'CONCLUIDA', sort: 'DESC' });
     expect(ascending.meta.total).toBe(4);
     expect(ascending.items[0].id).toBe(movementIds[0]);
     expect(descending.items[0].id).toBe(movementIds[3]);
 
-    const canceled = await service.list({ page: 1, limit: 20, operationalStatus: 'CANCELADA', sort: 'DESC' });
+    const canceled = await service.list({ view: 'GROUP', page: 1, limit: 20, operationalStatus: 'CANCELADA', sort: 'DESC' });
     expect(canceled.meta.total).toBe(1);
+  });
+
+  it('pagina e executa registros independentemente, preservando o grupo', async () => {
+    const extraId = randomUUID();
+    await db.query(`INSERT INTO movement_items(id,movement_id,product_id,batch_id,quantity)
+      VALUES ($1,$2,$3,$4,3)`, [extraId, movementIds[0], productId, batchId]);
+    const groupCode = (await db.query<Array<{ codigo_movimentacao: string }>>(
+      'SELECT codigo_movimentacao FROM movements WHERE id = $1', [movementIds[0]],
+    ))[0].codigo_movimentacao;
+    const groupRecords = await service.list({ page: 1, limit: 1, search: groupCode, sort: 'ASC' });
+    expect(groupRecords.meta.total).toBe(2);
+    const secondPage = await service.list({ page: 2, limit: 1, search: groupCode, sort: 'ASC' });
+    expect(secondPage.meta.total).toBe(2);
+    expect(groupRecords.items[0].codigoRegistro).toBe(`${groupCode}-A`);
+    expect(secondPage.items[0].codigoRegistro).toBe(`${groupCode}-B`);
+    const single = await service.list({ page: 1, limit: 10, search: `${groupCode}-B`, sort: 'ASC' });
+    expect(single.meta.total).toBe(1);
+    expect(single.items[0].recordId).toBe(extraId);
+    expect((await service.list({ view: 'GROUP', page: 1, limit: 10, search: `${groupCode}-B`, sort: 'ASC' })).meta.total).toBe(1);
+    const firstId = groupRecords.items[0].recordId as string;
+    const metadata = { requestId: randomUUID(), ipAddress: null, userAgent: 'pcp-integration' };
+    await service.executeRecord(firstId, {}, userId, metadata);
+    expect((await db.getRepository(MovementEntity).findOneByOrFail({ id: movementIds[0] })).pcpExecutionStatus).toBe(PcpExecutionStatus.Pending);
+    expect((await db.getRepository(MovementItemEntity).findOneByOrFail({ id: firstId })).pcpExecutionStatus).toBe(PcpExecutionStatus.Executed);
+    expect((await db.getRepository(MovementItemEntity).findOneByOrFail({ id: extraId })).pcpExecutionStatus).toBe(PcpExecutionStatus.Pending);
+    await service.executeRecord(extraId, {}, userId, { ...metadata, requestId: randomUUID() });
+    expect((await db.getRepository(MovementEntity).findOneByOrFail({ id: movementIds[0] })).pcpExecutionStatus).toBe(PcpExecutionStatus.Executed);
   });
 
   it('mantem o perfil PCP restrito a leitura e execucao administrativa', async () => {

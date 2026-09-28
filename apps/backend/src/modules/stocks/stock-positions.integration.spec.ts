@@ -52,7 +52,7 @@ describeWithDatabase('StockPositionsService (PostgreSQL)', () => {
     const batchId = randomUUID();
     await dataSource.query(
       `INSERT INTO products (id, code, name, default_unit, created_by, updated_by)
-       VALUES ($1, 'INT-001', 'Produto de integracao', 'UN', $2, $2)`,
+       VALUES ($1, '400001', 'Produto de integracao', 'UN', $2, $2)`,
       [productId, userId],
     );
     await dataSource.query(
@@ -123,7 +123,7 @@ describeWithDatabase('StockPositionsService (PostgreSQL)', () => {
 
     expect(result.meta.total).toBe(1);
     expect(result.items[0]).toMatchObject({ ...key, quantity: 12 });
-    expect(result.items[0].product.code).toBe('INT-001');
+    expect(result.items[0].product.code).toBe('400001');
     expect(result.items[0].batch.code).toBe('SOCDNV');
     expect(result.items[0].stockLocation.code).toBe('REVISAR');
   });

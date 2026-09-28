@@ -239,7 +239,7 @@ export function App() {
     <aside className="sidebar"><nav aria-label="Navegação principal"><NavButton active={page === 'home'} onClick={() => go('home')}>Início</NavButton>{areas.map((area) => <NavButton key={area.page} active={page === area.page || parentPage(page, activeUser) === area.page} onClick={() => go(area.page)}>{area.title}</NavButton>)}<NavButton active={page === 'more' || page === 'users' || page === 'settings'} onClick={() => go('more')}>Menu e conta</NavButton></nav><p className="sidebar-note">{operationalModeLabel[activeMode]}</p></aside>
     <main className="workspace" id="main-content" tabIndex={-1}>
       <NavigationTrail page={page} user={activeUser} navigate={go} />
-      {page === 'home' && <OperationalHomePage key={activeMode} user={activeUser} navigate={go} onOpenRecord={(destination, id) => { navigate(destination === 'movements' ? 'history' : destination); setSelectedRecordId(id); setSelectedMovementId(id); setMovementSuccess(undefined); }} />}
+      {page === 'home' && <OperationalHomePage key={activeMode} user={activeUser} navigate={go} onOpenRecord={(destination, id, recordId) => { navigate(destination === 'movements' ? 'history' : destination); setSelectedRecordId(recordId ?? id); setSelectedMovementId(id); setMovementSuccess(undefined); }} />}
       {page !== 'home' && menus.includes(page) && <SectionMenu page={page} user={activeUser} navigate={go} />}
       {page === 'more' && <section className="surface account-card"><h2>{user.username}</h2><p className="muted">{operationalModeLabel[activeMode]}</p><button className="secondary" onClick={logout} disabled={loggingOut}>{loggingOut ? 'Saindo…' : 'Sair do sistema'}</button></section>}
       {page === 'users' && adminMode && <UsersPage currentUserId={user.id} onOwnUpdate={logout} />}
@@ -259,7 +259,7 @@ export function App() {
       </>}
       {page === 'products' && can('products.read') && <ProductsPage canManageStatus={adminMode} canReadConversions={can('product-conversions.read')} canWrite={can('products.create') || can('products.update')} />}
       {page === 'inventory' && activeSector === 'PCP' && can('stock-positions.read') && <StockReportsPage />}
-      {page === 'history' && (can('movements.read') || can('pcp.movements.read') || can('shipments.read')) && <HistoryPage user={activeUser} initialMovementId={selectedMovementId} success={movementSuccess} onOpenShipment={(id) => { setSelectedRecordId(id); navigate('shipments'); }} onOpenPcp={(id) => { setSelectedRecordId(id); navigate('pcp'); }} />}
+      {page === 'history' && (can('movements.read') || can('pcp.movements.read') || can('shipments.read')) && <HistoryPage user={activeUser} initialMovementId={selectedMovementId} initialRecordId={selectedRecordId} success={movementSuccess} onOpenShipment={(id) => { setSelectedRecordId(id); navigate('shipments'); }} onOpenPcp={(id) => { setSelectedRecordId(id); navigate('pcp'); }} />}
     </main>
     <nav className="bottom-nav" aria-label="Navegação principal mobile">
       <NavButton active={page === 'home'} onClick={() => go('home')}>Início</NavButton>

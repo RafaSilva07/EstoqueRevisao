@@ -94,6 +94,13 @@ export interface StockPosition {
 }
 
 export interface MovementItem {
+  codigoRegistro?: string | null;
+  recordOrdinal?: number;
+  shipmentItemId?: string | null;
+  pcpExecutionStatus?: 'PENDENTE' | 'EXECUTADA';
+  pcpExecutedByUser?: { id: string; username: string } | null;
+  pcpExecutedAt?: string | null;
+  pcpExecutionObservation?: string | null;
   outputProductId?: string | null;
   outputProduct?: Product | null;
   outputBatch?: Batch | null;
@@ -149,6 +156,14 @@ export interface Movement {
 }
 
 export interface PcpMovementSummary extends Omit<Movement, 'items' | 'canceledByUser'> {
+    executedCount?: number;
+    recordId?: string;
+    codigoGrupo?: string | null;
+    codigoRegistro?: string | null;
+    product?: Product;
+    productSnapshot?: Pick<Product, 'code' | 'name' | 'defaultUnit'> | null;
+    batch?: Batch;
+    quantity?: number;
   itemCount: number;
 }
 
@@ -164,6 +179,10 @@ export interface PcpShipmentEvidence {
 }
 
 export interface PcpMovementDetail extends Movement {
+    recordId?: string;
+    codigoGrupo?: string | null;
+    codigoRegistro?: string | null;
+    groupItemCount?: number;
   operationalStatus: 'CONCLUIDA' | 'CANCELADA';
   auditHistory: PcpAuditEvent[];
   shipmentEvidence: PcpShipmentEvidence[];

@@ -34,8 +34,9 @@ function ShipmentPhotoThumbnail({ shipmentId, itemId, productName, ordinal, tota
   return <PhotoViewer src={url} alt={`Foto ${ordinal} de ${productName}`} status={`Foto ${ordinal} de ${total} · toque para ampliar`} />;
 }
 
-export function ShipmentItems({ shipment }: { shipment: Shipment }) {
+export function ShipmentItems({ shipment, onSelectRecord }: { shipment: Shipment; onSelectRecord?: (id: string) => void }) {
   return <ul className="movement-detail-items shipment-items">{shipment.items.map((item) => <li className="shipment-item-card" key={item.id}>
+    {item.codigoRegistro && (onSelectRecord ? <button type="button" className="text-button" onClick={() => onSelectRecord(item.id)}>{item.codigoRegistro} · Ver registro</button> : <small>Registro {item.codigoRegistro}</small>)}
     <div className="shipment-item-heading"><strong>{item.productSnapshot.code} — {item.productSnapshot.name}</strong><b>{item.quantity} {item.productSnapshot.defaultUnit}</b></div>
     <div className="shipment-item-data"><span>Lote {item.batch.code} · fabricação {formatDate(item.batch.manufacturingDate)}</span>
       <span>Validade {formatDate(item.batch.expirationDate)}</span>

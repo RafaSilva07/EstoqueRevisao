@@ -67,4 +67,36 @@ describe('Histórico unificado', () => {
     expect(historyPaths).toHaveLength(2);
     expect(historyPaths[1]).toContain('search=ENT-000152');
   });
+
+  it('abre o registro individual e permite navegar para o grupo e outro filho', async () => {
+    const child = { ...item, id: 'record-A', groupId: 'shipment-1', recordId: 'record-A',
+      code: 'ENT-000152-A', groupCode: 'ENT-000152', productCode: '800001', productName: 'Produto A',
+      productUnit: 'UN', batchCode: 'SOCDNV', quantity: 10, groupItemCount: 2 };
+    const shipmentDetail = { ...item, id: 'shipment-1', codigoMovimentacao: 'ENT-000152', originSector: 'PRODUCAO',
+      destinationSector: 'REVISAO', createdBy: { id: 'operator', username: 'Operador' }, createdAt: item.occurredAt,
+      items: [
+        { id: 'record-A', codigoRegistro: 'ENT-000152-A', quantity: 10, productSnapshot: { code: '800001', name: 'Produto A', defaultUnit: 'UN' }, batch: { code: 'SOCDNV', manufacturingDate: '2026-09-01', expirationDate: '2028-09-01' }, photoMimeType: null },
+        { id: 'record-B', codigoRegistro: 'ENT-000152-B', quantity: 20, productSnapshot: { code: '800002', name: 'Produto B', defaultUnit: 'UN' }, batch: { code: 'SOCINV', manufacturingDate: '2026-09-02', expirationDate: '2028-09-02' }, photoMimeType: null },
+      ],
+    };
+    vi.spyOn(api, 'get').mockImplementation((path) => {
+      requestedPaths.push(path);
+      if (path.startsWith('/history?')) return Promise.resolve(result(path.includes('view=GROUP') ? [item] : [child]));
+      return Promise.resolve(shipmentDetail);
+    });
+    await act(async () => { root.render(<HistoryPage user={user} onOpenShipment={vi.fn()} onOpenPcp={vi.fn()} />); await Promise.resolve(); });
+    expect(requestedPaths[0]).toContain('view=RECORD');
+    expect(host.querySelector('.history-card')?.textContent).toContain('ENT-000152-A');
+    await act(async () => { host.querySelector<HTMLButtonElement>('.history-card')!.click(); await Promise.resolve(); });
+    expect(host.querySelector('[role="dialog"]')?.textContent).toContain('Produto A');
+    expect(host.querySelector('[role="dialog"]')?.textContent).not.toContain('Produto B');
+    await act(async () => { Array.from(host.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent?.includes('Ver grupo'))!.click(); await Promise.resolve(); });
+    expect(host.querySelector('[role="dialog"]')?.textContent).toContain('Produto B');
+    await act(async () => { Array.from(host.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent?.includes('ENT-000152-B'))!.click(); await Promise.resolve(); });
+    expect(host.querySelector('[role="dialog"]')?.textContent).toContain('Produto B');
+    expect(host.querySelector('[role="dialog"]')?.textContent).not.toContain('Produto A');
+    const view = Array.from(host.querySelectorAll('select')).find((select) => select.closest('label')?.textContent?.includes('Visualização'))!;
+    await act(async () => { view.value = 'GROUP'; view.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
+    expect(requestedPaths.some((path) => path.includes('view=GROUP'))).toBe(true);
+  });
 });

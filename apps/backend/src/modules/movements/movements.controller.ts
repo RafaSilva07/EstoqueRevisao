@@ -1,7 +1,6 @@
 import { AdminGuard } from '../users/admin.guard';
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
-import { PaginatedResult } from '../../shared/pagination/paginated-result.interface';
 import { getAuditRequestMetadata } from '../audit/audit-request-metadata';
 import { AuthenticatedUser } from '../auth/authenticated-user.interface';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
@@ -74,7 +73,7 @@ export class MovementsController {
 
   @Get()
   @RequirePermissions('movements.read')
-  list(@Query() query: MovementQueryDto): Promise<PaginatedResult<MovementEntity>> {
+  list(@Query() query: MovementQueryDto): ReturnType<MovementsService['list']> {
     return this.service.list(query);
   }
 

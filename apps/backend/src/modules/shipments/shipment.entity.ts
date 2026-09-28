@@ -43,6 +43,8 @@ export class ShipmentEntity {
 @Entity('shipment_items')
 export class ShipmentItemEntity {
   @PrimaryColumn('uuid') id: string = randomUUID();
+  @Column({ name: 'record_ordinal', type: 'integer' }) recordOrdinal!: number;
+  @Column({ name: 'codigo_registro', type: 'varchar', length: 50, insert: false, update: false }) codigoRegistro!: string;
   @Column({ name: 'shipment_id', type: 'uuid' }) shipmentId!: string;
   @ManyToOne(() => ShipmentEntity, (shipment) => shipment.items) @JoinColumn({ name: 'shipment_id' }) shipment!: ShipmentEntity;
   @Column({ name: 'product_id', type: 'uuid' }) productId!: string;

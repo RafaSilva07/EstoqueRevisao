@@ -2,6 +2,7 @@ import { IsIn, IsISO8601, IsOptional, IsString, MaxLength } from 'class-validato
 import { PaginationQueryDto } from '../../shared/pagination/pagination-query.dto';
 
 export class HistoryQueryDto extends PaginationQueryDto {
+  @IsOptional() @IsIn(['RECORD', 'GROUP']) view?: 'RECORD' | 'GROUP' = 'RECORD';
   @IsOptional() @IsIn(['ALL', 'OPEN', 'PENDING_PCP', 'DONE', 'CLOSED'])
   scope: 'ALL' | 'OPEN' | 'PENDING_PCP' | 'DONE' | 'CLOSED' = 'ALL';
 

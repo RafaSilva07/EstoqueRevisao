@@ -15,6 +15,7 @@ const labels: Record<string, string> = {
   REVIEW_CREATE: 'Revisão registrada',
   MOVEMENT_CANCEL: 'Movimentação cancelada',
   PCP_MOVEMENT_EXECUTE: 'Execução registrada pelo PCP',
+  PCP_MOVEMENT_RECORD_EXECUTE: 'Registro executado pelo PCP',
 };
 
 export function auditActionLabel(action: string): string {

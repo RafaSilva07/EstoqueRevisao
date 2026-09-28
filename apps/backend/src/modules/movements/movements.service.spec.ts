@@ -29,7 +29,7 @@ describe('MovementsService', () => {
       { productId: '60000000-0000-4000-8000-000000000002', batchId: '70000000-0000-4000-8000-000000000002', quantity: 3 },
     ],
   };
-  const repository = { findByRequestKey: jest.fn(), findById: jest.fn(), findByIdForUpdate: jest.fn(), findAndCount: jest.fn(), save: jest.fn(), saveItems: jest.fn(), saveDistributions: jest.fn() };
+  const repository = { findByRequestKey: jest.fn(), findById: jest.fn(), findByIdForUpdate: jest.fn(), findAndCount: jest.fn(), findRecordsAndCount: jest.fn(), save: jest.fn(), saveItems: jest.fn(), saveDistributions: jest.fn() };
   const locations = { findById: jest.fn(), findByReviewRole: jest.fn() };
   const stock = { lockPositions: jest.fn(), addQuantity: jest.fn(), removeQuantity: jest.fn(), transferQuantity: jest.fn(), distributeQuantity: jest.fn(), restoreDistributedQuantity: jest.fn() };
   const audit = { record: jest.fn() };
@@ -178,10 +178,18 @@ describe('MovementsService', () => {
   });
 
   it('lista o historico com os filtros recebidos', async () => {
-    const query = { page: 1, limit: 20, type: MovementType.ExternalEntry, productId: dto.items[0].productId };
+    const query = { view: 'GROUP' as const, page: 1, limit: 20, type: MovementType.ExternalEntry, productId: dto.items[0].productId };
     repository.findAndCount.mockResolvedValue([[new MovementEntity()], 1]);
     const result = await service.list(query);
     expect(repository.findAndCount).toHaveBeenCalledWith(query);
+    expect(result.meta.total).toBe(1);
+  });
+
+  it('lista registros individuais por padrão', async () => {
+    const query = { page: 1, limit: 20 };
+    repository.findRecordsAndCount.mockResolvedValue([[{ ...new MovementEntity(), recordId: 'registro-1' }], 1]);
+    const result = await service.list(query);
+    expect(repository.findRecordsAndCount).toHaveBeenCalledWith(query);
     expect(result.meta.total).toBe(1);
   });
 

@@ -19,6 +19,16 @@ export interface HistoryItem {
   direction: 'INCOMING' | 'OUTGOING' | 'INTERNAL';
   parentShipmentId: string | null;
   parentCode: string | null;
+  groupId?: string;
+  groupCode?: string | null;
+  recordId?: string;
+  groupItemCount?: number;
+  productCode?: string | null;
+  productName?: string | null;
+  productUnit?: string | null;
+  batchCode?: string | null;
+  quantity?: number | null;
+  pcpExecutionStatus?: string | null;
 }
 
 @Injectable()
@@ -51,11 +61,6 @@ export class HistoryService {
         WHERE $1::boolean AND (s.origin_sector = $2 OR s.destination_sector = $2)
           AND (NOT $3::boolean OR s.separation_completed_at IS NULL OR NOT EXISTS (
             SELECT 1 FROM shipments returned WHERE returned.source_shipment_id = s.id AND returned.shipment_kind = 'RETORNO_IMEDIATO'))
-          AND ($6 = '' OR s.codigo_movimentacao ILIKE '%' || $6 || '%'
-            OR parent.codigo_movimentacao ILIKE '%' || $6 || '%'
-            OR EXISTS (SELECT 1 FROM shipment_items search_item WHERE search_item.shipment_id = s.id
-              AND (search_item.product_snapshot->>'code' ILIKE '%' || $6 || '%'
-                OR search_item.product_snapshot->>'name' ILIKE '%' || $6 || '%')))
         UNION ALL
         SELECT m.id, 'MOVEMENT'::text AS kind, m.codigo_movimentacao AS code,
           m.type::text AS type, origin.name::text AS origin,
@@ -78,22 +83,77 @@ export class HistoryService {
         WHERE $3::boolean AND ($2 = 'PCP' OR m.shipment_id IS NULL OR (
           linked_shipment.separation_completed_at IS NOT NULL AND EXISTS (
             SELECT 1 FROM shipments returned WHERE returned.source_shipment_id = linked_shipment.id AND returned.shipment_kind = 'RETORNO_IMEDIATO')))
-          AND ($6 = '' OR m.codigo_movimentacao ILIKE '%' || $6 || '%' OR m.type ILIKE '%' || $6 || '%'
-            OR EXISTS (SELECT 1 FROM movement_items search_item WHERE search_item.movement_id = m.id
-              AND (search_item.product_snapshot->>'code' ILIKE '%' || $6 || '%'
-                OR search_item.product_snapshot->>'name' ILIKE '%' || $6 || '%')))
+      ), records AS (
+        SELECT item.id, entry.kind, item.codigo_registro AS code, entry.type, entry.origin,
+          entry.destination, entry.responsible, entry.occurred_at, entry.status,
+          CASE WHEN entry.scope IN ('OPEN', 'CLOSED') THEN entry.scope
+            WHEN linked_item.id IS NOT NULL AND linked_movement.requires_pcp_execution
+              AND linked_item.pcp_execution_status = 'PENDENTE' THEN 'PENDING_PCP'
+            ELSE 'DONE' END::text AS scope,
+          1 AS item_count, entry.direction, entry.parent_shipment_id, entry.parent_code,
+          entry.id AS group_id, entry.code AS group_code, entry.item_count AS group_item_count,
+          item.record_ordinal,
+          item.product_snapshot->>'code' AS product_code, item.product_snapshot->>'name' AS product_name,
+          item.product_snapshot->>'defaultUnit' AS product_unit, batch.code AS batch_code,
+          item.quantity, linked_item.pcp_execution_status
+        FROM entries entry JOIN shipment_items item ON item.shipment_id = entry.id
+          JOIN batches batch ON batch.id = item.batch_id
+          LEFT JOIN movement_items linked_item ON linked_item.shipment_item_id = item.id
+          LEFT JOIN movements linked_movement ON linked_movement.id = linked_item.movement_id
+        WHERE entry.kind = 'SHIPMENT'
+        UNION ALL
+        SELECT item.id, entry.kind, item.codigo_registro AS code, entry.type, entry.origin,
+          COALESCE((SELECT string_agg(DISTINCT target.name, ' · ' ORDER BY target.name)
+            FROM movement_item_distributions distribution JOIN stock_locations target
+              ON target.id = distribution.destination_location_id
+            WHERE distribution.movement_item_id = item.id), entry.destination) AS destination,
+          entry.responsible, entry.occurred_at, entry.status,
+          CASE WHEN entry.status = 'CANCELADA' THEN 'CLOSED'
+            WHEN movement.requires_pcp_execution AND item.pcp_execution_status = 'PENDENTE' THEN 'PENDING_PCP'
+            ELSE 'DONE' END::text AS scope,
+          1 AS item_count, entry.direction, entry.parent_shipment_id, entry.parent_code,
+          entry.id AS group_id, entry.code AS group_code, entry.item_count AS group_item_count,
+          item.record_ordinal,
+          COALESCE(item.product_snapshot->>'code', product.code) AS product_code,
+          COALESCE(item.product_snapshot->>'name', product.name) AS product_name,
+          COALESCE(item.product_snapshot->>'defaultUnit', product.default_unit) AS product_unit,
+          batch.code AS batch_code, item.quantity, item.pcp_execution_status
+        FROM entries entry JOIN movement_items item ON item.movement_id = entry.id
+          JOIN movements movement ON movement.id = item.movement_id
+          JOIN products product ON product.id = item.product_id
+          JOIN batches batch ON batch.id = item.batch_id
+        WHERE entry.kind = 'MOVEMENT'
       ), filtered AS (
-        SELECT * FROM entries
+        SELECT * FROM ${query.view === 'GROUP' ? 'entries' : 'records'} source
         WHERE ($4 = 'ALL' OR scope = $4)
           AND ($5 = 'ALL' OR kind = $5)
           AND ($7 = 'ALL' OR type = $7)
           AND ($8::timestamptz IS NULL OR occurred_at >= $8)
           AND ($9::timestamptz IS NULL OR occurred_at <= $9)
           AND ($10 = 'ALL' OR direction = $10)
+          AND ($6 = '' OR source.code ILIKE '%' || $6 || '%'
+            ${query.view === 'GROUP' ? `OR source.parent_code ILIKE '%' || $6 || '%'
+              OR source.type ILIKE '%' || $6 || '%'
+              OR EXISTS (SELECT 1 FROM shipment_items searched_shipment WHERE source.kind = 'SHIPMENT'
+                AND searched_shipment.shipment_id = source.id AND
+                (searched_shipment.codigo_registro ILIKE '%' || $6 || '%'
+                  OR searched_shipment.product_snapshot->>'code' ILIKE '%' || $6 || '%'
+                  OR searched_shipment.product_snapshot->>'name' ILIKE '%' || $6 || '%'))
+              OR EXISTS (SELECT 1 FROM movement_items searched_movement WHERE source.kind = 'MOVEMENT'
+                AND searched_movement.movement_id = source.id AND
+                (searched_movement.codigo_registro ILIKE '%' || $6 || '%'
+                  OR searched_movement.product_snapshot->>'code' ILIKE '%' || $6 || '%'
+                  OR searched_movement.product_snapshot->>'name' ILIKE '%' || $6 || '%'))`
+              : `OR source.group_code ILIKE '%' || $6 || '%'
+                OR source.parent_code ILIKE '%' || $6 || '%'
+                OR source.product_code ILIKE '%' || $6 || '%'
+                OR source.product_name ILIKE '%' || $6 || '%'`})
       )`;
     const sql = `${cte}
       SELECT *, count(*) OVER ()::int AS total FROM filtered
-      ORDER BY occurred_at ${query.sort === 'OLDEST' ? 'ASC' : 'DESC'}, id ${query.sort === 'OLDEST' ? 'ASC' : 'DESC'}
+      ORDER BY occurred_at ${query.sort === 'OLDEST' ? 'ASC' : 'DESC'},
+        ${query.view === 'GROUP' ? `id ${query.sort === 'OLDEST' ? 'ASC' : 'DESC'}`
+          : `group_id ${query.sort === 'OLDEST' ? 'ASC' : 'DESC'}, record_ordinal ${query.sort === 'OLDEST' ? 'ASC' : 'DESC'}, id ${query.sort === 'OLDEST' ? 'ASC' : 'DESC'}`}
       LIMIT $11 OFFSET $12`;
     const parameters = [canReadShipments, user.sector, canReadMovements, query.scope, query.kind, query.search?.trim() ?? '', query.type ?? 'ALL', query.dateFrom ?? null, query.dateTo ?? null, query.direction ?? 'ALL', query.limit, (query.page - 1) * query.limit];
     const rows: Array<Record<string, unknown>> = await this.dataSource.query(sql, parameters);
@@ -108,6 +168,13 @@ export class HistoryService {
       status: String(row.status), scope: row.scope as HistoryItem['scope'], itemCount: Number(row.item_count),
       direction: row.direction as HistoryItem['direction'], parentShipmentId: row.parent_shipment_id as string | null,
       parentCode: row.parent_code as string | null,
+      ...(query.view === 'RECORD' ? {
+        groupId: String(row.group_id), groupCode: row.group_code as string | null,
+        recordId: String(row.id), groupItemCount: Number(row.group_item_count),
+        productCode: row.product_code as string | null, productName: row.product_name as string | null,
+        productUnit: row.product_unit as string | null, batchCode: row.batch_code as string | null,
+        quantity: Number(row.quantity), pcpExecutionStatus: row.pcp_execution_status as string | null,
+      } : {}),
     })), total, query.page, query.limit);
   }
 }

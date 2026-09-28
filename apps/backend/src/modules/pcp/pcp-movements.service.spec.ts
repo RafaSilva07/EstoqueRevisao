@@ -5,7 +5,7 @@ import { PcpExecutionStatus } from './domain/pcp-execution-status.enum';
 import { PcpMovementsService } from './pcp-movements.service';
 
 describe('PcpMovementsService', () => {
-  const manager = {};
+  const manager = { getRepository: jest.fn().mockReturnValue({ update: jest.fn().mockResolvedValue(undefined) }) };
   const metadata = { requestId: '11111111-1111-4111-8111-111111111111', ipAddress: null, userAgent: null };
   const movement = (status = MovementStatus.Effective, pcpExecutionStatus = PcpExecutionStatus.Pending): MovementEntity => ({
     id: '22222222-2222-4222-8222-222222222222', status, pcpExecutionStatus,

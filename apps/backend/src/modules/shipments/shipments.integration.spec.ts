@@ -59,7 +59,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
       users[sector] = { id, sector, username: sector, sessionId: randomUUID(), roles: [], permissions: ['shipments.read','shipments.create','shipments.decide'] };
     }
     productId = randomUUID(); batchId = randomUUID();
-    await db.query(`INSERT INTO products(id,code,name,default_unit,shelf_life_years,created_by,updated_by) VALUES ($1,'SHIP-P','Produto do envio','UN',2,$2,$2)`, [productId,users.REVISAO.id]);
+    await db.query(`INSERT INTO products(id,code,name,default_unit,shelf_life_years,created_by,updated_by) VALUES ($1,'500001','Produto do envio','UN',2,$2,$2)`, [productId,users.REVISAO.id]);
     await db.query(`INSERT INTO batches(id,product_id,code,manufacturing_date,expiration_date,created_by,updated_by) VALUES ($1,$2,'SOCDNV','2026-08-31','2028-08-31',$3,$3)`, [batchId,productId,users.REVISAO.id]);
     sourceId = (await db.getRepository(StockLocationEntity).findOneByOrFail({ code: 'REVISAR' })).id;
     tufId = (await db.getRepository(StockLocationEntity).findOneByOrFail({ code: 'TUF' })).id;
@@ -68,6 +68,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
   beforeEach(async () => {
     jest.restoreAllMocks();
     await db.query('TRUNCATE audit_logs, movements, stock_positions, shipments CASCADE');
+    await db.query('DELETE FROM batches WHERE product_id = $1 AND id <> $2', [productId, batchId]);
     await db.query("UPDATE system_settings SET value = CASE key WHEN 'shipment_photo_minimum' THEN '1' ELSE '5' END WHERE key IN ('shipment_photo_minimum', 'shipment_photo_maximum')");
     await db.query('UPDATE products SET active = true WHERE id = $1', [productId]);
   });
@@ -91,6 +92,10 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     expect(await balance()).toBe(10);
     const movement = await db.getRepository(MovementEntity).findOneByOrFail({ shipmentId: shipment.id });
     expect(movement.type).toBe('ENTRADA_EXTERNA'); expect(movement.destinationLocationId).toBe(sourceId);
+    expect(shipment.items[0].codigoRegistro).toBe(`${shipment.codigoMovimentacao}-A`);
+    const linkedCode = (await db.query<Array<{ codigo_registro: string }>>(
+      'SELECT codigo_registro FROM movement_items WHERE movement_id=$1', [movement.id]))[0].codigo_registro;
+    expect(linkedCode).toBe(shipment.items[0].codigoRegistro);
     expect(await db.getRepository(AuditLogEntity).countBy({ entityId: shipment.id })).toBe(2);
   });
   it('consolida separação vencida com request UUID válido sem derrubar as consultas', async () => {
@@ -141,7 +146,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     const returned = await service.completeSeparation(shipment.id, { items: [{ shipmentItemId: shipment.items[0].id, returnQuantity: 3, photoCount: 2 }] }, [image(), image()], users.REVISAO, metadata());
     expect(returned.status).toBe('CONFIRMADO');
     expect(await balance()).toBe(7);
-    expect(await service.get(shipment.id, users.REVISAO)).toMatchObject({ movements: [{ items: [{ quantity: 7, productSnapshot: { code: 'SHIP-P' } }] }] });
+    expect(await service.get(shipment.id, users.REVISAO)).toMatchObject({ movements: [{ items: [{ quantity: 7, productSnapshot: { code: '500001' } }] }] });
     const derived = await db.getRepository(ShipmentEntity).findOneByOrFail({ sourceShipmentId: shipment.id });
     const detail = await service.get(derived.id, users.REVISAO);
     expect(detail.items[0].additionalPhotos).toMatchObject([{ ordinal: 2, mimeType: 'image/jpeg' }]);
@@ -279,6 +284,13 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     const b = await create(); await decide(b.id,'EXPEDICAO');
     expect(await balance()).toBe(7); expect(await balance(tufId)).toBe(12);
     expect(await db.getRepository(MovementEntity).countBy({ shipmentId: b.id })).toBe(2);
+    expect(b.items.map((item) => item.codigoRegistro)).toEqual([`${b.codigoMovimentacao}-A`, `${b.codigoMovimentacao}-B`]);
+    const linked = await db.query<Array<{ code: string; source_code: string }>>(`SELECT item.codigo_registro AS code,
+      source.codigo_registro AS source_code FROM movement_items item
+      JOIN shipment_items source ON source.id = item.shipment_item_id
+      JOIN movements movement ON movement.id = item.movement_id WHERE movement.shipment_id=$1`, [b.id]);
+    expect(linked).toHaveLength(2);
+    expect(linked.every((item) => item.code === item.source_code)).toBe(true);
   });
   it('reverte reservas anteriores quando outro item não tem saldo', async () => {
     await seed();
@@ -332,7 +344,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
   it('unifica o histórico sem duplicar envio confirmado e só finaliza após PCP', async () => {
     const history = new HistoryService(db);
     const review = { ...users.REVISAO, permissions: [...users.REVISAO.permissions, 'movements.read'] };
-    const query = { page: 1, limit: 20, scope: 'ALL' as const, kind: 'ALL' as const, direction: 'ALL' as const, sort: 'RECENT' as const, type: 'ALL' as const };
+    const query = { page: 1, limit: 20, view: 'GROUP' as const, scope: 'ALL' as const, kind: 'ALL' as const, direction: 'ALL' as const, sort: 'RECENT' as const, type: 'ALL' as const };
     const shipment = await incoming();
     expect((await history.list(query, review)).items).toEqual(expect.arrayContaining([expect.objectContaining({ id: shipment.id, scope: 'OPEN' })]));
     expect((await history.list(query, users.EXPEDICAO)).items).toHaveLength(0);

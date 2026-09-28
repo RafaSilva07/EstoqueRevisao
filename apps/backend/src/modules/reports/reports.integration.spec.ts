@@ -59,7 +59,7 @@ describeWithDatabase('Reports (PostgreSQL)', () => {
       [userId],
     );
     await dataSource.query(
-      `INSERT INTO products (id, code, name, default_unit, created_by, updated_by) VALUES ($1, 'REPORT', 'Produto Relatorio', 'UN', $2, $2)`,
+      `INSERT INTO products (id, code, name, default_unit, created_by, updated_by) VALUES ($1, '700001', 'Produto Relatorio', 'UN', $2, $2)`,
       [productId, userId],
     );
     await dataSource.query(`
@@ -164,7 +164,7 @@ describeWithDatabase('Reports (PostgreSQL)', () => {
     ]));
     const filtered = await service.reviews(Object.assign(new ReviewReportQueryDto(), {
       productId, batchId: expiredBatchId, destinationLocationId: lataBoaId,
-      product: 'REPORT', batch: 'COC', destination: 'Lata',
+      product: '700001', batch: 'COC', destination: 'Lata',
     }));
     expect(filtered.items).toHaveLength(1);
     expect(filtered.items[0].quantity).toBe(5);

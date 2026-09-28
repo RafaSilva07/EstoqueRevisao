@@ -5,8 +5,9 @@ import { MovementStatus } from '../domain/movement-status.enum';
 import { PcpExecutionStatus } from '../../pcp/domain/pcp-execution-status.enum';
 
 export class MovementQueryDto extends PaginationQueryDto {
+  @IsOptional() @IsIn(['RECORD', 'GROUP']) view?: 'RECORD' | 'GROUP' = 'RECORD';
   @IsOptional() @IsIn(['RECENT','OLDEST','TYPE']) sort?: 'RECENT' | 'OLDEST' | 'TYPE' = 'RECENT';
-  @IsOptional() @IsString() @MaxLength(30)
+  @IsOptional() @IsString() @MaxLength(50)
   codigoMovimentacao?: string;
   @IsOptional()
   @IsISO8601({ strict: true })

@@ -64,7 +64,7 @@ Evite abstrações prematuras. Uma regra compartilhada deve ser extraída quando
 - `users`, `roles`, `permissions`, `user_roles`, `role_permissions`: identidade e autorização.
 - `auth_sessions`: refresh tokens e revogação de sessão.
 - `audit_logs`: trilha técnica/administrativa persistente.
-- `products`, `product_unit_conversions`: cadastro mestre e conversões. Produto possui `shelf_life_years`, obrigatório em novas criações da API e nulo apenas para legados ainda não configurados. `unit_weight_grams` guarda um inteiro positivo somente para `UN`; permanece nulo em embalagens e em registros unitários antigos ainda não atualizados.
+- `products`, `product_unit_conversions`: cadastro mestre e conversões. `products.code` aceita somente seis dígitos, com sufixo opcional de ponto e dois dígitos, validado na API e pela constraint `CHK_products_code_format`. A migration recusa códigos legados incompatíveis sem modificá-los automaticamente. Produto possui `shelf_life_years`, obrigatório em novas criações da API e nulo apenas para legados ainda não configurados. `unit_weight_grams` guarda um inteiro positivo somente para `UN`; permanece nulo em embalagens e em registros unitários antigos ainda não atualizados.
 - `batches`: referências internas imutáveis de produto/código/fabricação/validade; unicidade por produto + código normalizado + validade, sem cadastro mestre público.
 - `stock_locations`: locais lógicos hierárquicos e configuração da revisão.
 - `stock_positions`: saldo materializado por produto, variante de lote/validade e local. O `batch_id` identifica a validade; as chaves de saldo e os serviços atômicos existentes permanecem.
@@ -72,6 +72,7 @@ Evite abstrações prematuras. Uma regra compartilhada deve ser extraída quando
 - `shipment_items` guarda a primeira foto (chave privada, MIME e tamanho); `shipment_item_additional_photos` guarda as demais, com ordem e constraints próprias. Essa extensão preserva os envios antigos sem duplicar a foto inicial. Imagens permanecem fora do PostgreSQL e chaves privadas não são expostas nas respostas comuns.
 - `movements`: cabeçalho, estado, metadados de cancelamento e `shipment_id` opcional; índice único por envio/origem impede duplicar a efetivação.
 - `movement_items`: produto, referências imutáveis de lote/datas de origem e destino, quantidade e `product_snapshot` de código/descrição/unidade nas novas operações. Legados não recebem snapshots inventados.
+- `shipment_items` e `movement_items` possuem `record_ordinal` e `codigo_registro` únicos por grupo; `movement_items.shipment_item_id` liga o registro efetivo ao item enviado, mantendo seu código. O PCP guarda estado, executor, instante e observação no registro; o cabeçalho de `movements` conserva o estado agregado para compatibilidade.
 - `movement_item_distributions`: destinos e parcelas de itens revisados.
 - `products.units_per_package` e `product_unit_options`: fator por embalagem e alternativas de produto unitário. Não substituem as conversões legadas do mesmo código.
 - Revisões com desmontagem gravam `output_product_id`, `output_batch_id`, `output_quantity`, `units_per_package` e `output_product_snapshot` em `movement_items`. Campos nulos preservam operações anteriores. FK composta protege a associação produto/lote resultante; check protege a multiplicação, e trigger restringe a conversão à revisão com lote/datas preservados.
@@ -82,6 +83,7 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 
 - `MovementPublicCodes1790121600000` adiciona `movements.codigo_movimentacao`, UNIQUE e sequences PostgreSQL `seq_movimentacao_ent/sai/rev`. Um trigger gera o código no INSERT e bloqueia alteração de código/tipo no UPDATE. As sequences pertencem à coluna e são removidas no rollback da migration. Backfill transacional e cronológico. TypeORM mapeia o atributo sem escrita; o repositório recupera o código gerado antes da auditoria. Não se usa `MAX + 1`.
 - `ShipmentLifecyclePublicCodes1790208000000` transfere a identidade pública dos fluxos setoriais para `shipments`: o trigger gera ENT/SAI no INSERT do envio e a movimentação efetivada herda esse valor. `shipments.codigo_movimentacao` é único; movimentos sem envio mantêm índice único parcial. Vários registros técnicos originados pelo mesmo envio podem compartilhar o código da operação. O backfill reutiliza o código já ligado a envios confirmados e gera códigos para pendentes/recusados antigos.
+- `MovementRecords1790726400000` acrescenta códigos filhos e ordinais aos itens, com backfill determinístico, unicidade, vínculo de envio e migração do estado PCP existente. Triggers geram `A…Z, AA…` ao inserir e protegem a identidade do registro; a atualização histórica suspende temporariamente o trigger de imutabilidade dos itens de envio dentro da transação da migration. Transferências continuam com código público nulo.
 
 - `synchronize` é desativado; toda evolução do schema ocorre por migration versionada.
 - Operações críticas recebem um único `EntityManager` e confirmam documento, saldo e auditoria juntos.
@@ -158,19 +160,21 @@ pcp.movements.read / pcp.movements.execute
 
 ## Módulo PCP
 
-O módulo `pcp` expõe uma projeção paginada de `movements`, sem duplicar movimentações nem carregar itens/fotos na listagem. O detalhe reutiliza o agregado completo, a auditoria central e, quando existe `shipment_id`, apenas as referências de evidência dos itens do envio. A imagem privada continua sendo servida pelo endpoint autenticado de envios e nunca pelo banco ou frontend diretamente.
+O módulo `pcp` pagina `movement_items` por padrão; `view=GROUP` pagina cabeçalhos. O detalhe individual reutiliza o agregado existente, mas mostra somente o filho e sua evidência; o detalhe do grupo lista filhos clicáveis. A imagem privada continua sendo servida pelo endpoint autenticado de envios e nunca pelo banco ou frontend diretamente.
 
 ```text
 fluxo operacional -> EFETIVADA/CONCLUIDA -> PCP PENDENTE -> PCP EXECUTADA
 envio -> AGUARDANDO_RECEBIMENTO -> CONFIRMADO -> movement EFETIVADA -> PCP PENDENTE
 ```
 
-`movements.pcp_execution_status` é separado de `movements.status`; executor, instante e observação administrativa completam a transição. Constraints garantem a coerência dos campos e índices atendem fila por estado/data. A execução usa transação, lock pessimista da movimentação e auditoria `PCP_MOVEMENT_EXECUTE`.
+`movement_items.pcp_execution_status` é separado do status operacional do grupo; executor, instante e observação administrativa pertencem ao filho. A execução individual usa transação, lock pessimista do cabeçalho para serializar filhos concorrentes e auditoria `PCP_MOVEMENT_RECORD_EXECUTE`. O estado PCP do cabeçalho muda para `EXECUTADA` quando nenhum filho resta pendente. A rota antiga de execução por grupo permanece compatível e marca os filhos pendentes juntos.
 
 Endpoints:
 
 - `GET /api/v1/pcp/movements`: período, estado operacional, estado PCP, tipo, origem, destino, produto/lote, ordenação e paginação;
 - `GET /api/v1/pcp/movements/:id`: agregado, evidências e histórico auditável;
+- `GET /api/v1/pcp/movements/records/:id`: detalhe de um filho;
+- `POST /api/v1/pcp/movements/records/:id/execution`: execução individual auditada;
 - `POST /api/v1/pcp/movements/:id/execution`: transição irreversível com observação opcional.
 
 As permissões são `pcp.movements.read` e `pcp.movements.execute`. O papel exclusivo `PCP` recebe ainda somente leituras necessárias de produtos, lotes, locais, saldos e evidências. Autorizações operacionais continuam protegidas pelos guards existentes.

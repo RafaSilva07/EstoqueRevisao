@@ -48,7 +48,8 @@ export class ShipmentsService {
       .leftJoinAndSelect('item.additionalPhotos', 'additionalPhoto')
       .leftJoinAndSelect('item.separationDraft', 'separationDraft')
       .leftJoinAndSelect('item.batch', 'batch')
-      .leftJoinAndSelect('item.stockLocation', 'location');
+      .leftJoinAndSelect('item.stockLocation', 'location')
+      .orderBy('item.recordOrdinal', 'ASC');
   }
 
   async get(id: string, user: AuthenticatedUser, manager = this.dataSource.manager, processExpiration = true): Promise<ShipmentEntity> {
@@ -205,6 +206,7 @@ export class ShipmentsService {
         const shipmentItemId = crypto.randomUUID();
         items.push(Object.assign(new ShipmentItemEntity(), {
           id: shipmentItemId,
+          recordOrdinal: index + 1,
           shipmentId: shipment.id, productId: product.id, batchId: batch.id,
           stockLocationId: input.stockLocationId ?? null, quantity: input.quantity,
           observation: input.observation?.trim() || null,
@@ -448,6 +450,7 @@ export class ShipmentsService {
             })));
             return Object.assign(new ShipmentItemEntity(), {
               id: shipmentItemId,
+              recordOrdinal: itemIndex + 1,
               shipmentId: derived.id, productId: source.productId, batchId: source.batchId,
               stockLocationId: shipment.destinationLocationId, quantity: input.returnQuantity,
               observation: source.observation, productSnapshot: source.productSnapshot,
@@ -554,6 +557,7 @@ export class ShipmentsService {
       await this.movements.save(movement, manager);
       await this.movements.saveItems(items.map((item) => Object.assign(new MovementItemEntity(), {
         movementId: movement.id, productId: item.productId, batchId: item.batchId,
+        recordOrdinal: item.recordOrdinal, shipmentItemId: item.id,
         destinationBatchId: null, quantity: item.quantity, productSnapshot: item.productSnapshot,
       })), manager);
       await this.audit.record({ ...metadata, manager, userId: shipment.decidedById, action: 'SHIPMENT_MOVEMENT_CREATE', entityType: 'MOVEMENT',

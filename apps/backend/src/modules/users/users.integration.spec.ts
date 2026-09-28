@@ -57,7 +57,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     const created = await service.create({ ...input('review-operator'), sector: 'REVISAO', roleCodes: ['REVISAO'] }, actor, metadata());
     expect(created.roles.map((role) => role.code)).toEqual(['REVISAO']);
     const permissions = await db.query<{ code: string }[]>("SELECT p.code FROM permissions p JOIN role_permissions rp ON rp.permission_id=p.id JOIN roles r ON r.id=rp.role_id WHERE r.code='REVISAO'");
-    expect(permissions.map((p) => p.code).sort()).toEqual(['products.read', 'product-conversions.read', 'batches.read', 'stocks.read', 'stock-positions.read', 'movements.read', 'movements.create', 'shipments.read', 'shipments.create', 'shipments.decide'].sort());
+    expect(permissions.map((p) => p.code).sort()).toEqual(['products.read', 'products.create', 'products.update', 'product-conversions.read', 'batches.read', 'stocks.read', 'stock-positions.read', 'movements.read', 'movements.create', 'shipments.read', 'shipments.create', 'shipments.decide'].sort());
     await expect(service.create({ ...input('wrong-sector'), roleCodes: ['REVISAO'] }, actor, metadata())).rejects.toBeInstanceOf(BadRequestException);
     await expect(service.create(input('forbidden'), created.id, metadata())).rejects.toBeInstanceOf(ForbiddenException);
   });
