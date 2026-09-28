@@ -255,7 +255,7 @@ Envios, entradas, saídas, transferências e revisões apresentam a lista e o bo
 
 - Home com atalhos somente para funções disponíveis ao usuário.
 - Tela compacta de operações no mobile.
-- Barra inferior no celular e sidebar no desktop.
+- Barra inferior no celular; no desktop, barra lateral compacta por padrão, com ícones clicáveis, nomes acessíveis e botão para expandir/recolher os rótulos. Os destinos continuam limitados ao perfil e ao modo operacional ativo.
 - Cards responsivos, filtros recolhíveis e painéis de detalhe.
 - Feedback padronizado de loading, vazio, sucesso e erro.
 - Confirmação antes de operações críticas e bloqueio dos botões durante envio.

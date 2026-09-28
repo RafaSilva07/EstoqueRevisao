@@ -12,7 +12,7 @@ import { ReviewReportsPage } from './ReviewReportsPage';
 import { StockReportsPage } from './StockReportsPage';
 import { Login } from './Login';
 import { ShipmentsPage } from './ShipmentsPage';
-import { NavigationTrail, SectionMenu } from './Navigation';
+import { NavigationTrail, SectionMenu, SidebarNavigation } from './Navigation';
 import { homeActions, Page, parentPage } from './navigation-model';
 import { Sector } from './shipments';
 import { UsersPage } from './UsersPage';
@@ -160,6 +160,7 @@ export function App() {
   const [operationalMode, setOperationalMode] = useState<OperationalMode>('REVISAO');
   const [checking, setChecking] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [page, setPage] = useState<Page>('home');
   const [selectedMovementId, setSelectedMovementId] = useState<string>();
   const [selectedRecordId, setSelectedRecordId] = useState<string>();
@@ -234,9 +235,9 @@ export function App() {
     else if (destination === 'movements' || destination === 'history') openHistory();
     else navigate(destination);
   };
-  return <div className="app-shell"><a className="skip-link" href="#main-content">Ir para o conteúdo</a>
+  return <div className={`app-shell${sidebarExpanded ? ' sidebar-is-expanded' : ''}`}><a className="skip-link" href="#main-content">Ir para o conteúdo</a>
     <header className="topbar"><button className="brand" onClick={() => go('home')} aria-label="Ir para o início"><span>ER</span><strong>Estoque Revisão</strong></button><div className="user-area">{switcher}<span className="user-name">{user.username} · {operationalModeLabel[activeMode]}</span><button className="secondary desktop-logout" onClick={logout} disabled={loggingOut}>Sair</button></div></header>
-    <aside className="sidebar"><nav aria-label="Navegação principal"><NavButton active={page === 'home'} onClick={() => go('home')}>Início</NavButton>{areas.map((area) => <NavButton key={area.page} active={page === area.page || parentPage(page, activeUser) === area.page} onClick={() => go(area.page)}>{area.title}</NavButton>)}<NavButton active={page === 'more' || page === 'users' || page === 'settings'} onClick={() => go('more')}>Menu e conta</NavButton></nav><p className="sidebar-note">{operationalModeLabel[activeMode]}</p></aside>
+    <SidebarNavigation page={page} user={activeUser} areas={areas} modeLabel={operationalModeLabel[activeMode]} expanded={sidebarExpanded} onToggle={() => setSidebarExpanded((value) => !value)} navigate={go} />
     <main className="workspace" id="main-content" tabIndex={-1}>
       <NavigationTrail page={page} user={activeUser} navigate={go} />
       {page === 'home' && <OperationalHomePage key={activeMode} user={activeUser} navigate={go} onOpenRecord={(destination, id, recordId) => { navigate(destination === 'movements' ? 'history' : destination); setSelectedRecordId(recordId ?? id); setSelectedMovementId(id); setMovementSuccess(undefined); }} />}

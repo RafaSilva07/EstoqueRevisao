@@ -1,7 +1,43 @@
+import { ReactNode } from 'react';
 import { UserSession } from './api';
 import { EmptyState, PageHeader } from './components';
 
-import { homeActions, menuActions, Page, pageTitles, parentPage } from './navigation-model';
+import { homeActions, menuActions, MenuAction, Page, pageTitles, parentPage } from './navigation-model';
+
+function SidebarIcon({ page }: { page: Page }) {
+  let shape: ReactNode;
+  switch (page) {
+    case 'home': shape = <><path d="m3 10 9-7 9 7" /><path d="M5 9v11h14V9M9 20v-7h6v7" /></>; break;
+    case 'operations': shape = <><path d="M4 7h15m0 0-4-4m4 4-4 4M20 17H5m0 0 4-4m-4 4 4 4" /></>; break;
+    case 'shipments': shape = <><path d="m3 7 9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10M8 5l9 4" /></>; break;
+    case 'inventory': shape = <><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M4 10h16M9 14h6M9 17h6" /></>; break;
+    case 'history': shape = <><path d="M4.5 8A9 9 0 1 1 3 12M3 5v4h4M12 7v5l3 2" /></>; break;
+    case 'products': shape = <><path d="M3 4h11l7 8-7 8H3z" /><circle cx="8" cy="12" r="1" /></>; break;
+    case 'pcp': shape = <><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4.5V3h6v1.5M8 11l1.5 1.5L12 10M8 17h8" /></>; break;
+    default: shape = <><circle cx="12" cy="12" r="9" /><circle cx="7" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="17" cy="12" r="1" /></>;
+  }
+  return <svg className="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">{shape}</svg>;
+}
+
+export function SidebarNavigation({ page, user, areas, modeLabel, expanded, onToggle, navigate }: {
+  page: Page; user: UserSession; areas: MenuAction[]; modeLabel: string; expanded: boolean;
+  onToggle: () => void; navigate: (page: Page) => void;
+}) {
+  const currentSection = ['more', 'users', 'settings', 'stocks', 'reports', 'reports-reviews'].includes(page)
+    ? 'more' : areas.some((area) => area.page === page) ? page : parentPage(page, user);
+  const links: Array<{ page: Page; title: string }> = [{ page: 'home', title: 'Início' }, ...areas, { page: 'more', title: 'Menu e conta' }];
+  const toggleLabel = expanded ? 'Recolher menu lateral' : 'Expandir menu lateral';
+  return <aside className={`sidebar ${expanded ? 'sidebar-expanded' : 'sidebar-collapsed'}`}>
+    <div className="sidebar-main">
+      <div className="sidebar-controls"><button type="button" className="sidebar-toggle" aria-label={toggleLabel} aria-expanded={expanded} aria-controls="sidebar-navigation" title={toggleLabel} onClick={onToggle}>
+        <svg className="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /><path d={expanded ? 'm16 9-3 3 3 3' : 'm14 9 3 3-3 3'} /></svg>
+        <span className="sidebar-label">{expanded ? 'Recolher menu' : 'Abrir menu'}</span>
+      </button></div>
+      <nav id="sidebar-navigation" aria-label="Navegação principal">{links.map((link) => <button key={link.page} type="button" className={`sidebar-link${currentSection === link.page ? ' current' : ''}`} aria-label={link.title} aria-current={currentSection === link.page ? 'page' : undefined} title={expanded ? undefined : link.title} onClick={() => navigate(link.page)}><SidebarIcon page={link.page} /><span className="sidebar-label">{link.title}</span></button>)}</nav>
+    </div>
+    <div className="sidebar-footer" title={expanded ? undefined : `Modo: ${modeLabel}`}><span className="sidebar-mode-dot" aria-hidden="true" /><span className="sidebar-label">{modeLabel}</span></div>
+  </aside>;
+}
 
 export function SectionMenu({ page, user, navigate }: { page: Page; user: UserSession; navigate: (page: Page) => void }) {
   const actions = page === 'home' ? homeActions(user) : menuActions(page, user);
