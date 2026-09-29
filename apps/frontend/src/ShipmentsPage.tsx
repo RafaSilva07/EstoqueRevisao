@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, Paginated, ShipmentPhotoLimits, UserSession } from './api';
 import { EmptyState, LoadingState, Modal, Notice, PageHeader } from './components';
 import { formatDate, formatDateTime } from './format';
+import { MovementRecordRow } from './MovementRecordRow';
 import { NewShipment } from './NewShipment';
 import { useMovementSubmission } from './useMovementSubmission';
 import { ShipmentSector, sectorLabel, Shipment, ShipmentAuditEvent, shipmentStatusLabel } from './shipments';
@@ -192,7 +193,20 @@ export function ShipmentsPage({ user, initialView = 'pending', initialCreating =
     <label>Buscar pelo código da movimentação<input type="search" placeholder="ENT-000153" value={codeSearch} onChange={(event) => { setCodeSearch(event.target.value); setPage(1); }} /></label>
     <label>Ordenar por<select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}><option value="RECENT">Mais recentes</option><option value="OLDEST">Mais antigos</option><option value="STATUS">Status</option></select></label>
     {error ? <Notice kind="error">{error} <button className="secondary" onClick={() => void load()}>Tentar novamente</button></Notice> : loading ? <LoadingState label="Consultando envios" /> : !data?.items.length ? <EmptyState title="Nenhum envio nesta consulta" description="Novos recebimentos e decisões aparecerão aqui." /> : <>
-      <div className="shipment-list">{data.items.map((shipment) => <article className="surface shipment-card clickable-card" key={shipment.id} tabIndex={0} role="button" onClick={() => { setSelected(shipment); setDecision(null); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(shipment); setDecision(null); } }}>
+      <div className="shipment-list">{data.items.map((shipment) => <div className="shipment-list-entry" key={shipment.id}>
+        <div className="shipment-record-lines">{shipment.items.map((item) => { const openShipment = () => { setSelected(shipment); setDecision(null); }; const needsReceiving = shipment.status === 'AGUARDANDO_RECEBIMENTO' && shipment.destinationSector === user.sector && canDecide; const needsSeparation = shipment.status === 'EM_SEPARACAO' && user.sector === 'REVISAO'; return <MovementRecordRow key={item.id}
+          code={item.codigoRegistro ?? shipment.codigoMovimentacao} occurredAt={shipment.createdAt}
+          status={shipment.status === 'AGUARDANDO_RECEBIMENTO' ? 'Aguardando recebimento' : shipment.status === 'EM_SEPARACAO' ? 'Em separação' : shipmentStatusLabel[shipment.status]}
+          statusTone={['RECUSADO', 'CANCELADO'].includes(shipment.status) ? 'canceled' : shipment.status === 'CONFIRMADO' ? 'active' : 'warning'}
+          productCode={item.productSnapshot.code} productName={item.productSnapshot.name}
+          batchCode={item.batch.code} manufacturingDate={item.batch.manufacturingDate}
+          unit={item.productSnapshot.defaultUnit} quantity={item.quantity}
+          origin={sectorLabel[shipment.originSector]} destination={sectorLabel[shipment.destinationSector]}
+          sentBy={shipment.createdBy.username} receivedBy={shipment.decidedBy?.username ?? shipment.receivedBy?.username}
+          pcpExecutedBy={null} receiptRequired pcpRequired={shipment.shipmentKind !== 'RETORNO_IMEDIATO'}
+          onOpen={openShipment} action={(needsReceiving || needsSeparation) && <button type="button" className="secondary" onClick={openShipment}>{needsReceiving ? 'Abrir para receber' : 'Continuar separação'}</button>}
+        />; })}</div>
+        <article className="surface shipment-card clickable-card" tabIndex={0} role="button" onClick={() => { setSelected(shipment); setDecision(null); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(shipment); setDecision(null); } }}>
         <span className={`badge ${shipment.status === 'CONFIRMADO' ? 'active' : ['RECUSADO','CANCELADO'].includes(shipment.status) ? 'canceled' : ''}`}>{shipmentStatusLabel[shipment.status]}</span>
         <p><strong>{shipment.codigoMovimentacao}</strong></p><h2>{sectorLabel[shipment.originSector]} → {sectorLabel[shipment.destinationSector]}</h2>
         <p>{shipment.createdBy.username} · {formatDateTime(shipment.createdAt)}</p><p>{shipment.items.length} item(ns)</p>
@@ -201,7 +215,7 @@ export function ShipmentsPage({ user, initialView = 'pending', initialCreating =
         {shipment.decidedAt && <p>{shipmentStatusLabel[shipment.status]} por {shipment.decidedBy?.username} em {formatDateTime(shipment.decidedAt)}</p>}
         {shipment.refusalReason && <Notice kind="info">{shipment.status === 'CANCELADO' ? 'Motivo do cancelamento' : 'Motivo da recusa'}: {shipment.refusalReason}</Notice>}
         <button className="secondary button-wide" onClick={(event) => { event.stopPropagation(); setSelected(shipment); setDecision(null); }}>Ver itens e detalhes</button>
-      </article>)}</div>
+      </article></div>)}</div>
       <div className="shipment-pagination"><button className="secondary" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Anterior</button><span>Página {page} de {data.meta.totalPages} · {data.meta.total} envios</span><button className="secondary" disabled={page >= data.meta.totalPages} onClick={() => setPage((value) => value + 1)}>Próxima</button></div>
     </>}
     {selected && !decision && <Modal labelledBy="shipment-detail-title" className="shipment-detail-dialog" onClose={() => setSelected(null)}>

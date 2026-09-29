@@ -17,6 +17,9 @@ export type MovementListEntry = MovementEntity & {
   quantity?: number;
   itemCount?: number;
   executedCount?: number;
+  sentBy?: string | null;
+  receivedBy?: string | null;
+  pcpExecutedBy?: string | null;
 };
 
 @Injectable()

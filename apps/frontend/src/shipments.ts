@@ -23,7 +23,7 @@ export interface Shipment {
   receivedAt: string | null; separationStartedAt: string | null; separationExpiresAt: string | null; separationCompletedAt: string | null;
   observation: string | null;
   createdAt: string; createdBy: { id: string; username: string };
-  decidedAt: string | null; decidedBy: { username: string } | null; refusalReason: string | null;
+  decidedAt: string | null; decidedBy: { username: string } | null; receivedBy?: { username: string } | null; refusalReason: string | null;
   items: { id: string; codigoRegistro?: string; recordOrdinal?: number; productId: string; batchId: string; stockLocationId: string | null; quantity: number; productSnapshot: Pick<Product, 'code' | 'name' | 'defaultUnit'>;
     batch: Batch; stockLocation: StockLocation | null; observation: string | null; photoMimeType: string | null; photoSize: number | null;
     additionalPhotos?: Array<{ ordinal: number; mimeType: string; size: number }>;

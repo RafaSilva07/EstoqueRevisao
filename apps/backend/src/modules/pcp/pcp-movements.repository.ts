@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { AuditLogEntity } from '../audit/entities/audit-log.entity';
 import { MovementStatus } from '../movements/domain/movement-status.enum';
 import { MovementEntity } from '../movements/entities/movement.entity';
@@ -27,7 +27,8 @@ export class PcpMovementsRepository {
       .leftJoinAndSelect('movement.destinationLocation', 'destination')
       .innerJoinAndSelect('movement.responsibleUser', 'responsible')
       .innerJoinAndSelect('item.product', 'product')
-      .innerJoinAndSelect('item.batch', 'batch');
+      .innerJoinAndSelect('item.batch', 'batch')
+      .leftJoinAndSelect('item.pcpExecutedByUser', 'itemPcpExecutedBy');
     if (query.dateFrom) builder.andWhere('movement.occurredAt >= :dateFrom', { dateFrom: query.dateFrom });
     if (query.dateTo) builder.andWhere('movement.occurredAt <= :dateTo', { dateTo: query.dateTo });
     if (query.operationalStatus) builder.andWhere('movement.status = :status', {
@@ -49,12 +50,24 @@ export class PcpMovementsRepository {
     const [items, total] = await builder.orderBy(primary, direction)
       .addOrderBy('movement.occurredAt', direction).addOrderBy('item.recordOrdinal', direction)
       .addOrderBy('item.id', direction).skip((query.page - 1) * query.limit).take(query.limit).getManyAndCount();
+    const shipmentIds = [...new Set(items.map((item) => item.movement.shipmentId).filter((id): id is string => Boolean(id)))];
+    const shipments = shipmentIds.length ? await this.shipments.find({
+      where: { id: In(shipmentIds) }, relations: { createdBy: true, decidedBy: true, receivedBy: true },
+    }) : [];
+    const shipmentById = new Map(shipments.map((shipment) => [shipment.id, shipment]));
     return [items.map((item) => ({ ...item.movement, recordId: item.id, itemCount: 1,
       codigoGrupo: item.movement.codigoMovimentacao, codigoRegistro: item.codigoRegistro,
       product: item.product, productSnapshot: item.productSnapshot, batch: item.batch,
       quantity: item.quantity, pcpExecutionStatus: item.pcpExecutionStatus,
       pcpExecutedByUserId: item.pcpExecutedByUserId, pcpExecutedAt: item.pcpExecutedAt,
-      pcpExecutionObservation: item.pcpExecutionObservation })), total];
+      pcpExecutionObservation: item.pcpExecutionObservation,
+      sentBy: (item.movement.shipmentId ? shipmentById.get(item.movement.shipmentId)?.createdBy.username : null)
+        ?? item.movement.responsibleUser.username,
+      receivedBy: item.movement.shipmentId
+        ? shipmentById.get(item.movement.shipmentId)?.decidedBy?.username
+          ?? shipmentById.get(item.movement.shipmentId)?.receivedBy?.username ?? null : null,
+      pcpExecutedBy: item.pcpExecutedByUser?.username ?? null,
+    })), total];
   }
 
   async findAndCount(query: PcpMovementQueryDto): Promise<[MovementEntity[], number]> {

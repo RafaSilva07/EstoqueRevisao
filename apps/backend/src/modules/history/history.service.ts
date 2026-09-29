@@ -27,8 +27,13 @@ export interface HistoryItem {
   productName?: string | null;
   productUnit?: string | null;
   batchCode?: string | null;
+  manufacturingDate?: string | null;
   quantity?: number | null;
   pcpExecutionStatus?: string | null;
+  sentBy?: string | null;
+  receivedBy?: string | null;
+  pcpExecutedBy?: string | null;
+  pcpRequired?: boolean;
 }
 
 @Injectable()
@@ -95,11 +100,21 @@ export class HistoryService {
           item.record_ordinal,
           item.product_snapshot->>'code' AS product_code, item.product_snapshot->>'name' AS product_name,
           item.product_snapshot->>'defaultUnit' AS product_unit, batch.code AS batch_code,
-          item.quantity, linked_item.pcp_execution_status
+          item.quantity, linked_item.pcp_execution_status,
+          batch.manufacturing_date::text AS manufacturing_date,
+          entry.responsible AS sent_by,
+          CASE WHEN shipment.status IN ('CONFIRMADO', 'EM_SEPARACAO')
+            THEN COALESCE(receiver.username, early_receiver.username) ELSE NULL END AS received_by,
+          pcp_user.username AS pcp_executed_by,
+          COALESCE(linked_movement.requires_pcp_execution, shipment.shipment_kind <> 'RETORNO_IMEDIATO') AS pcp_required
         FROM entries entry JOIN shipment_items item ON item.shipment_id = entry.id
           JOIN batches batch ON batch.id = item.batch_id
+          JOIN shipments shipment ON shipment.id = item.shipment_id
+          LEFT JOIN users receiver ON receiver.id = shipment.decided_by_id
+          LEFT JOIN users early_receiver ON early_receiver.id = shipment.received_by_id
           LEFT JOIN movement_items linked_item ON linked_item.shipment_item_id = item.id
           LEFT JOIN movements linked_movement ON linked_movement.id = linked_item.movement_id
+          LEFT JOIN users pcp_user ON pcp_user.id = linked_item.pcp_executed_by_user_id
         WHERE entry.kind = 'SHIPMENT'
         UNION ALL
         SELECT item.id, entry.kind, item.codigo_registro AS code, entry.type, entry.origin,
@@ -117,11 +132,21 @@ export class HistoryService {
           COALESCE(item.product_snapshot->>'code', product.code) AS product_code,
           COALESCE(item.product_snapshot->>'name', product.name) AS product_name,
           COALESCE(item.product_snapshot->>'defaultUnit', product.default_unit) AS product_unit,
-          batch.code AS batch_code, item.quantity, item.pcp_execution_status
+          batch.code AS batch_code, item.quantity, item.pcp_execution_status,
+          batch.manufacturing_date::text AS manufacturing_date,
+          COALESCE(sender.username, entry.responsible) AS sent_by,
+          COALESCE(receiver.username, early_receiver.username) AS received_by,
+          pcp_user.username AS pcp_executed_by,
+          movement.requires_pcp_execution AS pcp_required
         FROM entries entry JOIN movement_items item ON item.movement_id = entry.id
           JOIN movements movement ON movement.id = item.movement_id
           JOIN products product ON product.id = item.product_id
           JOIN batches batch ON batch.id = item.batch_id
+          LEFT JOIN shipments shipment ON shipment.id = movement.shipment_id
+          LEFT JOIN users sender ON sender.id = shipment.created_by_id
+          LEFT JOIN users receiver ON receiver.id = shipment.decided_by_id
+          LEFT JOIN users early_receiver ON early_receiver.id = shipment.received_by_id
+          LEFT JOIN users pcp_user ON pcp_user.id = item.pcp_executed_by_user_id
         WHERE entry.kind = 'MOVEMENT'
       ), filtered AS (
         SELECT * FROM ${query.view === 'GROUP' ? 'entries' : 'records'} source
@@ -174,6 +199,9 @@ export class HistoryService {
         productCode: row.product_code as string | null, productName: row.product_name as string | null,
         productUnit: row.product_unit as string | null, batchCode: row.batch_code as string | null,
         quantity: Number(row.quantity), pcpExecutionStatus: row.pcp_execution_status as string | null,
+        manufacturingDate: row.manufacturing_date as string | null,
+        sentBy: row.sent_by as string | null, receivedBy: row.received_by as string | null,
+        pcpExecutedBy: row.pcp_executed_by as string | null, pcpRequired: Boolean(row.pcp_required),
       } : {}),
     })), total, query.page, query.limit);
   }

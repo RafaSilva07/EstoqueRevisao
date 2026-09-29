@@ -54,6 +54,8 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     expect(first.meta.total).toBe(3);
     expect(first.items.map((item) => item.code)).toEqual([`${groupCode}-C`, `${groupCode}-B`]);
     expect(first.items.every((item) => item.groupCode === groupCode && item.groupId === movementId)).toBe(true);
+    expect(first.items[0]).toMatchObject({ manufacturingDate: '2026-01-01', sentBy: 'history-records',
+      receivedBy: null, pcpExecutedBy: null, pcpRequired: true });
     const child = await history.list(query({ search: `${groupCode}-B` }), user);
     expect(child.meta.total).toBe(1);
     expect(child.items[0].quantity).toBe(20);
@@ -68,6 +70,8 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     const shipmentRecords = await history.list(query({ search: shipmentCode }), user);
     expect(shipmentRecords.items.map((item) => item.code)).toEqual([`${shipmentCode}-B`, `${shipmentCode}-A`]);
     expect(shipmentRecords.items.every((item) => item.scope === 'OPEN')).toBe(true);
+    expect(shipmentRecords.items[0]).toMatchObject({ manufacturingDate: '2026-01-01',
+      sentBy: 'history-records', receivedBy: null, pcpExecutedBy: null });
     await db.query(`UPDATE movement_items SET pcp_execution_status='EXECUTADA', pcp_executed_by_user_id=$1,
       pcp_executed_at=now() WHERE codigo_registro=$2`, [userId, `${groupCode}-A`]);
     const pending = await history.list(query({ scope: 'PENDING_PCP', search: groupCode }), user);
@@ -75,5 +79,6 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     const done = await history.list(query({ scope: 'DONE', search: groupCode }), user);
     expect(done.meta.total).toBe(1);
     expect(done.items[0].code).toBe(`${groupCode}-A`);
+    expect(done.items[0].pcpExecutedBy).toBe('history-records');
   });
 });

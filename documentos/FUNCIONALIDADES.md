@@ -44,7 +44,7 @@ Listagem aceita `search`, `page` e `limit`. `DELETE` inativa, sem excluir fisica
 
 O cadastro mantém código, descrição, unidade, prazo de validade e, para fardos/caixas, quantidade e alternativas unitárias. Produtos do tipo `UN` também exigem **Gramatura da unidade (g)**, em gramas inteiras e positivas. O campo aparece somente para `UN`, é retornado nas consultas e registrado na auditoria; `FD` e `CX` mantêm a gramatura nula e não recebem cálculo de peso total. Cadastros unitários anteriores permanecem sem valor inventado e precisam ter a gramatura preenchida ao serem editados.
 
-Todos os perfis podem cadastrar, editar, excluir por inativação e reativar produtos. O administrador pode abrir o **Log de produtos** para consultar autor, data e valores anteriores/novos das alterações. No desktop, os cards de envios e histórico ocupam colunas compactas em vez de esticar um único registro por toda a largura.
+Todos os perfis podem cadastrar, editar, excluir por inativação e reativar produtos. O administrador pode abrir o **Log de produtos** para consultar autor, data e valores anteriores/novos das alterações.
 
 ## Envios entre setores
 
@@ -196,6 +196,8 @@ GET             /api/v1/history
 ```
 
 A entrada principal **Histórico** reúne envios e movimentações diretas, sem duplicar em geral o envio confirmado pelo movimento de estoque; a separação imediata com retorno mantém sua exceção. **Por registro** é a visão padrão, paginada no backend, com produto/lote/quantidade, rota e código filho. **Por grupo** pagina a operação inteira e lista os filhos clicáveis no detalhe. A busca pelo código do grupo encontra seus filhos; pelo filho, apenas esse registro. Os filtros de etapa, tipo, período, produto/código e sentido relativo ao setor continuam disponíveis. `GET /api/v1/history?view=RECORD|GROUP` fornece a consulta somente de leitura. Relatórios de totais/CSV continuam em **Menu e conta**.
+
+No desktop, registros individuais aparecem em linhas compactas na Home, Histórico, envios abertos e fila PCP: identificador, data/hora e estado acima de produto, lote/fabricação, quantidade/unidade, rota e responsáveis pelo envio, recebimento e PCP. Etapas ainda não concluídas indicam pendência; etapas que não se aplicam são diferenciadas. A linha abre os detalhes existentes e ações operacionais ficam abaixo dela quando cabíveis. No celular, permanecem os cards/listas atuais. Transferências continuam sem código público.
 
 O detalhe de movimentação apresenta identificador, tipo, estados operacional e PCP, data/hora, responsável, rota, observação, itens, lotes, fabricação, validade, quantidades e distribuições. Os dados do produto confirmados em novos itens são preservados por snapshot; datas são preservadas nas variantes imutáveis. Relatórios históricos e CSVs existentes também mostram as datas de origem/destino. Registros efetivados e cancelados permanecem consultáveis.
 

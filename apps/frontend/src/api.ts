@@ -156,6 +156,9 @@ export interface Movement {
 }
 
 export interface PcpMovementSummary extends Omit<Movement, 'items' | 'canceledByUser'> {
+    sentBy?: string | null;
+    receivedBy?: string | null;
+    pcpExecutedBy?: string | null;
     executedCount?: number;
     recordId?: string;
     codigoGrupo?: string | null;

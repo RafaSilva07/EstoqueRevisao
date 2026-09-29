@@ -87,7 +87,8 @@ describe('Histórico unificado', () => {
     await act(async () => { root.render(<HistoryPage user={user} onOpenShipment={vi.fn()} onOpenPcp={vi.fn()} />); await Promise.resolve(); });
     expect(requestedPaths[0]).toContain('view=RECORD');
     expect(host.querySelector('.history-card')?.textContent).toContain('ENT-000152-A');
-    await act(async () => { host.querySelector<HTMLButtonElement>('.history-card')!.click(); await Promise.resolve(); });
+    expect(host.querySelector('.movement-record-line')?.textContent).toContain('800001 · Produto A');
+    await act(async () => { host.querySelector<HTMLButtonElement>('.movement-record-line-main')!.click(); await Promise.resolve(); });
     expect(host.querySelector('[role="dialog"]')?.textContent).toContain('Produto A');
     expect(host.querySelector('[role="dialog"]')?.textContent).not.toContain('Produto B');
     await act(async () => { Array.from(host.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent?.includes('Ver grupo'))!.click(); await Promise.resolve(); });

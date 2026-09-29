@@ -6,6 +6,7 @@ import { ShipmentPhoto } from './ShipmentsPage';
 import { canExecutePcp } from './pcp';
 import { MovementEvidence } from './MovementEvidence';
 import { auditActionLabel } from './audit-action-labels';
+import { MovementRecordRow } from './MovementRecordRow';
 
 const typeLabel: Record<PcpMovementSummary['type'], string> = {
   ENTRADA_EXTERNA: 'Entrada externa', SAIDA_EXTERNA: 'Saída externa',
@@ -94,7 +95,19 @@ export function PcpPage({ initialStatus = 'PENDENTE', initialId }: { initialStat
       <button className="secondary" onClick={() => { setFilters(initialFilters); setPage(1); }}>Limpar filtros</button>
     </FilterPanel>
     {loading ? <LoadingState label="Carregando fila do PCP" /> : !result?.items.length ? <EmptyState title="Nenhuma movimentação encontrada" description="Ajuste os filtros para consultar outras movimentações." /> : <>
-      <section className="surface pcp-list"><div className="responsive-table"><table><thead><tr><th>Data</th><th>Código</th><th>Produto / lote</th><th>Tipo</th><th>Origem</th><th>Destino</th><th>Operacional</th><th>PCP</th><th>Ação</th></tr></thead><tbody>{result.items.map((movement) => <tr key={movement.recordId ?? movement.id} className="clickable-row" tabIndex={0} role="button" onClick={() => void open(movement.recordId ?? movement.id, Boolean(movement.recordId))} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void open(movement.recordId ?? movement.id, Boolean(movement.recordId)); } }}>
+      {filters.view === 'RECORD' && <div className="pcp-record-lines">{result.items.map((movement) => { const product = movement.productSnapshot ?? movement.product; const pending = movement.status === 'EFETIVADA' && movement.requiresPcpExecution && movement.pcpExecutionStatus === 'PENDENTE'; const openRecord = () => void open(movement.recordId ?? movement.id, Boolean(movement.recordId)); return <MovementRecordRow key={movement.recordId ?? movement.id}
+        code={movement.codigoRegistro ?? movement.codigoMovimentacao} occurredAt={movement.occurredAt}
+        status={movement.status === 'CANCELADA' ? 'Cancelada' : pending ? 'Aguardando PCP' : 'Finalizada'}
+        statusTone={movement.status === 'CANCELADA' ? 'canceled' : pending ? 'pending' : 'active'}
+        productCode={product?.code} productName={product?.name} batchCode={movement.batch?.code}
+        manufacturingDate={movement.batch?.manufacturingDate} unit={product?.defaultUnit} quantity={movement.quantity}
+        origin={movement.originLocation.name} destination={movement.destinationLocation?.name ?? 'Múltiplos destinos'}
+        sentBy={movement.sentBy ?? movement.responsibleUser.username} receivedBy={movement.receivedBy}
+        pcpExecutedBy={movement.pcpExecutedBy ?? movement.pcpExecutedByUser?.username}
+        receiptRequired={Boolean(movement.shipmentId)} pcpRequired={movement.requiresPcpExecution}
+        onOpen={openRecord} action={pending && <button type="button" className="secondary" disabled={detailLoading} onClick={openRecord}>Executar no PCP</button>}
+      />; })}</div>}
+      <section className={`surface pcp-list ${filters.view === 'RECORD' ? 'pcp-table-mobile' : ''}`}><div className="responsive-table"><table><thead><tr><th>Data</th><th>Código</th><th>Produto / lote</th><th>Tipo</th><th>Origem</th><th>Destino</th><th>Operacional</th><th>PCP</th><th>Ação</th></tr></thead><tbody>{result.items.map((movement) => <tr key={movement.recordId ?? movement.id} className="clickable-row" tabIndex={0} role="button" onClick={() => void open(movement.recordId ?? movement.id, Boolean(movement.recordId))} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void open(movement.recordId ?? movement.id, Boolean(movement.recordId)); } }}>
         <td data-label="Data">{formatDateTime(movement.occurredAt)}</td>
         <td data-label="Código"><code>{movement.codigoRegistro ?? movement.codigoMovimentacao ?? 'Sem código público'}</code>{movement.recordId && <small>Grupo {movement.codigoGrupo ?? 'sem código público'}</small>}</td>
         <td data-label="Produto / lote">{movement.recordId ? <>{(movement.productSnapshot ?? movement.product)?.name} · {movement.batch?.code} · {movement.quantity} {(movement.productSnapshot ?? movement.product)?.defaultUnit}</> : `${movement.itemCount} registros`}</td>

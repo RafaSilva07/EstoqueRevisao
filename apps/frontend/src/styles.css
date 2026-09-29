@@ -585,6 +585,33 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
 .pcp-audit-list strong { min-width: 0; overflow-wrap: anywhere; }
 .pcp-audit-list span { color: var(--muted); text-align: right; }
 .badge.pending { background: #fff2cc; color: #6b4e00; }
+
+/* Registros compactos no desktop; os cards existentes continuam no mobile. */
+.movement-record-line, .pcp-record-lines, .shipment-record-lines { display: none; }
+@media (min-width: 1024px) {
+  .history-list.record-list, .home-operation-list.record-list, .shipment-list {
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: .4rem;
+  }
+  .record-list-entry, .shipment-list-entry { min-width: 0; }
+  .record-list-entry:has(.movement-record-line) > .record-mobile-card,
+  .shipment-list-entry > .shipment-card, .pcp-table-mobile { display: none; }
+  .pcp-record-lines, .shipment-record-lines { display: grid; gap: .4rem; min-width: 0; }
+  .movement-record-line { display: grid; min-width: 0; border: 1px solid var(--line); border-radius: .55rem; background: #fff; overflow: hidden; }
+  .movement-record-line:hover { border-color: #9ec8d2; background: #f9fcfd; }
+  .movement-record-line-main { display: block; width: 100%; min-width: 0; min-height: 0; border-radius: 0; background: transparent; color: var(--ink); padding: 0; text-align: left; font-weight: 400; }
+  .movement-record-line-main:hover { background: transparent; }
+  .movement-record-line-header { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: .7rem; min-width: 0; border-bottom: 1px solid #edf1f4; padding: .4rem .7rem; }
+  .movement-record-line-header > strong { min-width: 0; overflow: hidden; color: var(--primary-dark); font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
+  .movement-record-line-header time { color: var(--muted); font-size: .72rem; white-space: nowrap; }
+  .movement-record-line-header .badge { justify-self: end; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .7rem; }
+  .movement-record-line-fields { display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(0, 1.35fr) minmax(0, .7fr) minmax(0, 1.5fr) repeat(3, minmax(0, .8fr)); gap: .6rem; min-width: 0; padding: .45rem .7rem .55rem; }
+  .record-line-fact { display: grid; gap: .12rem; min-width: 0; }
+  .record-line-fact > span { overflow: hidden; color: var(--muted); font-size: .63rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+  .record-line-fact > strong { display: block; min-width: 0; overflow: hidden; color: var(--ink); font-size: .76rem; font-weight: 650; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+  .record-line-fact > strong.record-line-pending { color: #8a6a25; font-weight: 550; }
+  .movement-record-line-action { display: flex; justify-content: flex-end; border-top: 1px solid #edf1f4; padding: .3rem .7rem; }
+  .movement-record-line-action button { min-height: 32px; padding: .3rem .65rem; font-size: .72rem; }
+}
 .settings-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }
 .settings-grid .form-panel { display: grid; align-content: start; gap: 1rem; }
 .settings-grid .form-panel > h2, .settings-grid .form-panel > p { margin-bottom: 0; }

@@ -5,6 +5,7 @@ import { formatDateTime } from './format';
 import { MovementCancellationDialog } from './MovementCancellationDialog';
 import { MovementDetailModal } from './MovementDetailModal';
 import { ShipmentSummaryModal } from './ShipmentSummaryModal';
+import { HistoryRecordRow } from './HistoryRecordRow';
 
 export interface HistoryItem {
   id: string;
@@ -29,8 +30,13 @@ export interface HistoryItem {
   productName?: string | null;
   productUnit?: string | null;
   batchCode?: string | null;
+  manufacturingDate?: string | null;
   quantity?: number | null;
   pcpExecutionStatus?: string | null;
+  sentBy?: string | null;
+  receivedBy?: string | null;
+  pcpExecutedBy?: string | null;
+  pcpRequired?: boolean;
 }
 
 const scopeLabel: Record<HistoryItem['scope'], string> = {
@@ -114,7 +120,9 @@ export function HistoryPage({ user, initialMovementId, initialRecordId, success,
       <label>Ordenar<select value={filters.sort} onChange={(event) => update('sort', event.target.value)}><option value="RECENT">Mais recentes</option><option value="OLDEST">Mais antigas</option></select></label>
     </div>{activeFilters > 0 && <button className="text-button" onClick={clear}>Limpar filtros</button>}</FilterPanel>
     {loading ? <LoadingState label="Carregando histórico" /> : !result?.items.length ? <EmptyState title="Nenhum registro encontrado" description="Ajuste ou limpe os filtros para ver outras movimentações." action={activeFilters ? <button className="secondary" onClick={clear}>Limpar filtros</button> : undefined} /> : <>
-      <div className="history-list">{result.items.map((item) => <button type="button" className="surface history-card" key={`${item.kind}:${item.id}`} onClick={() => { setSelectedRecordId(item.recordId ?? null); if (item.kind === 'SHIPMENT') setSelectedShipmentId(item.groupId ?? item.id); else setSelectedMovementId(item.groupId ?? item.id); }}>
+      <div className={`history-list ${filters.view === 'RECORD' ? 'record-list' : ''}`}>{result.items.map((item) => { const openItem = () => { setSelectedRecordId(item.recordId ?? null); if (item.kind === 'SHIPMENT') setSelectedShipmentId(item.groupId ?? item.id); else setSelectedMovementId(item.groupId ?? item.id); }; return <div className="record-list-entry" key={`${item.kind}:${item.id}`}>
+      {item.recordId && <HistoryRecordRow item={item} onOpen={openItem} />}
+      <button type="button" className={`surface history-card ${item.recordId ? 'record-mobile-card' : ''}`} onClick={openItem}>
         <span className={`badge ${item.scope === 'DONE' ? 'active' : item.scope === 'CLOSED' ? 'canceled' : 'pending'}`}>{scopeLabel[item.scope]}</span>
         <strong>{item.code ?? 'Sem código público'} · {item.recordId ? item.productName ?? 'Produto' : typeLabel[item.type] ?? item.type}</strong>
         {item.recordId && <span>{item.productCode} · lote {item.batchCode} · {item.quantity} {item.productUnit} · Grupo {item.groupCode ?? 'sem código público'}</span>}
@@ -122,7 +130,7 @@ export function HistoryPage({ user, initialMovementId, initialRecordId, success,
         {item.parentCode && <span>Parte do envio original {item.parentCode}</span>}
         <small>{stateLabel[item.status] ?? item.status} · {formatDateTime(item.occurredAt)} · {item.responsible}{!item.recordId && ` · ${item.itemCount} ${item.itemCount === 1 ? 'registro' : 'registros'}`}</small>
         <span className="history-card-action">Ver detalhes →</span>
-      </button>)}</div>
+      </button></div>; })}</div>
       <div className="shipment-pagination"><button className="secondary" disabled={page <= 1} onClick={() => { setPage((current) => current - 1); setLoading(true); }}>Anterior</button><span>Página {page} de {result.meta.totalPages} · {result.meta.total} registros</span><button className="secondary" disabled={page >= result.meta.totalPages} onClick={() => { setPage((current) => current + 1); setLoading(true); }}>Próxima</button></div>
     </>}
     {selectedShipmentId && <ShipmentSummaryModal id={selectedShipmentId} user={user} recordId={selectedRecordId} onSelectRecord={setSelectedRecordId} onViewGroup={() => setSelectedRecordId(null)} onClose={() => { setSelectedShipmentId(null); setSelectedRecordId(null); }} onOpen={(id) => { setSelectedShipmentId(null); onOpenShipment(id); }} onOpenMovement={user.sector === 'REVISAO' && user.permissions.includes('movements.read') ? (id) => { setSelectedShipmentId(null); setSelectedMovementId(id); setSelectedRecordId(null); } : undefined} />}
