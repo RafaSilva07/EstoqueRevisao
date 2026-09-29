@@ -199,6 +199,8 @@ A entrada principal **Histórico** reúne envios e movimentações diretas, sem 
 
 No desktop, registros individuais aparecem em linhas compactas na Home, Histórico, envios abertos e fila PCP: identificador, data/hora e estado acima de produto, lote/fabricação, quantidade/unidade, rota e responsáveis pelo envio, recebimento e PCP. Etapas ainda não concluídas indicam pendência; etapas que não se aplicam são diferenciadas. A linha abre os detalhes existentes e ações operacionais ficam abaixo dela quando cabíveis. No celular, permanecem os cards/listas atuais. Transferências continuam sem código público.
 
+Quando um item de revisão possui mais de um destino, seu registro mostra uma matriz compacta com os destinos e, logo abaixo, as quantidades efetivamente distribuídas em cada um. A Home, o Histórico e a fila PCP usam as distribuições gravadas no item; a unidade exibida é a do produto resultante quando houve desmontagem. Destinos sem distribuição não são inventados.
+
 O detalhe de movimentação apresenta identificador, tipo, estados operacional e PCP, data/hora, responsável, rota, observação, itens, lotes, fabricação, validade, quantidades e distribuições. Os dados do produto confirmados em novos itens são preservados por snapshot; datas são preservadas nas variantes imutáveis. Relatórios históricos e CSVs existentes também mostram as datas de origem/destino. Registros efetivados e cancelados permanecem consultáveis.
 
 Na interface, o detalhe prioriza identificação e estados no cabeçalho, rota e produtos; responsáveis/data aparecem em uma faixa compacta, observações depois e ações ao final. As listas da Home usam fundos suaves diferentes para envios abertos, pendências PCP e finalizadas, mantendo os registros individuais em destaque.

@@ -6,7 +6,7 @@ import { ShipmentPhoto } from './ShipmentsPage';
 import { canExecutePcp } from './pcp';
 import { MovementEvidence } from './MovementEvidence';
 import { auditActionLabel } from './audit-action-labels';
-import { MovementRecordRow } from './MovementRecordRow';
+import { MovementRecordRow, ReviewDistributionMatrix } from './MovementRecordRow';
 
 const typeLabel: Record<PcpMovementSummary['type'], string> = {
   ENTRADA_EXTERNA: 'Entrada externa', SAIDA_EXTERNA: 'Saída externa',
@@ -105,12 +105,14 @@ export function PcpPage({ initialStatus = 'PENDENTE', initialId }: { initialStat
         sentBy={movement.sentBy ?? movement.responsibleUser.username} receivedBy={movement.receivedBy}
         pcpExecutedBy={movement.pcpExecutedBy ?? movement.pcpExecutedByUser?.username}
         receiptRequired={Boolean(movement.shipmentId)} pcpRequired={movement.requiresPcpExecution}
+        reviewDistributions={movement.type === 'REVISAO' ? movement.reviewDistributions : undefined}
+        reviewDistributionUnit={movement.reviewDistributionUnit}
         onOpen={openRecord} action={pending && <button type="button" className="secondary" disabled={detailLoading} onClick={openRecord}>Executar no PCP</button>}
       />; })}</div>}
       <section className={`surface pcp-list ${filters.view === 'RECORD' ? 'pcp-table-mobile' : ''}`}><div className="responsive-table"><table><thead><tr><th>Data</th><th>Código</th><th>Produto / lote</th><th>Tipo</th><th>Origem</th><th>Destino</th><th>Operacional</th><th>PCP</th><th>Ação</th></tr></thead><tbody>{result.items.map((movement) => <tr key={movement.recordId ?? movement.id} className="clickable-row" tabIndex={0} role="button" onClick={() => void open(movement.recordId ?? movement.id, Boolean(movement.recordId))} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void open(movement.recordId ?? movement.id, Boolean(movement.recordId)); } }}>
         <td data-label="Data">{formatDateTime(movement.occurredAt)}</td>
         <td data-label="Código"><code>{movement.codigoRegistro ?? movement.codigoMovimentacao ?? 'Sem código público'}</code>{movement.recordId && <small>Grupo {movement.codigoGrupo ?? 'sem código público'}</small>}</td>
-        <td data-label="Produto / lote">{movement.recordId ? <>{(movement.productSnapshot ?? movement.product)?.name} · {movement.batch?.code} · {movement.quantity} {(movement.productSnapshot ?? movement.product)?.defaultUnit}</> : `${movement.itemCount} registros`}</td>
+        <td data-label="Produto / lote">{movement.recordId ? <>{(movement.productSnapshot ?? movement.product)?.name} · {movement.batch?.code} · {movement.quantity} {(movement.productSnapshot ?? movement.product)?.defaultUnit}{movement.type === 'REVISAO' && <ReviewDistributionMatrix distributions={movement.reviewDistributions} unit={movement.reviewDistributionUnit} />}</> : `${movement.itemCount} registros`}</td>
         <td data-label="Tipo">{typeLabel[movement.type]}</td><td data-label="Origem">{movement.originLocation.name}</td><td data-label="Destino">{movement.destinationLocation?.name ?? 'Múltiplos destinos'}</td>
         <td data-label="Operacional"><span className={`badge ${movement.status === 'EFETIVADA' ? 'active' : 'canceled'}`}>{movement.status === 'EFETIVADA' ? 'Concluída' : 'Cancelada'}</span></td>
         <td data-label="PCP"><span className={`badge ${movement.pcpExecutionStatus === 'EXECUTADA' ? 'active' : 'pending'}`}>{movement.requiresPcpExecution === false ? 'Não necessária' : movement.pcpExecutionStatus === 'EXECUTADA' ? 'Executada' : 'Pendente'}</span>{!movement.recordId && movement.requiresPcpExecution && movement.executedCount !== undefined && <small>{movement.executedCount} executado(s) de {movement.itemCount}</small>}</td>

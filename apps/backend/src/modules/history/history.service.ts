@@ -34,6 +34,8 @@ export interface HistoryItem {
   receivedBy?: string | null;
   pcpExecutedBy?: string | null;
   pcpRequired?: boolean;
+  reviewDistributions?: Array<{ destinationCode: string; destination: string; quantity: number }>;
+  reviewDistributionUnit?: string | null;
 }
 
 @Injectable()
@@ -106,7 +108,8 @@ export class HistoryService {
           CASE WHEN shipment.status IN ('CONFIRMADO', 'EM_SEPARACAO')
             THEN COALESCE(receiver.username, early_receiver.username) ELSE NULL END AS received_by,
           pcp_user.username AS pcp_executed_by,
-          COALESCE(linked_movement.requires_pcp_execution, shipment.shipment_kind <> 'RETORNO_IMEDIATO') AS pcp_required
+          COALESCE(linked_movement.requires_pcp_execution, shipment.shipment_kind <> 'RETORNO_IMEDIATO') AS pcp_required,
+          NULL::jsonb AS review_distributions, NULL::text AS review_distribution_unit
         FROM entries entry JOIN shipment_items item ON item.shipment_id = entry.id
           JOIN batches batch ON batch.id = item.batch_id
           JOIN shipments shipment ON shipment.id = item.shipment_id
@@ -118,10 +121,7 @@ export class HistoryService {
         WHERE entry.kind = 'SHIPMENT'
         UNION ALL
         SELECT item.id, entry.kind, item.codigo_registro AS code, entry.type, entry.origin,
-          COALESCE((SELECT string_agg(DISTINCT target.name, ' · ' ORDER BY target.name)
-            FROM movement_item_distributions distribution JOIN stock_locations target
-              ON target.id = distribution.destination_location_id
-            WHERE distribution.movement_item_id = item.id), entry.destination) AS destination,
+          COALESCE(review.destination_names, entry.destination) AS destination,
           entry.responsible, entry.occurred_at, entry.status,
           CASE WHEN entry.status = 'CANCELADA' THEN 'CLOSED'
             WHEN movement.requires_pcp_execution AND item.pcp_execution_status = 'PENDENTE' THEN 'PENDING_PCP'
@@ -137,7 +137,12 @@ export class HistoryService {
           COALESCE(sender.username, entry.responsible) AS sent_by,
           COALESCE(receiver.username, early_receiver.username) AS received_by,
           pcp_user.username AS pcp_executed_by,
-          movement.requires_pcp_execution AS pcp_required
+          movement.requires_pcp_execution AS pcp_required,
+          CASE WHEN movement.type = 'REVISAO' THEN COALESCE(review.distributions, '[]'::jsonb)
+            ELSE NULL::jsonb END AS review_distributions,
+          CASE WHEN movement.type = 'REVISAO' THEN COALESCE(
+            item.output_product_snapshot->>'defaultUnit', item.product_snapshot->>'defaultUnit', product.default_unit
+          ) ELSE NULL::text END AS review_distribution_unit
         FROM entries entry JOIN movement_items item ON item.movement_id = entry.id
           JOIN movements movement ON movement.id = item.movement_id
           JOIN products product ON product.id = item.product_id
@@ -147,6 +152,15 @@ export class HistoryService {
           LEFT JOIN users receiver ON receiver.id = shipment.decided_by_id
           LEFT JOIN users early_receiver ON early_receiver.id = shipment.received_by_id
           LEFT JOIN users pcp_user ON pcp_user.id = item.pcp_executed_by_user_id
+          LEFT JOIN LATERAL (
+            SELECT string_agg(DISTINCT target.name, ' · ' ORDER BY target.name) AS destination_names,
+              jsonb_agg(jsonb_build_object(
+                'destinationCode', target.code, 'destination', target.name, 'quantity', distribution.quantity
+              ) ORDER BY target.name) AS distributions
+            FROM movement_item_distributions distribution
+              JOIN stock_locations target ON target.id = distribution.destination_location_id
+            WHERE distribution.movement_item_id = item.id
+          ) review ON true
         WHERE entry.kind = 'MOVEMENT'
       ), filtered AS (
         SELECT * FROM ${query.view === 'GROUP' ? 'entries' : 'records'} source
@@ -202,6 +216,12 @@ export class HistoryService {
         manufacturingDate: row.manufacturing_date as string | null,
         sentBy: row.sent_by as string | null, receivedBy: row.received_by as string | null,
         pcpExecutedBy: row.pcp_executed_by as string | null, pcpRequired: Boolean(row.pcp_required),
+        reviewDistributions: Array.isArray(row.review_distributions)
+          ? (row.review_distributions as Array<Record<string, unknown>>).map((distribution) => ({
+            destinationCode: String(distribution.destinationCode), destination: String(distribution.destination),
+            quantity: Number(distribution.quantity),
+          })) : [],
+        reviewDistributionUnit: row.review_distribution_unit as string | null,
       } : {}),
     })), total, query.page, query.limit);
   }

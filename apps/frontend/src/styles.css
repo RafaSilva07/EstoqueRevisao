@@ -606,6 +606,12 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
 .pcp-audit-list strong { min-width: 0; overflow-wrap: anywhere; }
 .pcp-audit-list span { color: var(--muted); text-align: right; }
 .badge.pending { background: #fff2cc; color: #6b4e00; }
+.review-distribution-matrix { display: block; width: max-content; max-width: 100%; min-width: 0; overflow-x: auto; border: 1px solid #d5e4e8; border-radius: .45rem; background: #f4f9fa; padding: .35rem .5rem; text-align: left; }
+.review-distribution-caption { display: block; margin-bottom: .25rem; color: #426b77; font-size: .63rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.review-distribution-grid { display: grid; width: max-content; overflow: hidden; border: 1px solid #d7e4e8; border-radius: .3rem; background: #fff; }
+.review-distribution-grid > span { display: block; min-width: 0; padding: .24rem .55rem; text-align: center; }
+.review-distribution-destination { overflow: hidden; background: #e8f2f4; color: #345665; font-size: .67rem; font-weight: 700; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.review-distribution-quantity { border-top: 1px solid #d7e4e8; color: var(--primary-dark); font-size: .8rem; font-variant-numeric: tabular-nums; font-weight: 750; }
 
 /* Registros compactos no desktop; os cards existentes continuam no mobile. */
 .movement-record-line, .pcp-record-lines, .shipment-record-lines { display: none; }
@@ -628,6 +634,7 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
   .movement-record-line-header time { color: var(--muted); font-size: .72rem; white-space: nowrap; }
   .movement-record-line-header .badge { justify-self: end; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .7rem; }
   .movement-record-line-fields { display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(0, 1.35fr) minmax(0, .7fr) minmax(0, 1.5fr) repeat(3, minmax(0, .8fr)); gap: .6rem; min-width: 0; padding: .45rem .7rem .55rem; }
+  .movement-record-line-main > .review-distribution-matrix { margin: 0 .7rem .55rem; max-width: calc(100% - 1.4rem); }
   .record-line-fact { display: grid; gap: .12rem; min-width: 0; }
   .record-line-fact > span { overflow: hidden; color: var(--muted); font-size: .63rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
   .record-line-fact > strong { display: block; min-width: 0; overflow: hidden; color: var(--ink); font-size: .76rem; font-weight: 650; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }

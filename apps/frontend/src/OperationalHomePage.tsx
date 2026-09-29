@@ -9,6 +9,7 @@ import { Page } from './navigation-model';
 import { Shipment, shipmentStatusLabel } from './shipments';
 import { HistoryItem } from './HistoryPage';
 import { HistoryRecordRow } from './HistoryRecordRow';
+import { ReviewDistributionMatrix } from './MovementRecordRow';
 
 type OperationalHomePageProps = { user: UserSession; navigate: (page: Page) => void; onOpenRecord: (page: Page, id: string, recordId?: string) => void };
 
@@ -30,6 +31,7 @@ function HomeRecordList({ items, onOpen }: { items: HistoryItem[]; onOpen: (item
       </span>
       <strong>{item.kind === 'MOVEMENT' ? `${movementLabels[item.type as Movement['type']] ?? item.type} · ` : ''}{item.productName ?? 'Produto'} · lote {item.batchCode}</strong>
       <span>{item.origin} → {item.destination} · {item.quantity} {item.productUnit}</span>
+      {item.type === 'REVISAO' && <ReviewDistributionMatrix distributions={item.reviewDistributions} unit={item.reviewDistributionUnit} />}
       <small>{formatDateTime(item.occurredAt)} · {item.code ?? 'Sem código público'}</small>
     </button>
   </div>)}</div>;

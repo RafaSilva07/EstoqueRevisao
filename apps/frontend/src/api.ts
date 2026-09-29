@@ -126,6 +126,12 @@ export interface MovementItemDistribution {
   destinationLocation: StockLocation;
 }
 
+export interface ReviewDistributionSummary {
+  destinationCode: string;
+  destination: string;
+  quantity: number;
+}
+
 export interface Movement {
   codigoMovimentacao?: string | null;
   shipmentId?: string | null;
@@ -156,6 +162,8 @@ export interface Movement {
 }
 
 export interface PcpMovementSummary extends Omit<Movement, 'items' | 'canceledByUser'> {
+    reviewDistributions?: ReviewDistributionSummary[];
+    reviewDistributionUnit?: string | null;
     sentBy?: string | null;
     receivedBy?: string | null;
     pcpExecutedBy?: string | null;

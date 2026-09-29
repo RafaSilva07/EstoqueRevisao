@@ -5,6 +5,8 @@ import { AuditLogEntity } from '../audit/entities/audit-log.entity';
 import { MovementStatus } from '../movements/domain/movement-status.enum';
 import { MovementEntity } from '../movements/entities/movement.entity';
 import { MovementItemEntity } from '../movements/entities/movement-item.entity';
+import { MovementItemDistributionEntity } from '../movements/entities/movement-item-distribution.entity';
+import { MovementType } from '../movements/domain/movement-type.enum';
 import { MovementListEntry } from '../movements/movements.repository';
 import { ShipmentEntity, ShipmentItemEntity } from '../shipments/shipment.entity';
 import { PcpMovementQueryDto } from './dto/pcp-movement-query.dto';
@@ -55,6 +57,18 @@ export class PcpMovementsRepository {
       where: { id: In(shipmentIds) }, relations: { createdBy: true, decidedBy: true, receivedBy: true },
     }) : [];
     const shipmentById = new Map(shipments.map((shipment) => [shipment.id, shipment]));
+    const reviewItemIds = items.filter((item) => item.movement.type === MovementType.Review).map((item) => item.id);
+    const distributions = reviewItemIds.length ? await this.movementItems.manager
+      .getRepository(MovementItemDistributionEntity).find({
+        where: { movementItemId: In(reviewItemIds) }, relations: { destinationLocation: true },
+      }) : [];
+    const distributionsByItem = new Map<string, MovementListEntry['reviewDistributions']>();
+    for (const distribution of distributions) {
+      const current = distributionsByItem.get(distribution.movementItemId) ?? [];
+      current.push({ destinationCode: distribution.destinationLocation.code,
+        destination: distribution.destinationLocation.name, quantity: distribution.quantity });
+      distributionsByItem.set(distribution.movementItemId, current);
+    }
     return [items.map((item) => ({ ...item.movement, recordId: item.id, itemCount: 1,
       codigoGrupo: item.movement.codigoMovimentacao, codigoRegistro: item.codigoRegistro,
       product: item.product, productSnapshot: item.productSnapshot, batch: item.batch,
@@ -67,6 +81,9 @@ export class PcpMovementsRepository {
         ? shipmentById.get(item.movement.shipmentId)?.decidedBy?.username
           ?? shipmentById.get(item.movement.shipmentId)?.receivedBy?.username ?? null : null,
       pcpExecutedBy: item.pcpExecutedByUser?.username ?? null,
+      reviewDistributions: distributionsByItem.get(item.id) ?? [],
+      reviewDistributionUnit: item.movement.type === MovementType.Review
+        ? item.outputProductSnapshot?.defaultUnit ?? item.productSnapshot?.defaultUnit ?? item.product.defaultUnit : null,
     })), total];
   }
 

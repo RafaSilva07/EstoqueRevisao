@@ -4,6 +4,12 @@ import { databaseEntities, databaseMigrations } from '../../database/typeorm.con
 import { AuthenticatedUser } from '../auth/authenticated-user.interface';
 import { HistoryQueryDto } from './history-query.dto';
 import { HistoryService } from './history.service';
+import { PcpMovementsRepository } from '../pcp/pcp-movements.repository';
+import { MovementType } from '../movements/domain/movement-type.enum';
+import { MovementEntity } from '../movements/entities/movement.entity';
+import { MovementItemEntity } from '../movements/entities/movement-item.entity';
+import { AuditLogEntity } from '../audit/entities/audit-log.entity';
+import { ShipmentEntity, ShipmentItemEntity } from '../shipments/shipment.entity';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 (databaseUrl ? describe : describe.skip)('Histórico por registro (PostgreSQL)', () => {
@@ -80,5 +86,36 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     expect(done.meta.total).toBe(1);
     expect(done.items[0].code).toBe(`${groupCode}-A`);
     expect(done.items[0].pcpExecutedBy).toBe('history-records');
+  });
+
+  it('consulta os destinos e quantidades gravados no item de revisão, inclusive no PCP', async () => {
+    const reviewId = randomUUID();
+    const itemId = randomUUID();
+    await db.query(`INSERT INTO movements(id,request_key,type,origin_location_id,destination_location_id,responsible_user_id,occurred_at,status)
+      VALUES ($1,$2,'REVISAO','10000000-0000-4000-8000-000000000002',NULL,$3,'2026-09-11','EFETIVADA')`,
+    [reviewId, randomUUID(), userId]);
+    await db.query('INSERT INTO movement_items(id,movement_id,product_id,batch_id,quantity) VALUES ($1,$2,$3,$4,60)',
+      [itemId, reviewId, productId, batchId]);
+    for (const [locationId, quantity] of [
+      ['10000000-0000-4000-8000-000000000003', 30],
+      ['10000000-0000-4000-8000-000000000004', 20],
+      ['10000000-0000-4000-8000-000000000005', 10],
+    ] as const) await db.query(`INSERT INTO movement_item_distributions(id,movement_item_id,destination_location_id,quantity)
+      VALUES ($1,$2,$3,$4)`, [randomUUID(), itemId, locationId, quantity]);
+    const code = (await db.query<Array<{ codigo_registro: string }>>('SELECT codigo_registro FROM movement_items WHERE id=$1', [itemId]))[0].codigo_registro;
+    const result = await history.list(query({ search: code, type: 'REVISAO' }), user);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].reviewDistributionUnit).toBe('UN');
+    expect(result.items[0].reviewDistributions).toEqual(expect.arrayContaining([
+      { destinationCode: 'LATA_BOA', destination: 'Lata Boa', quantity: 30 },
+      { destinationCode: 'VAREJO', destination: 'Varejo', quantity: 20 },
+      { destinationCode: 'TUF', destination: 'TUF', quantity: 10 },
+    ]));
+    const pcp = new PcpMovementsRepository(db.getRepository(MovementEntity), db.getRepository(MovementItemEntity),
+      db.getRepository(AuditLogEntity), db.getRepository(ShipmentItemEntity), db.getRepository(ShipmentEntity));
+    const [pcpItems] = await pcp.findRecordsAndCount({ page: 1, limit: 20, sort: 'ASC', type: MovementType.Review, search: code });
+    expect(pcpItems).toHaveLength(1);
+    expect(pcpItems[0].reviewDistributionUnit).toBe('UN');
+    expect(pcpItems[0].reviewDistributions).toEqual(expect.arrayContaining(result.items[0].reviewDistributions ?? []));
   });
 });

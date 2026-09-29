@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { api, Movement, Paginated, UserSession } from './api';
+import { api, Movement, Paginated, ReviewDistributionSummary, UserSession } from './api';
 import { EmptyState, FilterPanel, LoadingState, Notice, PageHeader } from './components';
 import { formatDateTime } from './format';
 import { MovementCancellationDialog } from './MovementCancellationDialog';
 import { MovementDetailModal } from './MovementDetailModal';
 import { ShipmentSummaryModal } from './ShipmentSummaryModal';
 import { HistoryRecordRow } from './HistoryRecordRow';
+import { ReviewDistributionMatrix } from './MovementRecordRow';
 
 export interface HistoryItem {
   id: string;
@@ -37,6 +38,8 @@ export interface HistoryItem {
   receivedBy?: string | null;
   pcpExecutedBy?: string | null;
   pcpRequired?: boolean;
+  reviewDistributions?: ReviewDistributionSummary[];
+  reviewDistributionUnit?: string | null;
 }
 
 const scopeLabel: Record<HistoryItem['scope'], string> = {
@@ -127,6 +130,7 @@ export function HistoryPage({ user, initialMovementId, initialRecordId, success,
         <strong>{item.code ?? 'Sem código público'} · {item.recordId ? item.productName ?? 'Produto' : typeLabel[item.type] ?? item.type}</strong>
         {item.recordId && <span>{item.productCode} · lote {item.batchCode} · {item.quantity} {item.productUnit} · Grupo {item.groupCode ?? 'sem código público'}</span>}
         <span>{item.origin} → {item.destination}</span>
+        {item.type === 'REVISAO' && <ReviewDistributionMatrix distributions={item.reviewDistributions} unit={item.reviewDistributionUnit} />}
         {item.parentCode && <span>Parte do envio original {item.parentCode}</span>}
         <small>{stateLabel[item.status] ?? item.status} · {formatDateTime(item.occurredAt)} · {item.responsible}{!item.recordId && ` · ${item.itemCount} ${item.itemCount === 1 ? 'registro' : 'registros'}`}</small>
         <span className="history-card-action">Ver detalhes →</span>

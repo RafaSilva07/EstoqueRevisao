@@ -18,6 +18,8 @@ export function HistoryRecordRow({ item, onOpen }: { item: HistoryItem; onOpen: 
     receivedBy={item.receivedBy} pcpExecutedBy={item.pcpExecutedBy}
     receiptRequired={item.kind === 'SHIPMENT' || Boolean(item.parentShipmentId)}
     pcpRequired={Boolean(item.pcpRequired)}
+    reviewDistributions={item.type === 'REVISAO' ? item.reviewDistributions : undefined}
+    reviewDistributionUnit={item.reviewDistributionUnit}
     receiptPlaceholder={closed ? 'Não realizado' : 'Pendente'}
     pcpPlaceholder={closed ? 'Não realizado' : 'Pendente'} onOpen={onOpen}
   />;

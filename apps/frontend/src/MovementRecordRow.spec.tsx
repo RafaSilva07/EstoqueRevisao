@@ -31,4 +31,21 @@ describe('Linha de movimentação', () => {
     expect(html).toContain('Não necessário');
     expect(formatRecordDateTime('2026-09-28T14:30:00')).toBe('seg, 28/09/2026 14:30');
   });
+
+  it('mostra os destinos e as quantidades da revisão em duas linhas, na ordem operacional', () => {
+    const reviewDistributions = [
+      { destinationCode: 'TUF', destination: 'TUF', quantity: 10 },
+      { destinationCode: 'VAREJO', destination: 'Varejo', quantity: 20 },
+      { destinationCode: 'LATA_BOA', destination: 'Lata Boa', quantity: 30 },
+    ];
+    const html = renderToStaticMarkup(<MovementRecordRow {...record} reviewDistributions={reviewDistributions} reviewDistributionUnit="UN" />);
+    expect(html).toContain('Distribuição da revisão · UN');
+    expect(html.indexOf('Lata Boa')).toBeLessThan(html.indexOf('Varejo'));
+    expect(html.indexOf('Varejo')).toBeLessThan(html.indexOf('TUF'));
+    expect(html).toContain('aria-label="Lata Boa: 30 UN"');
+    expect(html).toContain('aria-label="Varejo: 20 UN"');
+    expect(html).toContain('aria-label="TUF: 10 UN"');
+    const single = renderToStaticMarkup(<MovementRecordRow {...record} reviewDistributions={reviewDistributions.slice(0, 1)} />);
+    expect(single).not.toContain('review-distribution-matrix');
+  });
 });

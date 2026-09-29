@@ -20,6 +20,8 @@ export type MovementListEntry = MovementEntity & {
   sentBy?: string | null;
   receivedBy?: string | null;
   pcpExecutedBy?: string | null;
+  reviewDistributions?: Array<{ destinationCode: string; destination: string; quantity: number }>;
+  reviewDistributionUnit?: string | null;
 };
 
 @Injectable()
