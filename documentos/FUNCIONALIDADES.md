@@ -18,9 +18,14 @@ Todas as entradas, saídas, transferências e distribuições de revisão aceita
 | `POST` | `/api/v1/auth/refresh` | Rotaciona o refresh token e renova o acesso. |
 | `POST` | `/api/v1/auth/logout` | Revoga a sessão. |
 | `GET` | `/api/v1/auth/me` | Retorna o usuário autenticado. |
+| `POST` | `/api/v1/presence/heartbeat` | Atualiza a presença da sessão e do modo operacional ativo. |
+| `GET` | `/api/v1/presence/pcp` | Lista outros usuários online no modo PCP para aviso operacional. |
+| `GET` | `/api/v1/presence` | Lista usuários online para administradores. |
 | `GET` | `/api/v1/health` | Verifica API e PostgreSQL; é público. |
 
 O frontend possui login, restauração da sessão pelo cookie HttpOnly e navegação condicionada às permissões.
+
+Enquanto a aba está visível, a presença é atualizada a cada 20 segundos e também quando o usuário volta a ela. No modo PCP, um aviso no início da tela mostra o nome de outros colegas PCP online e se atualiza quando alguém entra ou sai. Administradores gerais e de área acessam **Usuários online** pelo menu lateral para consultar todos os usuários ativos e seus modos operacionais recentes. “Online” significa atividade recebida nos últimos 60 segundos; a indicação não reserva registros nem bloqueia operações.
 
 A interface usa transições curtas em botões, cartões, campos, filtros e diálogos, com rolagem suave. Quando o dispositivo solicita redução de movimento, as animações e a rolagem suave são desativadas.
 
@@ -178,6 +183,8 @@ Lote, fabricação e validade são preservados; não há edição desses campos 
 
 Administradores no modo `ADMIN` acessam **Configurações** para definir o prazo de separação (5 a 1440 minutos, inicialmente 180), os limites de fotos por item dos envios e um ou mais destinos internos cadastrados para a revisão. O formulário de revisão consulta os destinos e monta os campos dinamicamente, mantendo total, distribuído e restante e bloqueando diferenças.
 
+**Preferências** aparece em **Menu e conta** e diretamente na barra lateral do desktop para todos os perfis. Cada conta pode salvar modo claro/escuro e qualquer cor hexadecimal para o fundo geral, ou restaurar o fundo padrão do tema. A alteração acompanha a conta em novos logins e não muda parâmetros operacionais. `GET/PATCH /api/v1/auth/preferences` exigem sessão autenticada; a cor é validada na API e no banco.
+
 No recebimento Expedição → Revisão, **Sim, separar agora** coloca o envio em `EM_SEPARACAO`, exibe o prazo e permite salvar as quantidades de retorno como rascunho. A Expedição acompanha o estado sem ação. A conclusão exige fotos dentro dos limites em cada item retornado, credita somente a quantidade líquida e cria um envio de retorno ligado ao original. O retorno aguarda decisão da Expedição e é marcado como execução PCP não necessária. Se o prazo vencer, o acesso seguinte consolida integralmente o recebimento sem retorno.
 
 No histórico da Revisão, a separação concluída com retorno aparece em dois cards vinculados ao envio original: a **entrada líquida efetivada no estoque** e o envio de retorno. Os detalhes mostram itens e quantidades e permitem consultar o original. O próprio envio original não vira um terceiro card nesse recorte. Retorno integral é identificado sem inventar uma entrada de saldo zero.
@@ -211,7 +218,7 @@ Quando um item de revisão possui mais de um destino, seu registro mostra uma ma
 
 O detalhe de movimentação apresenta identificador, tipo, estados operacional e PCP, data/hora, responsável, rota, observação, itens, lotes, fabricação, validade, quantidades e distribuições. Os dados do produto confirmados em novos itens são preservados por snapshot; datas são preservadas nas variantes imutáveis. Relatórios históricos e CSVs existentes também mostram as datas de origem/destino. Registros efetivados e cancelados permanecem consultáveis.
 
-Na interface, o detalhe prioriza identificação e estados no cabeçalho, rota e produtos; responsáveis/data aparecem em uma faixa compacta, observações depois e ações ao final. As listas da Home usam fundos suaves diferentes para envios abertos, pendências PCP e finalizadas, mantendo os registros individuais em destaque.
+Na interface, o detalhe prioriza identificação e estados no cabeçalho, rota e produtos; responsáveis/data aparecem em uma faixa compacta, observações depois e ações ao final. As listas da Home usam fundos suaves diferentes para envios abertos, pendências PCP e finalizadas, mantendo os registros individuais em destaque. No tema escuro, as cores distinguem os painéis; os registros internos compartilham uma superfície neutra que contrasta com cada fundo.
 
 ## Cancelamento e estorno
 

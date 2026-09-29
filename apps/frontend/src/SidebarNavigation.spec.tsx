@@ -4,7 +4,7 @@ import { createRoot, Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UserSession } from './api';
-import { SidebarNavigation } from './Navigation';
+import { SectionMenu, SidebarNavigation } from './Navigation';
 import { homeActions } from './navigation-model';
 
 const baseUser: UserSession = { id: 'operator', username: 'Operador', sector: 'EXPEDICAO', roles: ['EXPEDICAO'], permissions: ['shipments.read', 'products.read'] };
@@ -20,17 +20,27 @@ afterEach(() => {
 });
 
 describe('Barra lateral compacta', () => {
+  it('oferece usuários online aos administradores sem expor o item aos operadores', () => {
+    const admin = { ...baseUser, roles: ['ADMIN_PRODUCAO_PCP'] };
+    const html = renderToStaticMarkup(<SidebarNavigation page="online-users" user={admin} areas={homeActions(admin)} modeLabel="PCP" expanded={false} showOnlineUsers onToggle={noop} navigate={noop} />);
+    expect(html).toContain('aria-label="Usuários online" aria-current="page"');
+    expect(renderToStaticMarkup(<SectionMenu page="more" user={admin} showOnlineUsers navigate={noop} />)).toContain('Usuários online');
+    expect(renderToStaticMarkup(<SidebarNavigation page="home" user={baseUser} areas={homeActions(baseUser)} modeLabel="Expedição" expanded={false} onToggle={noop} navigate={noop} />)).not.toContain('Usuários online');
+  });
   it('exibe somente destinos permitidos, com ícones, nome acessível e seção ativa', () => {
     const html = renderToStaticMarkup(<SidebarNavigation page="shipments" user={baseUser} areas={homeActions(baseUser)} modeLabel="Expedição" expanded={false} onToggle={noop} navigate={noop} />);
     expect(html).toContain('sidebar-collapsed');
     expect(html).toContain('aria-label="Expandir menu lateral"');
     expect(html).toContain('aria-label="Envios e recebimentos" aria-current="page"');
     expect(html).not.toContain('aria-label="Movimentar produtos"');
-    expect((html.match(/class="sidebar-icon"/g) ?? []).length).toBe(homeActions(baseUser).length + 3);
+    expect(html).toContain('aria-label="Preferências"');
+    expect((html.match(/class="sidebar-icon"/g) ?? []).length).toBe(homeActions(baseUser).length + 4);
     const pcp = { ...baseUser, sector: 'PCP' as const, permissions: ['pcp.movements.read', 'products.read', 'stock-positions.read'] };
     const pcpHtml = renderToStaticMarkup(<SidebarNavigation page="pcp-all" user={pcp} areas={homeActions(pcp)} modeLabel="PCP" expanded onToggle={noop} navigate={noop} />);
     expect(pcpHtml).toContain('sidebar-expanded');
     expect(pcpHtml).toContain('aria-label="Fila do PCP" aria-current="page"');
+    expect(renderToStaticMarkup(<SidebarNavigation page="preferences" user={baseUser} areas={homeActions(baseUser)} modeLabel="Expedição" expanded onToggle={noop} navigate={noop} />))
+      .toContain('aria-label="Preferências" aria-current="page"');
   });
 
   it('navega diretamente no ícone e abre ou recolhe os rótulos', () => {

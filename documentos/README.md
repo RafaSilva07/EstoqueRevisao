@@ -28,6 +28,8 @@ O EstoqueRevisao é um sistema web para controle de produtos por lote e local l�
 - envios Revisão ↔ Produção/Expedição, com reserva, confirmação/recusa e indicação interna;
 - separação imediata opcional no recebimento Expedição → Revisão, com prazo configurável e retorno derivado;
 - configurações administrativas para prazo de separação, destinos dinâmicos da revisão e limites de fotos por produto nos envios;
+- preferências visuais individuais de tema claro/escuro e cor do fundo geral;
+- indicação de presença recente de colegas no PCP e consulta de usuários online para administradores;
 - entrada e saída diretas para outros locais externos;
 - transferência interna, inclusive com troca ou criação de lote;
 - revisão com distribuição de cada item entre múltiplos destinos;

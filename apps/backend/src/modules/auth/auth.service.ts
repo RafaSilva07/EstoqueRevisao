@@ -5,6 +5,7 @@ import { AuditService } from '../audit/audit.service';
 import { UserStatus } from '../users/domain/user-status.enum';
 import { UserEntity } from '../users/entities/user.entity';
 import { UsersRepository } from '../users/repositories/users.repository';
+import { UserPreferences } from '../users/user-preferences.service';
 import { AuthSessionsRepository } from './auth-sessions.repository';
 import { AuthenticatedUser } from './authenticated-user.interface';
 import { LoginDto } from './dto/login.dto';
@@ -14,7 +15,7 @@ import { AccessTokenResult, TokenService } from './token.service';
 
 export interface AuthenticationResult extends AccessTokenResult {
   refreshToken: string;
-  user: Omit<AuthenticatedUser, 'sessionId'>;
+  user: Omit<AuthenticatedUser, 'sessionId'> & { preferences: UserPreferences };
 }
 
 @Injectable()
@@ -51,7 +52,10 @@ export class AuthService {
     session.revokedAt = null;
     session.ipAddress = metadata.ipAddress;
     session.userAgent = metadata.userAgent;
-    session.lastUsedAt = null;
+    session.lastUsedAt = new Date();
+    session.operationalMode = user.roles?.some((role) => role.code === 'ADMIN')
+      ? 'ADMIN'
+      : user.sector;
 
     await this.dataSource.transaction(async (manager) => {
       await this.sessionsRepository.save(session, manager);
@@ -163,6 +167,7 @@ export class AuthService {
       roles: authenticatedUser.roles,
       sector: authenticatedUser.sector,
       permissions: authenticatedUser.permissions,
+      preferences: { theme: user.uiTheme, backgroundColor: user.uiBackgroundColor },
     };
 
     return { ...access, refreshToken, user: publicUser };

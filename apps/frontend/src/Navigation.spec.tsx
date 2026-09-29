@@ -28,6 +28,8 @@ describe('Navegação simplificada', () => {
     expect(menuActions('operations', { ...user, roles: ['REVISAO'] }).map((a) => a.page)).toEqual(['new-transfer', 'new-review']);
     expect(menuActions('operations', { ...user, roles: ['ADMIN'] }).map((a) => a.page)).toEqual(['new-entry', 'new-exit', 'new-transfer', 'new-review']);
     expect(menuActions('more', { ...user, roles: ['REVISAO'] }).some((a) => a.page === 'users')).toBe(false);
+    expect(menuActions('more', { ...user, roles: ['REVISAO'] }).some((a) => a.page === 'preferences')).toBe(true);
+    expect(parentPage('preferences')).toBe('more');
   });
   it('mostra somente áreas na Home, sem operações, métricas ou tabelas', () => {
     const html = renderToStaticMarkup(<SectionMenu page="home" user={user} navigate={noop} />);

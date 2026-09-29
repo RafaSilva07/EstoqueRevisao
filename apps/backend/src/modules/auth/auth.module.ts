@@ -10,6 +10,9 @@ import { AuthSessionEntity } from './entities/auth-session.entity';
 import { JwtStrategy } from './jwt.strategy';
 import { PasswordHasherService } from './password-hasher.service';
 import { TokenService } from './token.service';
+import { PresenceController } from './presence.controller';
+import { PresenceRepository } from './presence.repository';
+import { PresenceService } from './presence.service';
 
 @Module({
   imports: [
@@ -28,13 +31,15 @@ import { TokenService } from './token.service';
       },
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, PresenceController],
   providers: [
     AuthService,
     AuthSessionsRepository,
     PasswordHasherService,
     TokenService,
     JwtStrategy,
+    PresenceRepository,
+    PresenceService,
   ],
   exports: [PasswordHasherService],
 })

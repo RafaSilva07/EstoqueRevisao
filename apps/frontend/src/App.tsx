@@ -1,5 +1,5 @@
-import { FormEvent, ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { api, Batch, Movement, Paginated, Product, StockDisplayMode, StockLocation, StockLocationKind, StockPosition, UnitConversion, UserSession } from './api';
+import { FormEvent, ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { api, Batch, Movement, Paginated, Product, StockDisplayMode, StockLocation, StockLocationKind, StockPosition, UnitConversion, UserPreferences, UserSession } from './api';
 import { ConfirmDialog, EmptyState, FilterPanel, LoadingState, Modal, Notice, PageHeader } from './components';
 import { formatDate, formatDateTime } from './format';
 import { ExternalExitPage } from './ExternalExitPage';
@@ -17,6 +17,11 @@ import { homeActions, Page, parentPage } from './navigation-model';
 import { Sector } from './shipments';
 import { UsersPage } from './UsersPage';
 import { SettingsPage } from './SettingsPage';
+import { PreferencesPage } from './PreferencesPage';
+import { OnlineUsersPage, PcpOnlineNotice } from './OnlinePresence';
+import { isPresenceAdmin } from './online-presence';
+import { useOnlinePresence } from './useOnlinePresence';
+import { applyUiPreferences, defaultPreferences } from './ui-preferences';
 import { ProductForm } from './ProductForm';
 import { ProductAuditPanel } from './ProductAuditPanel';
 import { PcpPage } from './PcpPage';
@@ -176,6 +181,7 @@ export function OperationalSectorSwitcher({ value, modes, onChange }: { value: O
 
 export function App() {
   const [user, setUser] = useState<UserSession | null>(null);
+  const [preferences, setPreferences] = useState<UserPreferences>(defaultPreferences);
   const [operationalMode, setOperationalMode] = useState<OperationalMode>('REVISAO');
   const [checking, setChecking] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -190,19 +196,29 @@ export function App() {
     const authenticated = result?.user ?? null;
     const sector = authenticated?.sector ?? 'REVISAO';
     const mode = authenticated?.roles.includes('ADMIN') ? 'ADMIN' : sector;
-    setUser(authenticated); setOperationalMode(mode);
+    setUser(authenticated); setOperationalMode(mode); setPreferences(authenticated?.preferences ?? defaultPreferences);
     api.setOperationalSector(authenticated && allowedOperationalModes(authenticated).length > 1 ? mode : null);
   }).finally(() => setChecking(false)); }, []);
+  useLayoutEffect(() => { applyUiPreferences(user ? preferences : defaultPreferences); }, [user, preferences]);
+  const onPresenceAccountChanged = useCallback(() => {
+    api.setOperationalSector(null);
+    setUser(null);
+    setPreferences(defaultPreferences);
+    setPage('home');
+    window.location.reload();
+  }, []);
+  const modes = user ? allowedOperationalModes(user) : [];
+  const activeMode: OperationalMode = user ? (modes.length > 1 ? operationalMode : modes[0]) : 'REVISAO';
+  const presenceAdmin = isPresenceAdmin(user);
+  const presence = useOnlinePresence(user?.id, activeMode, presenceAdmin && page === 'online-users', onPresenceAccountChanged);
   if (checking) return <main className="splash"><span className="spinner" /><p>Preparando seu ambiente...</p></main>;
   if (!user) return <Login onAuthenticated={(authenticated) => {
     const sector = authenticated.sector ?? 'REVISAO';
     const mode = authenticated.roles.includes('ADMIN') ? 'ADMIN' : sector;
-    setUser(authenticated); setOperationalMode(mode); setPage('home');
+    setUser(authenticated); setOperationalMode(mode); setPreferences(authenticated.preferences ?? defaultPreferences); setPage('home');
     api.setOperationalSector(allowedOperationalModes(authenticated).length > 1 ? mode : null);
   }} />;
-  const modes = allowedOperationalModes(user);
   const generalAdmin = user.roles.includes('ADMIN');
-  const activeMode: OperationalMode = modes.length > 1 ? operationalMode : modes[0];
   const activeUser = userForOperationalMode(user, activeMode);
   const activeSector: Sector = activeUser.sector ?? 'REVISAO';
   const adminMode = generalAdmin && activeMode === 'ADMIN';
@@ -236,7 +252,7 @@ export function App() {
   };
   const logout = () => {
     setLoggingOut(true);
-    void api.logout().finally(() => { setUser(null); setLoggingOut(false); });
+    void api.logout().finally(() => { setUser(null); setPreferences(defaultPreferences); setLoggingOut(false); });
   };
   const switchSector = (mode: OperationalMode) => {
     if (!modes.includes(mode)) return;
@@ -256,14 +272,17 @@ export function App() {
   };
   return <div className={`app-shell${sidebarExpanded ? ' sidebar-is-expanded' : ''}`}><a className="skip-link" href="#main-content">Ir para o conteúdo</a>
     <header className="topbar"><button className="brand" onClick={() => go('home')} aria-label="Ir para o início"><span>ER</span><strong>Estoque Revisão</strong></button><div className="user-area">{switcher}<span className="user-name">{user.username} · {operationalModeLabel[activeMode]}</span><button className="secondary desktop-logout" onClick={logout} disabled={loggingOut}>Sair</button></div></header>
-    <SidebarNavigation page={page} user={activeUser} areas={areas} modeLabel={operationalModeLabel[activeMode]} expanded={sidebarExpanded} onToggle={() => setSidebarExpanded((value) => !value)} navigate={go} />
+    <SidebarNavigation page={page} user={activeUser} areas={areas} modeLabel={operationalModeLabel[activeMode]} showOnlineUsers={presenceAdmin} expanded={sidebarExpanded} onToggle={() => setSidebarExpanded((value) => !value)} navigate={go} />
     <main className="workspace" id="main-content" tabIndex={-1}>
+      {activeMode === 'PCP' && <PcpOnlineNotice users={presence.pcpUsers} error={presence.error} />}
       <NavigationTrail page={page} user={activeUser} navigate={go} />
       {page === 'home' && <OperationalHomePage key={activeMode} user={activeUser} navigate={go} onOpenRecord={(destination, id, recordId) => { navigate(destination === 'movements' ? 'history' : destination); setSelectedRecordId(recordId ?? id); setSelectedMovementId(id); setMovementSuccess(undefined); }} />}
-      {page !== 'home' && menus.includes(page) && <SectionMenu page={page} user={activeUser} navigate={go} />}
+      {page !== 'home' && menus.includes(page) && <SectionMenu page={page} user={activeUser} showOnlineUsers={presenceAdmin} navigate={go} />}
       {page === 'more' && <section className="surface account-card"><h2>{user.username}</h2><p className="muted">{operationalModeLabel[activeMode]}</p><button className="secondary" onClick={logout} disabled={loggingOut}>{loggingOut ? 'Saindo…' : 'Sair do sistema'}</button></section>}
       {page === 'users' && adminMode && <UsersPage currentUserId={user.id} onOwnUpdate={logout} />}
       {page === 'settings' && adminMode && <SettingsPage />}
+      {page === 'preferences' && <PreferencesPage value={preferences} onSaved={setPreferences} />}
+      {page === 'online-users' && presenceAdmin && <OnlineUsersPage users={presence.onlineUsers} loading={presence.loading} error={presence.error} onRetry={presence.refresh} />}
       {activeSector !== 'PCP' && ['shipments', 'shipment-new', 'shipment-sent'].includes(page) && can('shipments.read') && <ShipmentsPage key={`${activeSector}:${page}`} user={activeUser} initialId={selectedRecordId} initialView={page === 'shipment-sent' ? 'sent' : 'pending'} initialCreating={page === 'shipment-new'} onHistory={() => go('history')} />}
       {activeSector === 'PCP' && ['pcp', 'pcp-all', 'pcp-executed'].includes(page) && can('pcp.movements.read') && <PcpPage key={page} initialId={selectedRecordId} initialStatus={page === 'pcp-all' ? '' : page === 'pcp-executed' ? 'EXECUTADA' : 'PENDENTE'} />}
       {reviewSector && <>
@@ -284,7 +303,7 @@ export function App() {
     <nav className="bottom-nav" aria-label="Navegação principal mobile">
       <NavButton active={page === 'home'} onClick={() => go('home')}>Início</NavButton>
       {areas.slice(0, 2).map((area) => <NavButton key={area.page} active={page === area.page || parentPage(page, activeUser) === area.page} onClick={() => go(area.page)}>{area.title}</NavButton>)}
-      <NavButton active={page === 'more' || page === 'users' || page === 'settings'} onClick={() => go('more')}>Menu</NavButton>
+      <NavButton active={page === 'more' || page === 'users' || page === 'settings' || page === 'preferences' || page === 'online-users'} onClick={() => go('more')}>Menu</NavButton>
     </nav>
   </div>;
 }

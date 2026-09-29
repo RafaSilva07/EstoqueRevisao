@@ -62,7 +62,8 @@ Evite abstrações prematuras. Uma regra compartilhada deve ser extraída quando
 ## Modelo de dados principal
 
 - `users`, `roles`, `permissions`, `user_roles`, `role_permissions`: identidade e autorização.
-- `auth_sessions`: refresh tokens e revogação de sessão.
+- `users.ui_theme` e `users.ui_background_color`: preferências visuais individuais, sem influência nas permissões ou operações de estoque. Tema e cor são validados na API e por constraints.
+- `auth_sessions`: refresh tokens, revogação de sessão e atividade recente para presença online.
 - `audit_logs`: trilha técnica/administrativa persistente.
 - `products`, `product_unit_conversions`: cadastro mestre e conversões. `products.code` aceita somente seis dígitos, com sufixo opcional de ponto e dois dígitos, validado na API e pela constraint `CHK_products_code_format`. A migration recusa códigos legados incompatíveis sem modificá-los automaticamente. Produto possui `shelf_life_years`, obrigatório em novas criações da API e nulo apenas para legados ainda não configurados. `unit_weight_grams` guarda um inteiro positivo somente para `UN`; permanece nulo em embalagens e em registros unitários antigos ainda não atualizados.
 - `batches`: referências internas imutáveis de produto/código/fabricação/validade; unicidade por produto + código normalizado + validade, sem cadastro mestre público.
@@ -121,6 +122,7 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 - Refresh token é aleatório, rotativo, enviado por cookie `HttpOnly`, `SameSite=Strict` e `Secure` configurável.
 - O banco armazena somente SHA-256 do refresh token.
 - Sessões são consultadas e podem ser revogadas; logout invalida a sessão.
+- A migration `SessionPresence1791072000000` acrescenta `auth_sessions.operational_mode`; um heartbeat autenticado registra atividade e modo operacional validado, sem senha, token, IP ou dados de estoque na resposta. Apenas sessões não revogadas, não expiradas, de contas ativas e com atividade nos últimos 60 segundos aparecem online. A consulta PCP mostra outros usuários no modo PCP; administradores gerais e de área podem consultar todos. O frontend renova o acesso uma vez após 401 e ressincroniza a conta se o cookie apontar para outro usuário. É um aviso eventual, não uma trava de concorrência nem uma garantia de que o usuário esteja trabalhando em determinado registro.
 - Guards globais exigem autenticação e permissões; rotas públicas usam declaração explícita.
 - A administração em `/users` exige adicionalmente `AdminGuard`, que verifica o perfil autenticado e o modo `ADMIN`. Não há novas permissões ou tabelas. `UsersService` reutiliza o hash Argon2id, repositório, sessões e auditoria. Alterações são serializadas por advisory lock transacional; o autor é revalidado dentro da transação, e sessões da conta editada/inativada são revogadas atomicamente. Respostas usam projeção explícita sem credenciais.
 - `users.sector` é consultado junto da sessão: REVISAO, PRODUCAO, EXPEDICAO ou PCP. `ADMIN` permanece cadastrado na Revisão; os perfis `ADMIN_REVISAO_EXPEDICAO` e `ADMIN_PRODUCAO_PCP` têm setor inicial em um dos seus dois modos. A migration desses perfis copia a união das permissões operacionais já existentes; o guard aplica novamente a lista permitida do modo ativo, impedindo que essa união amplie uma operação fora do setor. Todos mantêm `products.read/create/update` conforme os perfis operacionais; o PCP preserva sua leitura transversal e execução administrativa. O endpoint paginado de auditoria dos produtos usa `AdminGuard` e expõe apenas os dados necessários do evento, sem IP ou request ID.
@@ -192,6 +194,7 @@ O estado intermediário pertence a `shipments`, pois ainda não existe movimenta
 ## Frontend
 
 - Abordagem mobile-first a partir de 320 px.
+- A aparência usa variáveis CSS para superfícies/contraste e fundo geral. Preferências vêm da conta autenticada no login/refresh e são atualizadas em `GET/PATCH /auth/preferences`; o navegador não armazena tokens nem preferências em `localStorage`. A cor personalizada afeta o fundo, não o texto dos cartões; o texto sobre o fundo é escolhido pelo contraste da cor.
 - Navegação inferior no celular e sidebar no desktop.
 - Tabelas se tornam cards em telas estreitas.
 - Formulários possuem feedback de carregamento, erro, sucesso, estados vazios e confirmação para ações críticas.

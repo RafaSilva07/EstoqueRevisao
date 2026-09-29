@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Patch,
   Req,
   Res,
   UnauthorizedException,
@@ -17,12 +18,15 @@ import { AuthenticatedUser } from './authenticated-user.interface';
 import { AuthenticationResult, AuthService } from './auth.service';
 import { Public } from './decorators/public.decorator';
 import { LoginDto } from './dto/login.dto';
+import { UpdateUserPreferencesDto } from '../users/dto/user-preferences.dto';
+import { UserPreferences, UserPreferencesService } from '../users/user-preferences.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
+    private readonly preferences: UserPreferencesService,
   ) {}
 
   @Public()
@@ -75,6 +79,16 @@ export class AuthController {
   @Get('me')
   me(@Req() request: Request): AuthenticatedUser {
     return request.user as AuthenticatedUser;
+  }
+
+  @Get('preferences')
+  getPreferences(@Req() request: Request): Promise<UserPreferences> {
+    return this.preferences.get((request.user as AuthenticatedUser).id);
+  }
+
+  @Patch('preferences')
+  updatePreferences(@Req() request: Request, @Body() dto: UpdateUserPreferencesDto): Promise<UserPreferences> {
+    return this.preferences.update((request.user as AuthenticatedUser).id, dto);
   }
 
   private setRefreshCookie(response: Response, refreshToken: string): void {

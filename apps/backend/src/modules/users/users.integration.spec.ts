@@ -14,6 +14,7 @@ import { UsersService } from './users.service';
 import { UserStatus } from './domain/user-status.enum';
 import { AuditRequestMetadata } from '../audit/audit.types';
 import { CreateUserDto } from './dto/user.dto';
+import { UserPreferencesService } from './user-preferences.service';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 (databaseUrl ? describe : describe.skip)('Administração de usuários (PostgreSQL)', () => {
@@ -51,6 +52,23 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     expect(page.meta.total).toBe(1); expect(page.items[0].id).toBe(created.id);
     const logs = await db.getRepository(AuditLogEntity).find();
     expect(JSON.stringify({ created, page, logs })).not.toMatch(/Senha-teste|\$argon2id|passwordHash/);
+  });
+
+  it('guarda tema e fundo por usuário sem alterar a preferência de outra conta', async () => {
+    const preferences = new UserPreferencesService(db);
+    const otherId = randomUUID();
+    await db.query("INSERT INTO users(id, username, password_hash) VALUES ($1, 'operador-test', '$argon2id$test-only')", [otherId]);
+    expect(await preferences.get(actor)).toEqual({ theme: 'LIGHT', backgroundColor: null });
+    expect(await preferences.update(actor, { theme: 'DARK', backgroundColor: '#f4a8c8' })).toEqual({
+      theme: 'DARK', backgroundColor: '#F4A8C8',
+    });
+    expect(await preferences.get(otherId)).toEqual({ theme: 'LIGHT', backgroundColor: null });
+    await expect(preferences.update(actor, { theme: 'LIGHT', backgroundColor: '#xyzxyz' }))
+      .rejects.toThrow();
+    expect(await preferences.get(actor)).toEqual({ theme: 'DARK', backgroundColor: '#F4A8C8' });
+    expect(await preferences.update(actor, { theme: 'LIGHT', backgroundColor: null })).toEqual({
+      theme: 'LIGHT', backgroundColor: null,
+    });
   });
 
   it('disponibiliza Revisão operacional sem permissões administrativas', async () => {

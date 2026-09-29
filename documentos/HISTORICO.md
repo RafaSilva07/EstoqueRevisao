@@ -181,3 +181,11 @@ A movimentação da diferença recebida já era gravada, mas ficava oculta pela 
 ## Administradores de área
 
 Dois perfis novos permitem alternar entre Revisão/Expedição ou Produção/PCP sem ampliar as ações de cada modo. O `ADMIN` anterior continua como administrador geral e único gestor de usuários. Migration aditiva; contas existentes não são reclassificadas.
+
+## Preferências visuais por conta
+
+Tema claro/escuro e cor do fundo geral passaram a ser escolhas do próprio usuário, independentes do perfil operacional. A migration `UserUiPreferences1790985600000` acrescenta defaults e constraints em `users`; a autenticação devolve as preferências e a API autenticada permite consultá-las/atualizá-las. Nenhuma regra de estoque foi alterada.
+
+## Presença online no PCP e para administradores
+
+Presença recente passou a ser registrada na sessão autenticada e no modo operacional validado. O PCP recebe um aviso quando outro colega está online; administradores gerais e de área consultam todos em uma página do menu. A indicação é informativa e não substitui controle de concorrência ou bloqueia registros. Resumo no [relatório da etapa 52](./relatorios/RELATORIO_ETAPA_52_PRESENCA_ONLINE.md).

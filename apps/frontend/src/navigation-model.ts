@@ -1,12 +1,12 @@
 import { UserSession } from './api';
 
-export type Page = 'home' | 'operations' | 'pcp' | 'pcp-all' | 'pcp-executed' | 'users' | 'settings' | 'shipments' | 'shipment-new' | 'shipment-sent' | 'new-entry' | 'new-exit' | 'new-transfer' | 'new-review' | 'movements' | 'history' | 'inventory' | 'reports' | 'reports-reviews' | 'products' | 'stocks' | 'more';
+export type Page = 'home' | 'operations' | 'pcp' | 'pcp-all' | 'pcp-executed' | 'users' | 'settings' | 'preferences' | 'online-users' | 'shipments' | 'shipment-new' | 'shipment-sent' | 'new-entry' | 'new-exit' | 'new-transfer' | 'new-review' | 'movements' | 'history' | 'inventory' | 'reports' | 'reports-reviews' | 'products' | 'stocks' | 'more';
 export type MenuAction = { page: Page; title: string; description: string };
 
 export const pageTitles: Record<Page, string> = {
   home: 'Início', operations: 'Movimentar produtos',
   pcp: 'Pendentes de execução', 'pcp-all': 'Todas as movimentações', 'pcp-executed': 'Executadas',
-  users: 'Gerenciar usuários', settings: 'Configurações', shipments: 'Pendentes de aceite', 'shipment-new': 'Novo envio',
+  users: 'Gerenciar usuários', settings: 'Configurações', preferences: 'Preferências', 'online-users': 'Usuários online', shipments: 'Pendentes de aceite', 'shipment-new': 'Novo envio',
   'shipment-sent': 'Meus envios em aberto',
   'new-entry': 'Realizar entrada', 'new-exit': 'Realizar saída', 'new-transfer': 'Transferência interna',
   'new-review': 'Realizar revisão', movements: 'Movimentações', history: 'Histórico', inventory: 'Estoque e validades',
@@ -21,7 +21,7 @@ export function parentPage(page: Page, user?: UserSession): Page {
   if (page === 'movements' || page === 'reports' || page === 'reports-reviews') return 'history';
   if (page === 'pcp-all' || page === 'pcp-executed') return 'pcp';
   if (page === 'stocks') return 'more';
-  if (page === 'users' || page === 'settings') return 'more';
+  if (page === 'users' || page === 'settings' || page === 'preferences' || page === 'online-users') return 'more';
   return 'home';
 }
 
@@ -47,6 +47,7 @@ export function menuActions(page: Page, user: UserSession): MenuAction[] {
     add(can('products.read'), 'products', 'Buscar, cadastrar e manter produtos.');
     add(sector === 'PCP' && can('pcp.movements.read'), 'pcp', 'Executar movimentações pendentes.', 'Fila do PCP');
   } else if (page === 'more') {
+    add(true, 'preferences', 'Modo claro/escuro e cor do fundo da sua conta.');
     add(review && can('movements.read'), 'reports', 'Totais e exportação de movimentações.', 'Relatórios de movimentações');
     add(review && can('movements.read'), 'reports-reviews', 'Totais por classificação da revisão.', 'Relatórios de revisões');
     add(review && can('stocks.read'), 'stocks', 'Cadastrar e consultar locais de estoque.');

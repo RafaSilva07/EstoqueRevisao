@@ -14,18 +14,20 @@ function SidebarIcon({ page }: { page: Page }) {
     case 'history': shape = <><path d="M4.5 8A9 9 0 1 1 3 12M3 5v4h4M12 7v5l3 2" /></>; break;
     case 'products': shape = <><path d="M3 4h11l7 8-7 8H3z" /><circle cx="8" cy="12" r="1" /></>; break;
     case 'pcp': shape = <><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4.5V3h6v1.5M8 11l1.5 1.5L12 10M8 17h8" /></>; break;
+    case 'online-users': shape = <><circle cx="9" cy="8" r="3" /><path d="M3.5 20v-2a5.5 5.5 0 0 1 11 0v2M17 6a3 3 0 0 1 0 6m1.5 3a4.5 4.5 0 0 1 2 3.7V20" /></>; break;
+    case 'preferences': shape = <><path d="M12 3a9 9 0 1 0 0 18h1.5a2 2 0 0 0 1.5-3.3 1.8 1.8 0 0 1 1.3-3h1.2A3.5 3.5 0 0 0 21 11.2 9 9 0 0 0 12 3Z" /><circle cx="7.5" cy="11" r=".7" /><circle cx="10" cy="7.5" r=".7" /><circle cx="15" cy="7.5" r=".7" /></>; break;
     default: shape = <><circle cx="12" cy="12" r="9" /><circle cx="7" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="17" cy="12" r="1" /></>;
   }
   return <svg className="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">{shape}</svg>;
 }
 
-export function SidebarNavigation({ page, user, areas, modeLabel, expanded, onToggle, navigate }: {
-  page: Page; user: UserSession; areas: MenuAction[]; modeLabel: string; expanded: boolean;
+export function SidebarNavigation({ page, user, areas, modeLabel, expanded, showOnlineUsers = false, onToggle, navigate }: {
+  page: Page; user: UserSession; areas: MenuAction[]; modeLabel: string; expanded: boolean; showOnlineUsers?: boolean;
   onToggle: () => void; navigate: (page: Page) => void;
 }) {
-  const currentSection = ['more', 'users', 'settings', 'stocks', 'reports', 'reports-reviews'].includes(page)
+  const currentSection = page === 'preferences' || page === 'online-users' ? page : ['more', 'users', 'settings', 'stocks', 'reports', 'reports-reviews'].includes(page)
     ? 'more' : areas.some((area) => area.page === page) ? page : parentPage(page, user);
-  const links: Array<{ page: Page; title: string }> = [{ page: 'home', title: 'Início' }, ...areas, { page: 'more', title: 'Menu e conta' }];
+  const links: Array<{ page: Page; title: string }> = [{ page: 'home', title: 'Início' }, ...areas, { page: 'more', title: 'Menu e conta' }, ...(showOnlineUsers ? [{ page: 'online-users' as const, title: 'Usuários online' }] : []), { page: 'preferences', title: 'Preferências' }];
   const toggleLabel = expanded ? 'Recolher menu lateral' : 'Expandir menu lateral';
   return <aside className={`sidebar ${expanded ? 'sidebar-expanded' : 'sidebar-collapsed'}`}>
     <div className="sidebar-main">
@@ -39,8 +41,9 @@ export function SidebarNavigation({ page, user, areas, modeLabel, expanded, onTo
   </aside>;
 }
 
-export function SectionMenu({ page, user, navigate }: { page: Page; user: UserSession; navigate: (page: Page) => void }) {
+export function SectionMenu({ page, user, showOnlineUsers = false, navigate }: { page: Page; user: UserSession; showOnlineUsers?: boolean; navigate: (page: Page) => void }) {
   const actions = page === 'home' ? homeActions(user) : menuActions(page, user);
+  if (page === 'more' && showOnlineUsers) actions.push({ page: 'online-users', title: 'Usuários online', description: 'Ver quem está ativo em cada área.' });
   return <><PageHeader eyebrow={pageTitles[page]} title={page === 'home' ? 'O que você quer fazer?' : pageTitles[page]} description={page === 'home' ? 'Escolha uma opção para começar.' : 'Escolha uma opção para continuar.'} />
     <section className="section-menu" aria-label={pageTitles[page]}>{actions.map((action) => <button type="button" className="action-card" key={action.page} onClick={() => navigate(action.page)}><span>{action.title}</span><small>{action.description}</small><span className="action-card-arrow" aria-hidden="true">→</span></button>)}</section>
     {!actions.length && <EmptyState title="Nenhuma opção disponível" description="Não há ações disponíveis para seu perfil nesta área." />}</>;

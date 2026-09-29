@@ -43,4 +43,7 @@ export class AuthSessionEntity {
 
   @Column({ name: 'last_used_at', type: 'timestamptz', nullable: true })
   lastUsedAt!: Date | null;
+
+  @Column({ name: 'operational_mode', type: 'varchar', length: 10, nullable: true })
+  operationalMode!: string | null;
 }

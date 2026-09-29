@@ -28,6 +28,12 @@ export class UserEntity {
   @Column({ type: 'varchar', length: 20, default: UserStatus.Active })
   status: UserStatus = UserStatus.Active;
 
+  @Column({ name: 'ui_theme', type: 'varchar', length: 5, default: 'LIGHT' })
+  uiTheme: 'LIGHT' | 'DARK' = 'LIGHT';
+
+  @Column({ name: 'ui_background_color', type: 'varchar', length: 7, nullable: true })
+  uiBackgroundColor: string | null = null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 

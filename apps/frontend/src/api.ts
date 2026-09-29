@@ -4,6 +4,12 @@ export interface UserSession {
   sector?: 'REVISAO' | 'PRODUCAO' | 'EXPEDICAO' | 'PCP';
   roles: string[];
   permissions: string[];
+  preferences?: UserPreferences;
+}
+
+export interface UserPreferences {
+  theme: 'LIGHT' | 'DARK';
+  backgroundColor: string | null;
 }
 
 export type OperationalMode = NonNullable<UserSession['sector']> | 'ADMIN';
@@ -316,7 +322,7 @@ interface ErrorEnvelope {
 }
 
 export class ApiError extends Error {
-  constructor(message: string, readonly code?: string, readonly details?: { expirationKeys?: string[] }) {
+  constructor(message: string, readonly code?: string, readonly details?: { expirationKeys?: string[] }, readonly status?: number) {
     super(message);
   }
 }
@@ -386,7 +392,7 @@ export class ApiClient {
     const response = await fetch(`${apiUrl}${path}`, { headers, credentials: 'include' });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({})) as ErrorEnvelope;
-      throw new ApiError(payload.error?.message ?? 'Não foi possível carregar a foto.', payload.error?.code, payload.error?.details);
+      throw new ApiError(payload.error?.message ?? 'Não foi possível carregar a foto.', payload.error?.code, payload.error?.details, response.status);
     }
     return response.blob();
   }
@@ -411,7 +417,7 @@ export class ApiClient {
     });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({})) as ErrorEnvelope;
-      throw new ApiError(payload.error?.message ?? 'Nao foi possivel concluir a operacao.', payload.error?.code, payload.error?.details);
+      throw new ApiError(payload.error?.message ?? 'Nao foi possivel concluir a operacao.', payload.error?.code, payload.error?.details, response.status);
     }
     return response.status === 204 ? undefined as T : response.json() as Promise<T>;
   }
