@@ -36,9 +36,9 @@ export class AuthController {
     @Body() dto: LoginDto,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<Omit<AuthenticationResult, 'refreshToken'>> {
+  ): Promise<Omit<AuthenticationResult, 'refreshToken' | 'sessionExpiresAt'>> {
     const result = await this.authService.login(dto, getAuditRequestMetadata(request));
-    this.setRefreshCookie(response, result.refreshToken);
+    this.setRefreshCookie(response, result.refreshToken, result.sessionExpiresAt);
     return this.withoutRefreshToken(result);
   }
 
@@ -48,7 +48,7 @@ export class AuthController {
   async refresh(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<Omit<AuthenticationResult, 'refreshToken'>> {
+  ): Promise<Omit<AuthenticationResult, 'refreshToken' | 'sessionExpiresAt'>> {
     const token = this.readRefreshToken(request);
     if (!token) {
       throw new UnauthorizedException({
@@ -58,7 +58,7 @@ export class AuthController {
     }
 
     const result = await this.authService.refresh(token, getAuditRequestMetadata(request));
-    this.setRefreshCookie(response, result.refreshToken);
+    this.setRefreshCookie(response, result.refreshToken, result.sessionExpiresAt);
     return this.withoutRefreshToken(result);
   }
 
@@ -91,11 +91,10 @@ export class AuthController {
     return this.preferences.update((request.user as AuthenticatedUser).id, dto);
   }
 
-  private setRefreshCookie(response: Response, refreshToken: string): void {
-    const days = this.configService.getOrThrow<number>('REFRESH_TOKEN_TTL_DAYS');
+  private setRefreshCookie(response: Response, refreshToken: string, sessionExpiresAt: Date): void {
     response.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
       ...this.cookieOptions(),
-      maxAge: days * 24 * 60 * 60 * 1000,
+      maxAge: Math.max(0, sessionExpiresAt.getTime() - Date.now()),
     });
   }
 
@@ -121,7 +120,7 @@ export class AuthController {
 
   private withoutRefreshToken(
     result: AuthenticationResult,
-  ): Omit<AuthenticationResult, 'refreshToken'> {
+  ): Omit<AuthenticationResult, 'refreshToken' | 'sessionExpiresAt'> {
     return {
       accessToken: result.accessToken,
       tokenType: result.tokenType,

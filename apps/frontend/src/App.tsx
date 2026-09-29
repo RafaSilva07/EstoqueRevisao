@@ -200,17 +200,20 @@ export function App() {
     api.setOperationalSector(authenticated && allowedOperationalModes(authenticated).length > 1 ? mode : null);
   }).finally(() => setChecking(false)); }, []);
   useLayoutEffect(() => { applyUiPreferences(user ? preferences : defaultPreferences); }, [user, preferences]);
-  const onPresenceAccountChanged = useCallback(() => {
+  const onSessionInvalid = useCallback(() => {
     api.setOperationalSector(null);
     setUser(null);
     setPreferences(defaultPreferences);
     setPage('home');
-    window.location.reload();
   }, []);
+  useEffect(() => {
+    api.setSessionInvalidHandler(onSessionInvalid);
+    return () => api.setSessionInvalidHandler(null);
+  }, [onSessionInvalid]);
   const modes = user ? allowedOperationalModes(user) : [];
   const activeMode: OperationalMode = user ? (modes.length > 1 ? operationalMode : modes[0]) : 'REVISAO';
   const presenceAdmin = isPresenceAdmin(user);
-  const presence = useOnlinePresence(user?.id, activeMode, presenceAdmin && page === 'online-users', onPresenceAccountChanged);
+  const presence = useOnlinePresence(user?.id, activeMode, presenceAdmin && page === 'online-users');
   if (checking) return <main className="splash"><span className="spinner" /><p>Preparando seu ambiente...</p></main>;
   if (!user) return <Login onAuthenticated={(authenticated) => {
     const sector = authenticated.sector ?? 'REVISAO';

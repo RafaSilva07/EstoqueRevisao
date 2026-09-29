@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { api, ApiError, OperationalMode } from './api';
+import { api, OperationalMode } from './api';
 import { OnlineUser } from './online-presence';
 
 type Snapshot = { key: string; pcpUsers: OnlineUser[]; onlineUsers: OnlineUser[]; error: boolean };
 const emptySnapshot: Snapshot = { key: '', pcpUsers: [], onlineUsers: [], error: false };
 
-export function useOnlinePresence(userId: string | undefined, mode: OperationalMode, showAll: boolean, onAccountChanged: () => void) {
+export function useOnlinePresence(userId: string | undefined, mode: OperationalMode, showAll: boolean) {
   const [snapshot, setSnapshot] = useState<Snapshot>(emptySnapshot);
   const [revision, setRevision] = useState(0);
   const key = `${userId ?? ''}:${mode}:${showAll}`;
@@ -27,19 +27,7 @@ export function useOnlinePresence(userId: string | undefined, mode: OperationalM
       if (document.hidden || running) return;
       running = true;
       try {
-        let result: Awaited<ReturnType<typeof query>>;
-        try {
-          result = await query();
-        } catch (caught) {
-          if (!(caught instanceof ApiError) || caught.status !== 401) throw caught;
-          const renewed = await api.refresh();
-          if (!renewed) throw caught;
-          if (renewed.user.id !== userId) {
-            if (active) onAccountChanged();
-            return;
-          }
-          result = await query();
-        }
+        const result = await query();
         if (active) setSnapshot({ key, ...result, error: false });
       } catch {
         if (active) setSnapshot({ key, pcpUsers: [], onlineUsers: [], error: true });
@@ -59,7 +47,7 @@ export function useOnlinePresence(userId: string | undefined, mode: OperationalM
       document.removeEventListener('visibilitychange', whenVisible);
       window.removeEventListener('focus', whenVisible);
     };
-  }, [userId, mode, showAll, revision, key, onAccountChanged]);
+  }, [userId, mode, showAll, revision, key]);
 
   const current = snapshot.key === key ? snapshot : emptySnapshot;
   return {

@@ -70,6 +70,8 @@ Cada produto do envio aceita fotos conforme mínimo e máximo definidos em **Con
 
 Destinatário e remetente podem visualizar todas as miniaturas e abrir cada foto no visualizador, inclusive após confirmação ou recusa. O visualizador permite zoom de 100% a 400%, roda do mouse, duplo clique, restauração e deslocamento por arraste com mouse ou toque. Os cards de produto mantêm código/descrição, quantidade, lote, datas, observação e evidências em grupos alinhados. A primeira foto usa `GET /api/v1/shipments/:id/items/:itemId/photo`; as demais usam `/photos/:ordinal`, sempre com autenticação e escopo autorizado. Itens históricos sem foto continuam consultáveis.
 
+Os detalhes de envios abertos ou históricos usam a mesma apresentação para todos os perfis, na Home, no Histórico, em Envios e recebimentos e nos avisos: código/status, rota destacada, produtos, responsáveis/datas e observações. Cada produto possui seu próprio botão para mostrar/ocultar fotos, inicialmente recolhidas no detalhe; a confirmação de recebimento mantém as fotos abertas para conferência. As ações continuam condicionadas às permissões e ao estado do envio.
+
 Não há edição posterior: destinatário confirma ou recusa com motivo e responsável/data registrados. Recusas oferecem **Criar novo envio**, sem alterar o documento recusado. Loading, erros, sucesso e bloqueio de duplo envio seguem os componentes existentes.
 
 ```text
@@ -271,6 +273,8 @@ Abaixo dos menus e botões ficam, conforme as permissões: envios abertos dos qu
 ## Experiência de uso
 
 Seletores de lote/posição nos envios, saídas, transferências e revisões usam uma lista contida no formulário, com quebra de linha e rolagem vertical. Textos usam `prod:` e `val:` para fabricação e validade, preservando as datas completas e o saldo. A seleção funciona por toque, mouse e teclado; Escape fecha a lista antes de fechar o modal.
+
+Setas de seletores nativos e pesquisáveis têm traço definido e contraste nos temas claro/escuro. No mobile, modais não bloqueiam a rolagem da página; sua altura acompanha a área visível quando o teclado aparece e o conteúdo do formulário permanece rolável.
 
 Todos os modais de **Adicionar produto** reutilizam o seletor pesquisável por código e descrição usado nos envios externos. Ao abrir um dos campos, a lista mostra os produtos disponíveis e é filtrada enquanto o operador digita; escolher por código preenche a descrição e escolher por descrição preenche o código. Entrada mostra produtos ativos do cadastro, enquanto saída, transferência e revisão limitam a lista aos produtos com posição disponível na origem correspondente.
 

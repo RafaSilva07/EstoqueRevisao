@@ -42,7 +42,10 @@ export class TokenService {
   }
 
   refreshTokenExpiresAt(): Date {
-    const days = this.configService.getOrThrow<number>('REFRESH_TOKEN_TTL_DAYS');
-    return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    return new Date(Date.now() + this.sessionLifetimeMs());
+  }
+
+  sessionLifetimeMs(): number {
+    return this.configService.getOrThrow<number>('REFRESH_TOKEN_TTL_HOURS') * 60 * 60 * 1000;
   }
 }

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Movement, PcpMovementDetail } from './api';
 import { MovementDetailModal } from './MovementDetailModal';
 
-vi.mock('./ShipmentsPage', () => ({ ShipmentPhoto: ({ productName }: { productName: string }) => <span>Foto de {productName}</span> }));
+vi.mock('./ShipmentItems', () => ({ ShipmentPhoto: ({ productName }: { productName: string }) => <span>Foto de {productName}</span> }));
 
 const movement = {
   id: 'movement-1', type: 'REVISAO', codigoMovimentacao: 'REV-000001',

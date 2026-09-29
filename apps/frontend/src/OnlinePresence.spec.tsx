@@ -45,11 +45,9 @@ describe('Presença online', () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     const heartbeat = vi.spyOn(api, 'post').mockResolvedValue(undefined);
     const query = vi.spyOn(api, 'get').mockResolvedValue([colleague]);
-    const refreshSession = vi.spyOn(api, 'refresh').mockResolvedValue({ accessToken: 'renewed', user });
     const interval = vi.spyOn(window, 'setInterval');
-    const onAccountChanged = () => undefined;
     function Harness({ mode }: { mode: OperationalMode }) {
-      const presence = useOnlinePresence(user.id, mode, false, onAccountChanged);
+      const presence = useOnlinePresence(user.id, mode, false);
       return <PcpOnlineNotice users={presence.pcpUsers} error={presence.error} />;
     }
     host = document.createElement('div');
@@ -62,28 +60,23 @@ describe('Presença online', () => {
     expect(host.textContent).toContain('PCP 2');
 
     query.mockResolvedValue([{ ...colleague, username: 'PCP 3' }]);
-    heartbeat.mockRejectedValueOnce(new ApiError('Sessão expirada', undefined, undefined, 401));
     await act(async () => { window.dispatchEvent(new Event('focus')); await Promise.resolve(); });
     expect(host.textContent).toContain('PCP 3');
-    expect(refreshSession).toHaveBeenCalledTimes(1);
 
     heartbeat.mockRejectedValueOnce(new TypeError('Falha de rede'));
     await act(async () => { window.dispatchEvent(new Event('focus')); await Promise.resolve(); });
-    expect(refreshSession).toHaveBeenCalledTimes(1);
     expect(host.textContent).toContain('Não foi possível atualizar');
 
     await act(async () => { root?.render(<Harness mode="PRODUCAO" />); await Promise.resolve(); });
     expect(host.textContent).not.toContain('PCP 3');
   });
 
-  it('não consulta presença com outra conta após renovar o cookie', async () => {
+  it('não consulta presença quando o heartbeat falha', async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     const heartbeat = vi.spyOn(api, 'post').mockRejectedValueOnce(new ApiError('Sessão expirada', undefined, undefined, 401));
     const query = vi.spyOn(api, 'get');
-    vi.spyOn(api, 'refresh').mockResolvedValue({ accessToken: 'outra-conta', user: { ...user, id: 'other-account' } });
-    const onAccountChanged = vi.fn();
     function Harness() {
-      useOnlinePresence(user.id, 'PCP', false, onAccountChanged);
+      useOnlinePresence(user.id, 'PCP', false);
       return <div>Conectado</div>;
     }
     host = document.createElement('div');
@@ -91,7 +84,6 @@ describe('Presença online', () => {
     root = createRoot(host);
     await act(async () => { root?.render(<Harness />); await Promise.resolve(); });
     expect(heartbeat).toHaveBeenCalledTimes(1);
-    expect(onAccountChanged).toHaveBeenCalledTimes(1);
     expect(query).not.toHaveBeenCalled();
   });
 });

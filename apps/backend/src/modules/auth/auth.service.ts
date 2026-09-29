@@ -15,6 +15,7 @@ import { AccessTokenResult, TokenService } from './token.service';
 
 export interface AuthenticationResult extends AccessTokenResult {
   refreshToken: string;
+  sessionExpiresAt: Date;
   user: Omit<AuthenticatedUser, 'sessionId'> & { preferences: UserPreferences };
 }
 
@@ -70,7 +71,7 @@ export class AuthService {
       });
     });
 
-    return this.authenticationResult(user, session.id, refreshToken);
+    return this.authenticationResult(user, session, refreshToken);
   }
 
   async refresh(refreshToken: string, metadata: AuditRequestMetadata): Promise<AuthenticationResult> {
@@ -84,7 +85,6 @@ export class AuthService {
       }
 
       current.refreshTokenHash = this.tokenService.hashRefreshToken(nextRefreshToken);
-      current.expiresAt = this.tokenService.refreshTokenExpiresAt();
       current.lastUsedAt = new Date();
       current.ipAddress = metadata.ipAddress;
       current.userAgent = metadata.userAgent;
@@ -112,7 +112,7 @@ export class AuthService {
       throw this.invalidCredentials();
     }
 
-    return this.authenticationResult(session.user, session.id, nextRefreshToken);
+    return this.authenticationResult(session.user, session, nextRefreshToken);
   }
 
   async logout(refreshToken: string | undefined, metadata: AuditRequestMetadata): Promise<void> {
@@ -147,7 +147,7 @@ export class AuthService {
       this.sessionsRepository.findActiveByIdAndUser(sessionId, userId),
     ]);
 
-    if (!user || !session) {
+    if (!user || !session || this.effectiveSessionExpiresAt(session).getTime() <= Date.now()) {
       return null;
     }
 
@@ -156,11 +156,11 @@ export class AuthService {
 
   private async authenticationResult(
     user: UserEntity,
-    sessionId: string,
+    session: AuthSessionEntity,
     refreshToken: string,
   ): Promise<AuthenticationResult> {
-    const access = await this.tokenService.createAccessToken(user, sessionId);
-    const authenticatedUser = this.toAuthenticatedUser(user, sessionId);
+    const access = await this.tokenService.createAccessToken(user, session.id);
+    const authenticatedUser = this.toAuthenticatedUser(user, session.id);
     const publicUser = {
       id: authenticatedUser.id,
       username: authenticatedUser.username,
@@ -170,7 +170,7 @@ export class AuthService {
       preferences: { theme: user.uiTheme, backgroundColor: user.uiBackgroundColor },
     };
 
-    return { ...access, refreshToken, user: publicUser };
+    return { ...access, refreshToken, sessionExpiresAt: this.effectiveSessionExpiresAt(session), user: publicUser };
   }
 
   private toAuthenticatedUser(user: UserEntity, sessionId: string): AuthenticatedUser {
@@ -191,9 +191,16 @@ export class AuthService {
     return Boolean(
       session
       && !session.revokedAt
-      && session.expiresAt.getTime() > Date.now()
+      && this.effectiveSessionExpiresAt(session).getTime() > Date.now()
       && session.user.status === UserStatus.Active,
     );
+  }
+
+  private effectiveSessionExpiresAt(session: AuthSessionEntity): Date {
+    return new Date(Math.min(
+      session.expiresAt.getTime(),
+      session.createdAt.getTime() + this.tokenService.sessionLifetimeMs(),
+    ));
   }
 
   private recordLoginFailure(

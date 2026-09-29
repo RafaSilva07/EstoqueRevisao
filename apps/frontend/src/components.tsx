@@ -44,19 +44,41 @@ export function Modal({ children, labelledBy, busy = false, className = '', onCl
   onClose: () => void;
 }) {
   const ref = useRef<HTMLElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
   const returnFocus = useRef(typeof document === 'undefined' ? null : document.activeElement as HTMLElement | null);
   useEffect(() => {
     const previous = returnFocus.current;
     const overflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const mobile = window.matchMedia?.('(max-width: 759px), (pointer: coarse)').matches ?? window.innerWidth <= 759;
+    if (!mobile) document.body.style.overflow = 'hidden';
     const dialog = ref.current;
+    const backdrop = backdropRef.current;
+    const viewport = window.visualViewport;
+    const updateViewport = () => {
+      if (!backdrop || !viewport) return;
+      backdrop.style.top = `${viewport.offsetTop}px`;
+      backdrop.style.height = `${viewport.height}px`;
+      backdrop.style.setProperty('--modal-viewport-height', `${viewport.height}px`);
+    };
+    const onViewportResize = () => {
+      updateViewport();
+      const focused = document.activeElement;
+      if (focused instanceof HTMLElement && dialog?.contains(focused) && focused !== dialog) {
+        focused.scrollIntoView({ block: 'nearest' });
+      }
+    };
+    updateViewport();
+    viewport?.addEventListener('resize', onViewportResize);
+    viewport?.addEventListener('scroll', updateViewport);
     if (dialog && !dialog.contains(document.activeElement)) dialog.focus();
     return () => {
+      viewport?.removeEventListener('resize', onViewportResize);
+      viewport?.removeEventListener('scroll', updateViewport);
       document.body.style.overflow = overflow;
       previous?.focus({ preventScroll: true });
     };
   }, []);
-  return <div className="dialog-backdrop" onMouseDown={(event) => {
+  return <div ref={backdropRef} className="dialog-backdrop" onMouseDown={(event) => {
     if (event.target === event.currentTarget && !busy) onClose();
   }}>
     <section ref={ref} className={`dialog confirmation-dialog ${className}`.trim()} role="dialog" aria-modal="true" aria-labelledby={labelledBy} aria-busy={busy} tabIndex={-1} onKeyDown={(event) => {

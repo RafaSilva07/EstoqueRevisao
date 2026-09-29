@@ -28,6 +28,7 @@ Edite `.env` antes de iniciar. No mínimo:
 - copie a URL **Session pooler** do Supabase para `DATABASE_URL`;
 - mantenha `DATABASE_SSL=true`;
 - defina `JWT_ACCESS_SECRET` com pelo menos 32 caracteres;
+- mantenha `JWT_ACCESS_TTL=15m` e `REFRESH_TOKEN_TTL_HOURS=14` para a sessão de até 14 horas; se o `.env` antigo usar `REFRESH_TOKEN_TTL_DAYS`, substitua a chave pela nova e reinicie o backend;
 - defina `BOOTSTRAP_USERNAME` e `BOOTSTRAP_PASSWORD` para o primeiro acesso;
 - em desenvolvimento local, mantenha `FRONTEND_URL=http://localhost:5173` e `VITE_API_URL=http://localhost:3000/api/v1`.
 - para fotos locais, mantenha `STORAGE_DRIVER=local` e configure `FILE_STORAGE_PATH=./storage`; o diretório é criado automaticamente e não entra no Git.

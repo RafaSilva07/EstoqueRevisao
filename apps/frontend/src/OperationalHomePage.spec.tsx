@@ -94,6 +94,8 @@ describe('Resumo operacional da Home', () => {
     });
     await act(async () => { root.render(<OperationalHomePage user={user} navigate={navigate} onOpenRecord={onOpenRecord} />); await Promise.resolve(); });
     await click('Expedição → Revisão');
+    expect(getPhoto).not.toHaveBeenCalled();
+    await click('Mostrar fotos');
     expect(getPhoto).toHaveBeenCalledWith('/shipments/shipment-1/items/shipment-item-1/photo');
     expect(host.querySelector('img')?.getAttribute('src')).toBe('blob:test-photo');
     expect(host.textContent).toContain('Produto teste');

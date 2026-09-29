@@ -14,7 +14,7 @@ describe('evidências da movimentação', () => {
   afterEach(() => { act(() => root.unmount()); host.remove(); });
 
   it('não carrega fotos pendentes no PCP até o operador pedir e permite ocultá-las novamente', () => {
-    act(() => root.render(<MovementEvidence pendingPcp><span>Foto do produto</span></MovementEvidence>));
+    act(() => root.render(<MovementEvidence initiallyCollapsed><span>Foto do produto</span></MovementEvidence>));
     const toggle = host.querySelector('button')!;
     expect(toggle.textContent).toBe('Mostrar fotos');
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
@@ -27,7 +27,7 @@ describe('evidências da movimentação', () => {
   });
 
   it('mantém evidências de operações não pendentes visíveis', () => {
-    act(() => root.render(<MovementEvidence pendingPcp={false}><span>Foto do produto</span></MovementEvidence>));
+    act(() => root.render(<MovementEvidence initiallyCollapsed={false}><span>Foto do produto</span></MovementEvidence>));
     expect(host.textContent).toContain('Foto do produto');
     expect(host.querySelector('button')).toBeNull();
   });

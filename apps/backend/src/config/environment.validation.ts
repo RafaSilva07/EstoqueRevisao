@@ -63,7 +63,7 @@ export class EnvironmentVariables {
   @Transform(toNumber)
   @IsInt()
   @Min(1)
-  REFRESH_TOKEN_TTL_DAYS = 7;
+  REFRESH_TOKEN_TTL_HOURS = 14;
 
   @Transform(toBoolean)
   @IsBoolean()

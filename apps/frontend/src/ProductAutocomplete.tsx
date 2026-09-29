@@ -147,13 +147,13 @@ export function ProductAutocomplete({
       <label>Código{required && ' *'}<span className="autocomplete-control">
         <input value={code} required={required} autoComplete="off" aria-autocomplete="list" aria-controls={listId} aria-expanded={field === 'code'} role="combobox"
           onFocus={() => setField('code')} onChange={(event) => edit('code', event.target.value)} onKeyDown={keyDown} placeholder="Digite ou abra a lista" />
-        <button type="button" className="autocomplete-toggle" aria-label="Abrir lista de códigos" onClick={() => browse('code')}>⌄</button>
+        <button type="button" className="autocomplete-toggle" aria-label="Abrir lista de códigos" onClick={() => browse('code')}><span className="dropdown-chevron" aria-hidden="true" /></button>
         {field === 'code' && list}
       </span></label>
       <label>Descrição{required && ' *'}<span className="autocomplete-control">
         <input value={name} required={required} autoComplete="off" aria-autocomplete="list" aria-controls={listId} aria-expanded={field === 'name'} role="combobox"
           onFocus={() => setField('name')} onChange={(event) => edit('name', event.target.value)} onKeyDown={keyDown} placeholder="Digite o nome do produto" />
-        <button type="button" className="autocomplete-toggle" aria-label="Abrir lista de descrições" onClick={() => browse('name')}>⌄</button>
+        <button type="button" className="autocomplete-toggle" aria-label="Abrir lista de descrições" onClick={() => browse('name')}><span className="dropdown-chevron" aria-hidden="true" /></button>
         {field === 'name' && list}
       </span></label>
     </div>

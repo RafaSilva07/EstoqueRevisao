@@ -36,7 +36,7 @@ export function PositionSelect({ label, value, options, onChange, disabled = fal
         } else if ((event.key === 'Enter' || event.key === ' ') && expanded) {
           event.preventDefault(); if (options[active]) choose(options[active]);
         } else if (event.key === 'Tab') setOpen(false);
-      }}><span>{selected?.label ?? placeholder}</span><span aria-hidden="true">⌄</span></button>
+      }}><span>{selected?.label ?? placeholder}</span><span className="dropdown-chevron" aria-hidden="true" /></button>
     {expanded && <div id={`${id}-list`} role="listbox" aria-labelledby={`${id}-label`} className="position-select-list">
       {!options.length && <span className="muted">Nenhuma posição disponível.</span>}
       {options.map((option, index) => <button key={option.value} id={`${id}-${index}`} type="button" role="option"

@@ -1,53 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, Paginated, ShipmentPhotoLimits, UserSession } from './api';
 import { EmptyState, LoadingState, Modal, Notice, PageHeader } from './components';
-import { formatDate, formatDateTime } from './format';
+import { formatDateTime } from './format';
 import { MovementRecordRow } from './MovementRecordRow';
 import { NewShipment } from './NewShipment';
 import { useMovementSubmission } from './useMovementSubmission';
 import { ShipmentSector, sectorLabel, Shipment, ShipmentAuditEvent, shipmentStatusLabel } from './shipments';
-import { PhotoViewer } from './PhotoViewer';
 import { PhotoAttachment } from './shipment-photo-state';
 import { ShipmentPhotoInput } from './ShipmentPhotoInput';
-import { ShipmentStockOutcome } from './ShipmentStockOutcome';
 import { auditActionLabel } from './audit-action-labels';
-
-export function ShipmentPhoto({ shipmentId, itemId, productName, available, additionalPhotos = [] }: { shipmentId: string; itemId: string; productName: string; available: boolean; additionalPhotos?: Array<{ ordinal: number; mimeType: string; size: number }> }) {
-  const ordinals = [...(available ? [1] : []), ...additionalPhotos.map((photo) => photo.ordinal)].sort((a, b) => a - b);
-  if (!ordinals.length) return <span className="muted">Item histórico sem foto.</span>;
-  return <div className="shipment-photo-grid">{ordinals.map((ordinal) => <ShipmentPhotoThumbnail key={ordinal} shipmentId={shipmentId} itemId={itemId}
-    productName={productName} ordinal={ordinal} total={ordinals.length} />)}</div>;
-}
-
-function ShipmentPhotoThumbnail({ shipmentId, itemId, productName, ordinal, total }: { shipmentId: string; itemId: string; productName: string; ordinal: number; total: number }) {
-  const [url, setUrl] = useState('');
-  const [error, setError] = useState('');
-  useEffect(() => {
-    let active = true; let objectUrl = '';
-    const path = ordinal === 1 ? `/shipments/${shipmentId}/items/${itemId}/photo` : `/shipments/${shipmentId}/items/${itemId}/photos/${ordinal}`;
-    void api.getBlob(path).then((blob) => {
-      if (!active) return; objectUrl = URL.createObjectURL(blob); setUrl(objectUrl);
-    }).catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível carregar a foto.'); });
-    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [itemId, ordinal, shipmentId]);
-  if (error) return <span className="photo-required">{error}</span>;
-  if (!url) return <span className="muted">Carregando foto…</span>;
-  return <PhotoViewer src={url} alt={`Foto ${ordinal} de ${productName}`} status={`Foto ${ordinal} de ${total} · toque para ampliar`} />;
-}
-
-export function ShipmentItems({ shipment, onSelectRecord }: { shipment: Shipment; onSelectRecord?: (id: string) => void }) {
-  return <ul className="movement-detail-items shipment-items">{shipment.items.map((item) => <li className="shipment-item-card" key={item.id}>
-    {item.codigoRegistro && (onSelectRecord ? <button type="button" className="text-button" onClick={() => onSelectRecord(item.id)}>{item.codigoRegistro} · Ver registro</button> : <small>Registro {item.codigoRegistro}</small>)}
-    <div className="shipment-item-heading"><strong>{item.assembly?.packageProductSnapshot.code ?? item.productSnapshot.code} — {item.assembly?.packageProductSnapshot.name ?? item.productSnapshot.name}</strong><b>{item.assembly?.packageQuantity ?? item.quantity} {item.assembly?.packageProductSnapshot.defaultUnit ?? item.productSnapshot.defaultUnit}</b></div>
-    <div className="shipment-item-data"><span>{item.assembly?.mixedDates ? 'Lote 0 · datas misturadas' : `Lote ${item.assembly?.outputLot ?? item.batch.code} · fabricação ${formatDate(item.assembly?.outputManufacturingDate ?? item.batch.manufacturingDate)}`}</span>
-      {!item.assembly?.mixedDates && <span>Validade {formatDate(item.assembly?.outputExpirationDate ?? item.batch.expirationDate)}</span>}
-      {item.assembly ? <span>Montagem de {item.quantity} UN ({item.productSnapshot.code}). Origens: {item.assembly.sources.map((source) => `${source.locationName} / ${source.lot}: ${source.quantity} UN`).join('; ')}</span>
-        : item.stockLocation && <span>Origem: {item.stockLocation.name}</span>}
-      {item.observation && <span><strong>Observação do produto:</strong> {item.observation}</span>}
-    </div>
-    <ShipmentPhoto shipmentId={shipment.id} itemId={item.id} productName={item.assembly?.packageProductSnapshot.name ?? item.productSnapshot.name} available={Boolean(item.photoMimeType)} additionalPhotos={item.additionalPhotos} />
-  </li>)}</ul>;
-}
+import { ShipmentItems } from './ShipmentItems';
+import { ShipmentDetailView } from './ShipmentDetailView';
 
 function ShipmentDecision({ shipment, refuse, onClose, onDone }: { shipment: Shipment; refuse: boolean; onClose: () => void; onDone: () => void }) {
   const [reason, setReason] = useState('');
@@ -220,23 +183,18 @@ export function ShipmentsPage({ user, initialView = 'pending', initialCreating =
       <div className="shipment-pagination"><button className="secondary" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Anterior</button><span>Página {page} de {data.meta.totalPages} · {data.meta.total} envios</span><button className="secondary" disabled={page >= data.meta.totalPages} onClick={() => setPage((value) => value + 1)}>Próxima</button></div>
     </>}
     {selected && !decision && <Modal labelledBy="shipment-detail-title" className="shipment-detail-dialog" onClose={() => setSelected(null)}>
-      <h2 id="shipment-detail-title">{sectorLabel[selected.originSector]} → {sectorLabel[selected.destinationSector]}</h2>
-      <p><strong>{shipmentStatusLabel[selected.status]}</strong></p><p>Enviado por {selected.createdBy.username} em {formatDateTime(selected.createdAt)}</p>
-      <strong>{selected.codigoMovimentacao}</strong>
-      {selected.sourceShipmentId && <button className="text-button" onClick={() => void api.get<Shipment>(`/shipments/${selected.sourceShipmentId}`).then(setSelected).catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'Erro ao abrir recebimento.'))}>Ver recebimento original · {selected.sourceShipment?.codigoMovimentacao ?? selected.sourceShipmentId}</button>}
-      {selected.derivedShipments?.map((derived) => <button key={derived.id} className="text-button" onClick={() => void api.get<Shipment>(`/shipments/${derived.id}`).then(setSelected).catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'Erro ao abrir retorno.'))}>Ver retorno · {shipmentStatusLabel[derived.status]}</button>)}
-      {selected.observation && <p><strong>Observação geral:</strong> {selected.observation}</p>}
-      <ShipmentItems shipment={selected} />
-      <ShipmentStockOutcome shipment={selected} />
-      {selected.decidedAt && <p>{shipmentStatusLabel[selected.status]} por {selected.decidedBy?.username} em {formatDateTime(selected.decidedAt)}</p>}
-      {selected.refusalReason && <Notice kind="info">{selected.status === 'CANCELADO' ? 'Motivo do cancelamento' : 'Motivo da recusa'}: {selected.refusalReason}</Notice>}
-      {isAdmin && auditShipmentId === selected.id && auditHistory.length > 0 && <><h3>Auditoria</h3><ul className="pcp-audit-list">{auditHistory.map((event) => <li key={event.id}><strong title={event.action}>{auditActionLabel(event.action)}</strong><span>{event.user?.username ?? 'Sistema'} · {formatDateTime(event.createdAt)}</span></li>)}</ul></>}
-      {canDecide && selected.status === 'AGUARDANDO_RECEBIMENTO' && selected.destinationSector === user.sector && <div className="dialog-actions"><button className="secondary" onClick={() => setDecision('refuse')}>Recusar envio</button><button onClick={() => setDecision('confirm')}>Confirmar recebimento</button></div>}
-      {selected.status === 'AGUARDANDO_RECEBIMENTO' && selected.createdBy.id === user.id && <button className="danger button-wide" onClick={() => setDecision('cancel')}>Cancelar envio</button>}
-      {canDecide && selected.status === 'EM_SEPARACAO' && user.sector === 'REVISAO' && <button className="button-wide" onClick={() => setDecision('separate')}>Continuar separação</button>}
-      {selected.status === 'EM_SEPARACAO' && user.sector === 'EXPEDICAO' && <Notice kind="info">A Revisão está realizando a separação dos produtos recebidos. Prazo previsto: {selected.separationExpiresAt ? formatDateTime(selected.separationExpiresAt) : 'não informado'}.</Notice>}
-      {canCreate && selected.status === 'RECUSADO' && selected.createdBy.id === user.id && <button className="button-wide" onClick={() => { setSelected(null); setCreating(true); }}>Criar novo envio</button>}
-      <button className="secondary button-wide" onClick={() => setSelected(null)}>Fechar detalhes</button>
+      <ShipmentDetailView shipment={selected} titleId="shipment-detail-title" onClose={() => setSelected(null)}
+        onOpenShipment={(id) => void api.get<Shipment>(`/shipments/${id}`).then(setSelected).catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'Erro ao abrir envio vinculado.'))}
+        audit={<>
+          {selected.status === 'EM_SEPARACAO' && user.sector === 'EXPEDICAO' && <Notice kind="info">A Revisão está realizando a separação dos produtos recebidos. Prazo previsto: {selected.separationExpiresAt ? formatDateTime(selected.separationExpiresAt) : 'não informado'}.</Notice>}
+          {isAdmin && auditShipmentId === selected.id && auditHistory.length > 0 && <section className="movement-detail-section" aria-labelledby="shipment-audit-title"><h3 id="shipment-audit-title">Auditoria</h3><ul className="pcp-audit-list">{auditHistory.map((event) => <li key={event.id}><strong title={event.action}>{auditActionLabel(event.action)}</strong><span>{event.user?.username ?? 'Sistema'} · {formatDateTime(event.createdAt)}</span></li>)}</ul></section>}
+        </>}
+        actions={<>
+          {canDecide && selected.status === 'AGUARDANDO_RECEBIMENTO' && selected.destinationSector === user.sector && <><button type="button" className="secondary" onClick={() => setDecision('refuse')}>Recusar envio</button><button type="button" onClick={() => setDecision('confirm')}>Confirmar recebimento</button></>}
+          {selected.status === 'AGUARDANDO_RECEBIMENTO' && selected.createdBy.id === user.id && <button type="button" className="danger" onClick={() => setDecision('cancel')}>Cancelar envio</button>}
+          {canDecide && selected.status === 'EM_SEPARACAO' && user.sector === 'REVISAO' && <button type="button" onClick={() => setDecision('separate')}>Continuar separação</button>}
+          {canCreate && selected.status === 'RECUSADO' && selected.createdBy.id === user.id && <button type="button" onClick={() => { setSelected(null); setCreating(true); }}>Criar novo envio</button>}
+        </>} />
     </Modal>}
     {selected && (decision === 'confirm' || decision === 'refuse') && <ShipmentDecision key={`${selected.id}:${decision}`} shipment={selected} refuse={decision === 'refuse'} onClose={() => setDecision(null)} onDone={() => { setSuccess(decision === 'refuse' ? 'Envio recusado. O remetente poderá consultar o motivo.' : 'Recebimento atualizado com sucesso.'); setDecision(null); setSelected(null); void load(); }} />}
     {selected && decision === 'cancel' && <ShipmentCancellation shipment={selected} onClose={() => setDecision(null)} onDone={() => { setSuccess('Envio cancelado. O registro e o motivo foram preservados no histórico.'); setDecision(null); setSelected(null); void load(); }} />}
@@ -248,6 +206,8 @@ export function ShipmentHomeNotice({ onOpen }: { onOpen: () => void }) {
   const [pending, setPending] = useState<number | null>(null);
   const [sent, setSent] = useState<Shipment[]>([]);
   const [selected, setSelected] = useState<Shipment | null>(null);
+  const [selectedDetail, setSelectedDetail] = useState<Shipment | null>(null);
+  const [detailError, setDetailError] = useState('');
   const [error, setError] = useState('');
   useEffect(() => {
     let active = true;
@@ -257,10 +217,17 @@ export function ShipmentHomeNotice({ onOpen }: { onOpen: () => void }) {
     load(); const timer = window.setInterval(load, 30000);
     return () => { active = false; window.clearInterval(timer); };
   }, []);
+  useEffect(() => {
+    if (!selected) return;
+    let active = true;
+    void api.get<Shipment>(`/shipments/${selected.id}`).then((detail) => { if (active) setSelectedDetail(detail); })
+      .catch((caught: unknown) => { if (active) setDetailError(caught instanceof Error ? caught.message : 'Não foi possível atualizar o detalhe do envio.'); });
+    return () => { active = false; };
+  }, [selected]);
   return <section className="surface shipment-card"><p className="eyebrow">Envios entre setores</p><h2>Aguardando meu recebimento</h2>
     {error ? <Notice kind="error">{error}</Notice> : pending === null ? <LoadingState label="Consultando pendências" /> : <p><strong>{pending}</strong> envio(s) aguardando sua ação.</p>}
     <button onClick={onOpen}>Abrir envios e recebimentos</button>
-    {sent.length > 0 && <><h3>Atualizações dos seus envios</h3><ul className="movement-detail-items">{sent.map((shipment) => <li className="clickable-card" tabIndex={0} role="button" onClick={() => setSelected(shipment)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(shipment); } }} key={shipment.id}><strong>{sectorLabel[shipment.destinationSector]} · {shipmentStatusLabel[shipment.status]}</strong><span>{formatDateTime(shipment.decidedAt ?? shipment.createdAt)}</span>{shipment.refusalReason && <span>Motivo: {shipment.refusalReason}</span>}</li>)}</ul></>}
-    {selected && <Modal labelledBy="shipment-update-title" className="shipment-detail-dialog" onClose={() => setSelected(null)}><h2 id="shipment-update-title">{sectorLabel[selected.originSector]} → {sectorLabel[selected.destinationSector]}</h2><p><strong>{shipmentStatusLabel[selected.status]}</strong></p><p>Enviado por {selected.createdBy.username} em {formatDateTime(selected.createdAt)}</p>{selected.observation && <p><strong>Observação geral:</strong> {selected.observation}</p>}<ShipmentItems shipment={selected} />{selected.decidedAt && <p>{shipmentStatusLabel[selected.status]} por {selected.decidedBy?.username} em {formatDateTime(selected.decidedAt)}</p>}{selected.refusalReason && <Notice kind="info">Motivo da recusa: {selected.refusalReason}</Notice>}<button className="secondary button-wide" onClick={() => setSelected(null)}>Fechar detalhes</button></Modal>}
+    {sent.length > 0 && <><h3>Atualizações dos seus envios</h3><ul className="movement-detail-items">{sent.map((shipment) => <li className="clickable-card" tabIndex={0} role="button" onClick={() => { setSelected(shipment); setSelectedDetail(null); setDetailError(''); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(shipment); setSelectedDetail(null); setDetailError(''); } }} key={shipment.id}><strong>{sectorLabel[shipment.destinationSector]} · {shipmentStatusLabel[shipment.status]}</strong><span>{formatDateTime(shipment.decidedAt ?? shipment.createdAt)}</span>{shipment.refusalReason && <span>Motivo: {shipment.refusalReason}</span>}</li>)}</ul></>}
+    {selected && <Modal labelledBy="shipment-update-title" className="shipment-detail-dialog" onClose={() => setSelected(null)}>{detailError && <Notice kind="error">{detailError}</Notice>}<ShipmentDetailView shipment={selectedDetail?.id === selected.id ? selectedDetail : selected} titleId="shipment-update-title" onClose={() => setSelected(null)} /></Modal>}
   </section>;
 }

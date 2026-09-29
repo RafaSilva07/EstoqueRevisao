@@ -334,7 +334,15 @@ const apiUrl = typeof configuredUrl === 'string'
 
 export class ApiClient {
   private accessToken: string | null = null;
+  private userId: string | null = null;
+  private refreshPromise: Promise<AuthenticationResult | null> | null = null;
+  private refreshDenied = false;
+  private onSessionInvalid: (() => void) | null = null;
   private operationalSector: OperationalMode | null = null;
+
+  setSessionInvalidHandler(handler: (() => void) | null): void {
+    this.onSessionInvalid = handler;
+  }
 
   setOperationalSector(sector: OperationalMode | null): void {
     this.operationalSector = sector;
@@ -346,26 +354,41 @@ export class ApiClient {
       body: JSON.stringify({ username, password }),
     }, false);
     this.accessToken = result.accessToken;
+    this.userId = result.user.id;
     return result;
   }
 
-  async refresh(): Promise<AuthenticationResult | null> {
-    try {
-      const result = await this.request<AuthenticationResult>('/auth/refresh', {
-        method: 'POST',
-      }, false);
-      this.accessToken = result.accessToken;
-      return result;
-    } catch {
-      return null;
+  refresh(): Promise<AuthenticationResult | null> {
+    if (!this.refreshPromise) {
+      this.refreshPromise = (async () => {
+        try {
+          this.refreshDenied = false;
+          const result = await this.request<AuthenticationResult>('/auth/refresh', { method: 'POST' }, false);
+          if (this.userId && this.userId !== result.user.id) {
+            this.invalidateSession();
+            return null;
+          }
+          this.accessToken = result.accessToken;
+          this.userId = result.user.id;
+          return result;
+        } catch (error) {
+          this.refreshDenied = error instanceof ApiError && error.status === 401;
+          return null;
+        } finally {
+          this.refreshPromise = null;
+        }
+      })();
     }
+    return this.refreshPromise;
   }
 
   async logout(): Promise<void> {
     try {
+      if (this.refreshPromise) await this.refreshPromise;
       await this.request<void>('/auth/logout', { method: 'POST' }, false);
     } finally {
       this.accessToken = null;
+      this.userId = null;
       this.operationalSector = null;
     }
   }
@@ -386,10 +409,7 @@ export class ApiClient {
   }
 
   async getBlob(path: string): Promise<Blob> {
-    const headers = new Headers();
-    if (this.accessToken) headers.set('Authorization', `Bearer ${this.accessToken}`);
-    if (this.operationalSector) headers.set('X-Operational-Sector', this.operationalSector);
-    const response = await fetch(`${apiUrl}${path}`, { headers, credentials: 'include' });
+    const response = await this.fetchWithAuth(path, {});
     if (!response.ok) {
       const payload = await response.json().catch(() => ({})) as ErrorEnvelope;
       throw new ApiError(payload.error?.message ?? 'Não foi possível carregar a foto.', payload.error?.code, payload.error?.details, response.status);
@@ -406,20 +426,39 @@ export class ApiClient {
   }
 
   private async request<T>(path: string, options: RequestInit = {}, authenticated = true): Promise<T> {
+    const response = await this.fetchWithAuth(path, options, authenticated);
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({})) as ErrorEnvelope;
+      throw new ApiError(payload.error?.message ?? 'Nao foi possivel concluir a operacao.', payload.error?.code, payload.error?.details, response.status);
+    }
+    return response.status === 204 ? undefined as T : response.json() as Promise<T>;
+  }
+
+  private async fetchWithAuth(path: string, options: RequestInit, authenticated = true, retried = false): Promise<Response> {
     const headers = new Headers(options.headers);
     if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
-    if (authenticated && this.accessToken) headers.set('Authorization', `Bearer ${this.accessToken}`);
+    const token = this.accessToken;
+    if (authenticated && token) headers.set('Authorization', `Bearer ${token}`);
     if (authenticated && this.operationalSector) headers.set('X-Operational-Sector', this.operationalSector);
     const response = await fetch(`${apiUrl}${path}`, {
       ...options,
       headers,
       credentials: 'include',
     });
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({})) as ErrorEnvelope;
-      throw new ApiError(payload.error?.message ?? 'Nao foi possivel concluir a operacao.', payload.error?.code, payload.error?.details, response.status);
+    if (authenticated && response.status === 401 && token && !retried) {
+      const renewed = this.accessToken !== token || Boolean(await this.refresh());
+      if (renewed && this.accessToken) return this.fetchWithAuth(path, options, true, true);
+      if (this.refreshDenied) this.invalidateSession();
     }
-    return response.status === 204 ? undefined as T : response.json() as Promise<T>;
+    return response;
+  }
+
+  private invalidateSession(): void {
+    if (!this.accessToken && !this.userId) return;
+    this.accessToken = null;
+    this.userId = null;
+    this.operationalSector = null;
+    this.onSessionInvalid?.();
   }
 }
 
