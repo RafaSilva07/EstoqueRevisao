@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { randomUUID } from 'node:crypto';
-import { AvailableShipmentPositionsQueryDto, CreateShipmentDto, RefuseShipmentDto } from './shipment.dto';
+import { AssemblyOptionsQueryDto, AvailableShipmentPositionsQueryDto, CreateShipmentDto, RefuseShipmentDto } from './shipment.dto';
 
 describe('DTOs de envios', () => {
   it.each([0, -1, 1.5])('rejeita quantidade inválida %s', async (quantity) => {
@@ -21,6 +21,10 @@ describe('DTOs de envios', () => {
     const invalid = plainToInstance(AvailableShipmentPositionsQueryDto, { productId: randomUUID(), manufacturingDate: '31/08/2026' });
     expect((await validate(invalid)).length).toBeGreaterThan(0);
   });
+  it('aceita apenas identificador válido para filtrar a data/lote da montagem', async () => {
+    expect(await validate(plainToInstance(AssemblyOptionsQueryDto, { productId: randomUUID(), batchId: randomUUID() }))).toHaveLength(0);
+    expect((await validate(plainToInstance(AssemblyOptionsQueryDto, { productId: randomUUID(), batchId: 'inválido' }))).length).toBeGreaterThan(0);
+  });
   it('normaliza e limita observações gerais e por produto', async () => {
     const valid = plainToInstance(CreateShipmentDto, {
       requestKey: randomUUID(), destinationSector: 'REVISAO', observation: '  Conferir lacre  ',
@@ -34,5 +38,19 @@ describe('DTOs de envios', () => {
       items: [{ productId: randomUUID(), batchId: randomUUID(), quantity: 1, observation: 'x'.repeat(1001) }],
     });
     expect((await validate(invalid)).length).toBeGreaterThan(0);
+  });
+  it('valida parcelas inteiras da montagem e rejeita origem inválida', async () => {
+    const data = { requestKey: randomUUID(), destinationSector: 'EXPEDICAO', items: [{ productId: randomUUID(),
+      quantity: 2, assembly: { packageProductId: randomUUID(), mixedDates: true,
+        sources: [{ batchId: randomUUID(), stockLocationId: randomUUID(), quantity: 10 }] } }] };
+    expect(await validate(plainToInstance(CreateShipmentDto, data))).toHaveLength(0);
+    for (const badQuantity of [0, -1, 1.5]) {
+      const invalid = structuredClone(data);
+      invalid.items[0].assembly.sources[0].quantity = badQuantity;
+      expect((await validate(plainToInstance(CreateShipmentDto, invalid))).length).toBeGreaterThan(0);
+    }
+    const empty = structuredClone(data);
+    empty.items[0].assembly.sources = [];
+    expect((await validate(plainToInstance(CreateShipmentDto, empty))).length).toBeGreaterThan(0);
   });
 });

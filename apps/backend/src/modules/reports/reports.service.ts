@@ -10,6 +10,7 @@ import {
   ReviewReportItem,
   ReviewReportTotals,
   StockReportItem,
+  StockProductReportItem,
   StockReportTotals,
 } from './report.types';
 
@@ -30,14 +31,14 @@ export class ReportsService {
       'Produto', 'Lote origem', 'Lote destino', 'Quantidade', 'Unidade', 'Destinos revisao',
       'Cancelada em', 'Cancelada por', 'Motivo cancelamento',
       'Fabricacao origem', 'Validade origem', 'Fabricacao destino', 'Validade destino',
-      'Produto unitario resultante', 'Unidades produzidas',
+      'Produto resultante', 'Quantidade resultante', 'Unidade resultante',
     ], report.items.map((item) => [
       item.movementId, item.occurredAt, item.type, item.status, item.responsible, item.origin,
       item.destination, `${item.productCode} - ${item.productName}`, item.batchCode,
       item.destinationBatchCode, item.quantity, item.unit, item.reviewDestinations,
       item.canceledAt, item.canceledBy, item.cancellationReason,
       item.manufacturingDate, item.expirationDate, item.destinationManufacturingDate, item.destinationExpirationDate,
-      item.outputProductCode ? `${item.outputProductCode} - ${item.outputProductName}` : null, item.outputQuantity ?? null,
+      item.outputProductCode ? `${item.outputProductCode} - ${item.outputProductName}` : null, item.outputQuantity ?? null, item.outputUnit ?? null,
     ]));
   }
 
@@ -61,6 +62,11 @@ export class ReportsService {
   stock(query: StockReportQueryDto): Promise<ReportResult<StockReportItem, StockReportTotals>> {
     this.validateDateRange(query.expirationFrom, query.expirationTo);
     return this.repository.stock(query, this.referenceDate(query));
+  }
+
+  stockProducts(query: StockReportQueryDto): Promise<ReportResult<StockProductReportItem, StockReportTotals>> {
+    this.validateDateRange(query.expirationFrom, query.expirationTo);
+    return this.repository.stockProducts(query, this.referenceDate(query));
   }
 
   async stockCsv(query: StockReportQueryDto): Promise<string> {

@@ -29,12 +29,13 @@ import { ShipmentsService } from './shipments.service';
 import { CreateShipmentDto, ShipmentQueryDto } from './shipment.dto';
 import { StorageService, UploadedImage } from '../storage/storage.service';
 import { HistoryService } from '../history/history.service';
+import { HistoryQueryDto } from '../history/history-query.dto';
 import { SettingsService } from '../settings/settings.service';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 (databaseUrl ? describe : describe.skip)('Envios entre setores (PostgreSQL)', () => {
   let db: DataSource; let service: ShipmentsService; let stock: StockPositionsService; let movements: MovementsService; let audit: AuditService;
-  let users: Record<Sector, AuthenticatedUser>; let productId: string; let batchId: string; let sourceId: string; let tufId: string; let lataBoaId: string;
+  let users: Record<Sector, AuthenticatedUser>; let productId: string; let packageId: string; let batchId: string; let sourceId: string; let tufId: string; let lataBoaId: string;
   const metadata = (): { requestId: string; ipAddress: null; userAgent: string } => ({ requestId: randomUUID(), ipAddress: null, userAgent: 'jest-shipments' });
   beforeAll(async () => {
     if (!new URL(databaseUrl!).pathname.endsWith('_test')) throw new Error('Banco descartável _test obrigatório.');
@@ -60,6 +61,10 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     }
     productId = randomUUID(); batchId = randomUUID();
     await db.query(`INSERT INTO products(id,code,name,default_unit,shelf_life_years,created_by,updated_by) VALUES ($1,'500001','Produto do envio','UN',2,$2,$2)`, [productId,users.REVISAO.id]);
+    packageId = randomUUID();
+    await db.query(`INSERT INTO products(id,code,name,default_unit,units_per_package,shelf_life_years,created_by,updated_by)
+      VALUES ($1,'500002','Fardo do envio','FD',10,2,$2,$2)`, [packageId, users.REVISAO.id]);
+    await db.query('INSERT INTO product_unit_options(package_product_id,unit_product_id) VALUES ($1,$2)', [packageId, productId]);
     await db.query(`INSERT INTO batches(id,product_id,code,manufacturing_date,expiration_date,created_by,updated_by) VALUES ($1,$2,'SOCDNV','2026-08-31','2028-08-31',$3,$3)`, [batchId,productId,users.REVISAO.id]);
     sourceId = (await db.getRepository(StockLocationEntity).findOneByOrFail({ code: 'REVISAR' })).id;
     tufId = (await db.getRepository(StockLocationEntity).findOneByOrFail({ code: 'TUF' })).id;
@@ -81,6 +86,101 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
   const balance = (location = sourceId): Promise<number> => stock.getBalance({ productId, batchId, stockLocationId: location });
   const seed = (quantity = 10, location = sourceId): Promise<StockPositionEntity> => db.transaction((manager) => stock.addQuantity({ productId, batchId, stockLocationId: location }, quantity, manager));
   const decide = (id: string, sector: Sector, refuse = false): Promise<ShipmentEntity> => service.decide(id, refuse ? 'RECUSADO' : 'CONFIRMADO', refuse ? 'Quantidade divergente' : null, {}, users[sector], metadata());
+  const assembly = (quantity: number, sources: Array<{ batchId: string; stockLocationId: string; quantity: number }>, mixedDates = false): Promise<ShipmentEntity> =>
+    createShipment({ requestKey: randomUUID(), destinationSector: 'EXPEDICAO', items: [{ productId, quantity,
+      assembly: { packageProductId: packageId, mixedDates, sources } }] }, users.REVISAO, metadata());
+
+  it('monta fardos de um lote, reserva UN uma vez e mantém o produto FD no histórico do envio', async () => {
+    await seed(12); await seed(8, lataBoaId);
+    const options = await service.assemblyOptions({ productId, page: 1, limit: 20 }, users.REVISAO);
+    expect(options.availableUnits).toBe(20);
+    expect(options.availableByBatch).toEqual([expect.objectContaining({ batchId, code: 'SOCDNV', availableUnits: 20 })]);
+    expect(options.packages).toEqual(expect.arrayContaining([expect.objectContaining({ id: packageId, unitsPerPackage: 10 })]));
+    const shipment = await assembly(2, [{ batchId, stockLocationId: sourceId, quantity: 12 },
+      { batchId, stockLocationId: lataBoaId, quantity: 8 }]);
+    expect(shipment).toMatchObject({ shipmentKind: 'MONTAGEM', items: [{ quantity: 20,
+      assembly: { packageQuantity: 2, outputLot: 'SOCDNV', mixedDates: false } }] });
+    expect(await balance()).toBe(0); expect(await balance(lataBoaId)).toBe(0);
+    await decide(shipment.id, 'EXPEDICAO');
+    expect(await balance()).toBe(0); expect(await balance(lataBoaId)).toBe(0);
+    const movement = await db.getRepository(MovementEntity).findOne({ where: { shipmentId: shipment.id }, relations: { items: true } });
+    expect(movement?.items[0]).toMatchObject({ quantity: 20, assembly: { packageQuantity: 2, packageProductId: packageId } });
+    const history = await new HistoryService(db).list(Object.assign(new HistoryQueryDto(), { page: 1, limit: 10 }), users.REVISAO);
+    const record = history.items.find((item) => item.code === shipment.items[0].codigoRegistro);
+    expect(record).toMatchObject({ productCode: '500002', productUnit: 'FD', quantity: 2, batchCode: 'SOCDNV' });
+    expect(record?.origin).toContain('Lata Boa');
+  });
+
+  it('separa a capacidade por lote/data e filtra apenas as posições do lote escolhido', async () => {
+    const secondBatchId = randomUUID();
+    await db.query(`INSERT INTO batches(id,product_id,code,manufacturing_date,expiration_date,created_by,updated_by)
+      VALUES ($1,$2,'SOCDNA','2026-09-01','2028-09-01',$3,$3)`, [secondBatchId, productId, users.REVISAO.id]);
+    await seed(6); await seed(5, lataBoaId);
+    await db.transaction((manager) => stock.addQuantity({ productId, batchId: secondBatchId, stockLocationId: tufId }, 15, manager));
+    const options = await service.assemblyOptions({ productId, batchId, page: 1, limit: 20 }, users.REVISAO);
+    expect(options.availableUnits).toBe(26);
+    expect(options.availableByBatch).toEqual([
+      expect.objectContaining({ batchId, manufacturingDate: '2026-08-31', availableUnits: 11 }),
+      expect.objectContaining({ batchId: secondBatchId, manufacturingDate: '2026-09-01', availableUnits: 15 }),
+    ]);
+    expect(options.availableByBatch[0].positions).toEqual([
+      expect.objectContaining({ stockLocationName: 'Lata Boa', availableUnits: 5 }),
+      expect.objectContaining({ stockLocationName: 'Revisar', availableUnits: 6 }),
+    ]);
+    expect(options.availableByBatch[1].positions).toEqual([
+      expect.objectContaining({ stockLocationName: 'TUF', availableUnits: 15 }),
+    ]);
+    expect(options.positions.items).toHaveLength(2);
+    expect(options.positions.items.every((position) => position.batchId === batchId)).toBe(true);
+  });
+
+  it('montagem Lote 0 preserva datas reais nas parcelas e recusa/cancelamento devolvem cada origem', async () => {
+    const secondBatchId = randomUUID();
+    await db.query(`INSERT INTO batches(id,product_id,code,manufacturing_date,expiration_date,created_by,updated_by)
+      VALUES ($1,$2,'SOCDNA','2026-09-01','2028-09-01',$3,$3)`, [secondBatchId, productId, users.REVISAO.id]);
+    await seed(5);
+    await db.transaction((manager) => stock.addQuantity({ productId, batchId: secondBatchId, stockLocationId: tufId }, 5, manager));
+    const sources = [{ batchId, stockLocationId: sourceId, quantity: 5 }, { batchId: secondBatchId, stockLocationId: tufId, quantity: 5 }];
+    const refused = await assembly(1, sources, true);
+    expect(refused.items[0].assembly).toMatchObject({ outputLot: '0', outputManufacturingDate: null,
+      outputExpirationDate: null, sources: [{ quantity: 5 }, { quantity: 5 }] });
+    const history = await new HistoryService(db).list(Object.assign(new HistoryQueryDto(), { page: 1, limit: 10 }), users.REVISAO);
+    expect(history.items).toEqual(expect.arrayContaining([expect.objectContaining({ code: refused.items[0].codigoRegistro,
+      batchCode: '0', manufacturingDate: null, quantity: 1, productCode: '500002' })]));
+    expect(await balance()).toBe(0);
+    await decide(refused.id, 'EXPEDICAO', true);
+    expect(await balance()).toBe(5);
+    expect(await stock.getBalance({ productId, batchId: secondBatchId, stockLocationId: tufId })).toBe(5);
+    const canceled = await assembly(1, sources, true);
+    await service.cancel(canceled.id, 'Montagem não será enviada', users.REVISAO, metadata());
+    expect(await balance()).toBe(5);
+    expect(await stock.getBalance({ productId, batchId: secondBatchId, stockLocationId: tufId })).toBe(5);
+  });
+
+  it('bloqueia soma incorreta, embalagem incompatível e falta de saldo sem reserva parcial', async () => {
+    await seed(10);
+    const source = { batchId, stockLocationId: sourceId, quantity: 9 };
+    await expect(assembly(1, [source])).rejects.toBeInstanceOf(BadRequestException);
+    expect(await balance()).toBe(10);
+    await expect(assembly(2, [{ ...source, quantity: 20 }])).rejects.toBeInstanceOf(BadRequestException);
+    expect(await balance()).toBe(10);
+    await expect(createShipment({ requestKey: randomUUID(), destinationSector: 'EXPEDICAO', items: [{ productId, quantity: 1,
+      assembly: { packageProductId: productId, mixedDates: false, sources: [{ ...source, quantity: 10 }] } }] }, users.REVISAO, metadata()))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(await balance()).toBe(10);
+  });
+
+  it('montagem reverte a reserva se a auditoria falhar e impede consumo concorrente duplicado', async () => {
+    await seed(10);
+    const sources = [{ batchId, stockLocationId: sourceId, quantity: 10 }];
+    jest.spyOn(audit, 'record').mockRejectedValueOnce(new Error('audit failed'));
+    await expect(assembly(1, sources)).rejects.toThrow('audit failed');
+    expect(await balance()).toBe(10);
+    expect(await db.getRepository(ShipmentEntity).count()).toBe(0);
+    const attempts = await Promise.allSettled([assembly(1, sources), assembly(1, sources)]);
+    expect(attempts.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(await balance()).toBe(0);
+  });
 
   it('Produção → Revisão: pendente não altera saldo; confirma uma entrada e guarda responsáveis', async () => {
     const shipment = await incoming();

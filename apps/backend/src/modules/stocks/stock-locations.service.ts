@@ -5,6 +5,7 @@ import { PaginatedResult, paginate } from '../../shared/pagination/paginated-res
 import { AuditService } from '../audit/audit.service';
 import { AuditRequestMetadata } from '../audit/audit.types';
 import { StockLocationKind } from './domain/stock-location-kind.enum';
+import { StockDisplayMode } from './domain/stock-display-mode.enum';
 import { CreateStockLocationDto } from './dto/create-stock-location.dto';
 import { StockLocationQueryDto } from './dto/stock-location-query.dto';
 import { UpdateStockLocationDto } from './dto/update-stock-location.dto';
@@ -42,12 +43,14 @@ export class StockLocationsService {
         throw this.duplicate();
       }
       await this.validateParent(dto.kind, dto.parentId ?? null, undefined, manager);
+      this.validateDisplayMode(dto.kind, dto.displayMode ?? StockDisplayMode.Lots);
 
       const location = new StockLocationEntity();
       location.code = dto.code;
       location.name = dto.name;
       location.description = dto.description ?? null;
       location.kind = dto.kind;
+      location.displayMode = dto.displayMode ?? StockDisplayMode.Lots;
       location.parentId = dto.parentId ?? null;
       location.active = true;
       location.createdById = userId;
@@ -85,6 +88,8 @@ export class StockLocationsService {
       const before = this.snapshot(location);
       const code = dto.code ?? location.code;
       const kind = dto.kind ?? location.kind;
+      const displayMode = dto.displayMode ?? location.displayMode;
+      this.validateDisplayMode(kind, displayMode);
       if (kind !== location.kind) {
         const pending = await manager.query<unknown[]>(`SELECT 1 FROM shipment_items item JOIN shipments shipment ON shipment.id = item.shipment_id
           WHERE item.stock_location_id = $1 AND shipment.status = 'AGUARDANDO_RECEBIMENTO' LIMIT 1`, [id]);
@@ -108,6 +113,7 @@ export class StockLocationsService {
         location.description = dto.description;
       }
       location.kind = kind;
+      location.displayMode = displayMode;
       location.parentId = parentId;
       location.updatedById = userId;
       await this.save(location, manager);
@@ -195,6 +201,15 @@ export class StockLocationsService {
     }
   }
 
+  private validateDisplayMode(kind: StockLocationKind, mode: StockDisplayMode): void {
+    if (kind === StockLocationKind.External && mode !== StockDisplayMode.Lots) {
+      throw new BadRequestException({
+        code: 'INVALID_STOCK_DISPLAY_MODE',
+        message: 'Locais externos nao possuem visualizacao de estoque por produto.',
+      });
+    }
+  }
+
   private async save(location: StockLocationEntity, manager: EntityManager): Promise<void> {
     try {
       await this.repository.save(location, manager);
@@ -212,6 +227,7 @@ export class StockLocationsService {
       name: location.name,
       description: location.description,
       kind: location.kind,
+      displayMode: location.displayMode,
       parentId: location.parentId,
       active: location.active,
     };

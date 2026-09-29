@@ -6,6 +6,20 @@ import { StockLocationEntity } from '../stocks/entities/stock-location.entity';
 
 export type Sector = 'REVISAO' | 'PRODUCAO' | 'EXPEDICAO';
 export type ShipmentStatus = 'AGUARDANDO_RECEBIMENTO' | 'EM_SEPARACAO' | 'CONFIRMADO' | 'RECUSADO' | 'CANCELADO';
+export interface ShipmentAssembly {
+  packageProductId: string;
+  packageProductSnapshot: { code: string; name: string; defaultUnit: string };
+  packageQuantity: number;
+  unitsPerPackage: number;
+  mixedDates: boolean;
+  outputLot: string;
+  outputManufacturingDate: string | null;
+  outputExpirationDate: string | null;
+  sources: Array<{
+    batchId: string; stockLocationId: string; quantity: number;
+    lot: string; manufacturingDate: string; expirationDate: string; locationName: string;
+  }>;
+}
 
 @Entity('shipments')
 export class ShipmentEntity {
@@ -23,7 +37,7 @@ export class ShipmentEntity {
   @Column({ name: 'destination_location_id', type: 'uuid' }) destinationLocationId!: string;
   @Column({ type: 'varchar', length: 1000, nullable: true }) observation!: string | null;
   @Column({ type: 'varchar' }) status: ShipmentStatus = 'AGUARDANDO_RECEBIMENTO';
-  @Column({ name: 'shipment_kind', type: 'varchar', length: 30, default: 'NORMAL' }) shipmentKind: 'NORMAL' | 'RETORNO_IMEDIATO' = 'NORMAL';
+  @Column({ name: 'shipment_kind', type: 'varchar', length: 30, default: 'NORMAL' }) shipmentKind: 'NORMAL' | 'RETORNO_IMEDIATO' | 'MONTAGEM' = 'NORMAL';
   @Column({ name: 'source_shipment_id', type: 'uuid', nullable: true }) sourceShipmentId!: string | null;
   @ManyToOne(() => ShipmentEntity, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'source_shipment_id' }) sourceShipment!: ShipmentEntity | null;
   @OneToMany(() => ShipmentEntity, (shipment) => shipment.sourceShipment) derivedShipments!: ShipmentEntity[];
@@ -59,6 +73,7 @@ export class ShipmentItemEntity {
   @Column({ name: 'photo_size', type: 'integer', nullable: true }) photoSize!: number | null;
   @OneToMany(() => ShipmentItemAdditionalPhotoEntity, (photo) => photo.shipmentItem) additionalPhotos!: ShipmentItemAdditionalPhotoEntity[];
   @Column({ name: 'product_snapshot', type: 'jsonb' }) productSnapshot!: { code: string; name: string; defaultUnit: string };
+  @Column({ type: 'jsonb', nullable: true }) assembly!: ShipmentAssembly | null;
   @OneToOne(() => ShipmentSeparationDraftEntity, (draft) => draft.shipmentItem) separationDraft!: unknown;
 }
 

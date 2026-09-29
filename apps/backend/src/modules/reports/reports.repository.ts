@@ -20,6 +20,7 @@ import {
   ReviewReportItem,
   ReviewReportTotals,
   StockReportItem,
+  StockProductReportItem,
   StockReportTotals,
 } from './report.types';
 
@@ -51,7 +52,8 @@ export class ReportsRepository {
       .addSelect('responsible.id', 'responsibleUserId')
       .addSelect('responsible.username', 'responsible')
       .addSelect('origin.id', 'originLocationId')
-      .addSelect('origin.name', 'origin')
+      .addSelect(`COALESCE((SELECT string_agg(DISTINCT source->>'locationName', ', ')
+        FROM jsonb_array_elements(item.assembly->'sources') source), origin.name)`, 'origin')
       .addSelect('destination.id', 'destinationLocationId')
       .addSelect(`COALESCE(destination.name, 'Varios destinos')`, 'destination')
       .addSelect('product.id', 'productId')
@@ -65,9 +67,10 @@ export class ReportsRepository {
       .addSelect('destinationBatch.code', 'destinationBatchCode')
       .addSelect('destinationBatch.manufacturingDate', 'destinationManufacturingDate')
       .addSelect('destinationBatch.expirationDate', 'destinationExpirationDate')
-      .addSelect('item.outputQuantity', 'outputQuantity')
-      .addSelect("item.output_product_snapshot->>'code'", 'outputProductCode')
-      .addSelect("item.output_product_snapshot->>'name'", 'outputProductName')
+      .addSelect("COALESCE((item.assembly->>'packageQuantity')::numeric, item.output_quantity)", 'outputQuantity')
+      .addSelect("COALESCE(item.assembly->'packageProductSnapshot'->>'code', item.output_product_snapshot->>'code')", 'outputProductCode')
+      .addSelect("COALESCE(item.assembly->'packageProductSnapshot'->>'name', item.output_product_snapshot->>'name')", 'outputProductName')
+      .addSelect("COALESCE(item.assembly->'packageProductSnapshot'->>'defaultUnit', item.output_product_snapshot->>'defaultUnit')", 'outputUnit')
       .addSelect('item.quantity', 'quantity')
       .addSelect(`COALESCE(item.product_snapshot->>'defaultUnit', product.default_unit)`, 'unit')
       .addSelect(`(
@@ -285,6 +288,80 @@ export class ReportsRepository {
     };
   }
 
+  async stockProducts(
+    query: StockReportQueryDto,
+    referenceDate: string,
+  ): Promise<ReportResult<StockProductReportItem, StockReportTotals>> {
+    const groupsBuilder = this.applyStockFilters(this.stockBuilder(), query, referenceDate)
+      .select('product.id', 'productId')
+      .addSelect('product.code', 'productCode')
+      .addSelect('product.name', 'productName')
+      .addSelect('product.defaultUnit', 'unit')
+      .addSelect('SUM(position.quantity)', 'quantity')
+      .addSelect('MIN(batch.expirationDate)', 'nearestExpiration')
+      .groupBy('product.id')
+      .addGroupBy('product.code')
+      .addGroupBy('product.name')
+      .addGroupBy('product.defaultUnit');
+    if (query.sort === 'QUANTITY') groupsBuilder.orderBy('SUM(position.quantity)', 'DESC');
+    else if (query.sort === 'EXPIRATION') groupsBuilder.orderBy('MIN(batch.expirationDate)', 'ASC');
+    else groupsBuilder.orderBy('product.name', 'ASC');
+    groupsBuilder.addOrderBy('product.name', 'ASC').addOrderBy('product.id', 'ASC')
+      .offset((query.page - 1) * query.limit).limit(query.limit);
+
+    const countBuilder = this.applyStockFilters(this.stockBuilder(), query, referenceDate)
+      .select('COUNT(DISTINCT product.id)', 'products');
+    const totalsBuilder = this.applyStockFilters(this.stockBuilder(), query, referenceDate)
+      .select('product.defaultUnit', 'unit')
+      .addSelect('COUNT(position.id)', 'positions')
+      .addSelect('COALESCE(SUM(position.quantity), 0)', 'quantity')
+      .groupBy('product.defaultUnit')
+      .orderBy('product.defaultUnit', 'ASC');
+    const [groups, count, totals] = await Promise.all([
+      groupsBuilder.getRawMany<RawValues>(), countBuilder.getRawOne<RawValues>(), totalsBuilder.getRawMany<RawValues>(),
+    ]);
+    const productIds = groups.map((group) => this.string(group.productId));
+    const positions = productIds.length ? await this.applyStockFilters(this.stockBuilder(), query, referenceDate)
+      .andWhere('product.id IN (:...productIds)', { productIds })
+      .select('position.id', 'positionId')
+      .addSelect('product.id', 'productId')
+      .addSelect('product.code', 'productCode')
+      .addSelect('product.name', 'productName')
+      .addSelect('batch.id', 'batchId')
+      .addSelect('batch.code', 'batchCode')
+      .addSelect('batch.manufacturingDate', 'manufacturingDate')
+      .addSelect('batch.expirationDate', 'expirationDate')
+      .addSelect('location.id', 'stockLocationId')
+      .addSelect('location.name', 'location')
+      .addSelect('position.quantity', 'quantity')
+      .addSelect('product.defaultUnit', 'unit')
+      .addSelect(this.expirationCase(), 'expirationStatus')
+      .orderBy('product.name', 'ASC')
+      .addOrderBy('batch.expirationDate', 'ASC')
+      .addOrderBy('position.id', 'ASC')
+      .getRawMany<RawValues>() : [];
+    const positionsByProduct = new Map<string, StockReportItem[]>();
+    for (const row of positions) {
+      const position = this.stockRow(row);
+      const list = positionsByProduct.get(position.productId) ?? [];
+      list.push(position);
+      positionsByProduct.set(position.productId, list);
+    }
+    return {
+      items: groups.map((group) => ({
+        productId: this.string(group.productId), productCode: this.string(group.productCode),
+        productName: this.string(group.productName), unit: this.string(group.unit),
+        quantity: this.number(group.quantity),
+        positions: positionsByProduct.get(this.string(group.productId)) ?? [],
+      })),
+      meta: this.meta(query.page, query.limit, this.number(count?.products)),
+      totals: {
+        positions: totals.reduce((sum, row) => sum + this.number(row.positions), 0),
+        quantityByUnit: totals.map((row) => this.quantityByUnit(row)),
+      },
+    };
+  }
+
   private movementBuilder(): SelectQueryBuilder<MovementItemEntity> {
     return this.movementItems.createQueryBuilder('item')
       .innerJoin('item.movement', 'movement')
@@ -304,12 +381,20 @@ export class ReportsRepository {
     if (query.dateFrom) builder.andWhere('movement.occurredAt >= :dateFrom', { dateFrom: query.dateFrom });
     if (query.dateTo) builder.andWhere('movement.occurredAt <= :dateTo', { dateTo: query.dateTo });
     if (query.type) builder.andWhere('movement.type = :type', { type: query.type });
-    if (query.productId) builder.andWhere('(item.productId = :productId OR item.outputProductId = :productId)', { productId: query.productId });
-    if (query.product) builder.andWhere(`(COALESCE(item.product_snapshot->>'code', product.code) ILIKE :product OR COALESCE(item.product_snapshot->>'name', product.name) ILIKE :product OR item.output_product_snapshot->>'code' ILIKE :product OR item.output_product_snapshot->>'name' ILIKE :product)`, { product: `%${query.product}%` });
-    if (query.batchId) builder.andWhere('(item.batchId = :batchId OR item.outputBatchId = :batchId)', { batchId: query.batchId });
-    if (query.batch) builder.andWhere('batch.code ILIKE :batch', { batch: `%${query.batch}%` });
-    if (query.originLocationId) builder.andWhere('movement.originLocationId = :originLocationId', { originLocationId: query.originLocationId });
-    if (query.origin) builder.andWhere('(origin.code ILIKE :origin OR origin.name ILIKE :origin)', { origin: `%${query.origin}%` });
+    if (query.productId) builder.andWhere("(item.productId = :productId OR item.outputProductId = :productId OR (item.assembly->>'packageProductId')::uuid = :productId)", { productId: query.productId });
+    if (query.product) builder.andWhere(`(COALESCE(item.product_snapshot->>'code', product.code) ILIKE :product OR COALESCE(item.product_snapshot->>'name', product.name) ILIKE :product OR item.output_product_snapshot->>'code' ILIKE :product OR item.output_product_snapshot->>'name' ILIKE :product OR item.assembly->'packageProductSnapshot'->>'code' ILIKE :product OR item.assembly->'packageProductSnapshot'->>'name' ILIKE :product)`, { product: `%${query.product}%` });
+    if (query.batchId) builder.andWhere(`(item.batchId = :batchId OR item.outputBatchId = :batchId OR EXISTS (
+      SELECT 1 FROM jsonb_array_elements(item.assembly->'sources') source WHERE (source->>'batchId')::uuid = :batchId
+    ))`, { batchId: query.batchId });
+    if (query.batch) builder.andWhere(`(batch.code ILIKE :batch OR item.assembly->>'outputLot' ILIKE :batch OR EXISTS (
+      SELECT 1 FROM jsonb_array_elements(item.assembly->'sources') source WHERE source->>'lot' ILIKE :batch
+    ))`, { batch: `%${query.batch}%` });
+    if (query.originLocationId) builder.andWhere(`(movement.originLocationId = :originLocationId OR EXISTS (
+      SELECT 1 FROM jsonb_array_elements(item.assembly->'sources') source WHERE (source->>'stockLocationId')::uuid = :originLocationId
+    ))`, { originLocationId: query.originLocationId });
+    if (query.origin) builder.andWhere(`(origin.code ILIKE :origin OR origin.name ILIKE :origin OR EXISTS (
+      SELECT 1 FROM jsonb_array_elements(item.assembly->'sources') source WHERE source->>'locationName' ILIKE :origin
+    ))`, { origin: `%${query.origin}%` });
     if (query.destinationLocationId) {
       builder.andWhere(`(
         movement.destinationLocationId = :destinationLocationId
@@ -383,7 +468,11 @@ export class ReportsRepository {
     if (query.product) builder.andWhere('(product.code ILIKE :product OR product.name ILIKE :product)', { product: `%${query.product}%` });
     if (query.batchId) builder.andWhere('position.batchId = :batchId', { batchId: query.batchId });
     if (query.batch) builder.andWhere('batch.code ILIKE :batch', { batch: `%${query.batch}%` });
-    if (query.stockLocationId) builder.andWhere('position.stockLocationId = :stockLocationId', { stockLocationId: query.stockLocationId });
+    if (query.stockLocationId) {
+      builder.andWhere(query.includeSubstocks === 'true'
+        ? '(position.stockLocationId = :stockLocationId OR location.parentId = :stockLocationId)'
+        : 'position.stockLocationId = :stockLocationId', { stockLocationId: query.stockLocationId });
+    }
     if (query.location) builder.andWhere('(location.code ILIKE :location OR location.name ILIKE :location)', { location: `%${query.location}%` });
     if (query.expirationFrom) builder.andWhere('batch.expirationDate >= :expirationFrom', { expirationFrom: query.expirationFrom });
     if (query.expirationTo) builder.andWhere('batch.expirationDate <= :expirationTo', { expirationTo: query.expirationTo });
@@ -419,7 +508,7 @@ export class ReportsRepository {
       destinationManufacturingDate: row.destinationManufacturingDate ? this.civilDate(row.destinationManufacturingDate) : null,
       destinationExpirationDate: row.destinationExpirationDate ? this.civilDate(row.destinationExpirationDate) : null,
       destinationBatchId: this.nullableString(row.destinationBatchId), destinationBatchCode: this.nullableString(row.destinationBatchCode),
-      outputProductCode: this.nullableString(row.outputProductCode), outputProductName: this.nullableString(row.outputProductName), outputQuantity: row.outputQuantity == null ? null : this.number(row.outputQuantity),
+      outputProductCode: this.nullableString(row.outputProductCode), outputProductName: this.nullableString(row.outputProductName), outputQuantity: row.outputQuantity == null ? null : this.number(row.outputQuantity), outputUnit: this.nullableString(row.outputUnit),
       quantity: this.number(row.quantity), unit: this.string(row.unit), reviewDestinations: this.string(row.reviewDestinations),
       canceledAt: row.canceledAt ? this.iso(row.canceledAt) : null,
       canceledBy: this.nullableString(row.canceledBy), cancellationReason: this.nullableString(row.cancellationReason),

@@ -10,6 +10,7 @@ describe('ReportsService', () => {
     movements: jest.fn(),
     reviews: jest.fn(),
     stock: jest.fn(),
+    stockProducts: jest.fn(),
   };
   const service = new ReportsService(repository as unknown as ReportsRepository);
 
@@ -18,6 +19,7 @@ describe('ReportsService', () => {
     repository.movements.mockResolvedValue({ items: [], meta: {}, totals: {} });
     repository.reviews.mockResolvedValue({ items: [], meta: {}, totals: {} });
     repository.stock.mockResolvedValue({ items: [], meta: {}, totals: {} });
+    repository.stockProducts.mockResolvedValue({ items: [], meta: {}, totals: {} });
   });
 
   it('rejeita periodo historico invertido', () => {
@@ -36,6 +38,8 @@ describe('ReportsService', () => {
     });
     expect(() => service.stock(query)).toThrow(BadRequestException);
     expect(repository.stock).not.toHaveBeenCalled();
+    expect(() => service.stockProducts(query)).toThrow(BadRequestException);
+    expect(repository.stockProducts).not.toHaveBeenCalled();
   });
 
   it('exporta CSV com BOM, separador e escape de aspas usando consulta sem paginacao', async () => {

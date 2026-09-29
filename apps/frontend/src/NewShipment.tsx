@@ -10,12 +10,14 @@ import { useMovementSubmission } from './useMovementSubmission';
 import { ShipmentSector, sectorLabel } from './shipments';
 import { allShipmentPhotosReady, PhotoAttachment } from './shipment-photo-state';
 import { ShipmentPhotoInput } from './ShipmentPhotoInput';
+import { AssemblyDraft, AssemblyItemForm } from './AssemblyItemForm';
 
-interface DraftItem { key: string; product: Product; lot: OperationalLot; quantity: number; observation: string | null; position?: StockPosition; photos: PhotoAttachment[] }
+interface DraftItem { key: string; product: Product; lot: OperationalLot; quantity: number; observation: string | null; position?: StockPosition; assembly?: AssemblyDraft; photos: PhotoAttachment[] }
 
 export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSector; onCreated: (id: string) => void; onClose: () => void }) {
   const outgoing = sector === 'REVISAO';
   const [destination, setDestination] = useState<ShipmentSector>(outgoing ? 'PRODUCAO' : 'REVISAO');
+  const [assemblyMode, setAssemblyMode] = useState(false);
   const [product, setProduct] = useState<Product | null>(null);
   const [productResetKey, setProductResetKey] = useState(0);
   const [positions, setPositions] = useState<StockPosition[]>([]);
@@ -191,24 +193,31 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
       return false;
     }));
   }
+  function addAssemblyItem(unit: Product, assembly: AssemblyDraft, itemNote: string) {
+    setItems((current) => [...current, { key: crypto.randomUUID(), product: unit, lot: assembly.sources[0].position.batch,
+      quantity: assembly.packageQuantity, observation: itemNote || null, assembly, photos: [] }]);
+    setAdding(false); setError('');
+  }
   const summary = <ul className="movement-detail-items shipment-items">{items.map((item) => <li className="shipment-item-card" key={item.key}>
-    <div className="shipment-item-heading"><strong>{item.product.code} — {item.product.name}</strong><b>{item.quantity} {item.product.defaultUnit}</b></div>
-    <div className="shipment-item-data"><span>Lote {item.lot.code} · fabricação {formatDate(item.lot.manufacturingDate)}</span>
-      <span>Validade {formatDate(item.lot.expirationDate)}{item.position ? ` · ${item.position.stockLocation.name}` : ''}</span>
+    <div className="shipment-item-heading"><strong>{item.assembly?.packageProduct.code ?? item.product.code} — {item.assembly?.packageProduct.name ?? item.product.name}</strong><b>{item.quantity} {item.assembly?.packageProduct.defaultUnit ?? item.product.defaultUnit}</b></div>
+    <div className="shipment-item-data"><span>{item.assembly?.mixedDates ? 'Lote 0 · datas misturadas' : `Lote ${item.lot.code} · fabricação ${formatDate(item.lot.manufacturingDate)}`}</span>
+      {!item.assembly?.mixedDates && <span>Validade {formatDate(item.lot.expirationDate)}{item.position ? ` · ${item.position.stockLocation.name}` : ''}</span>}
+      {item.assembly && <span>Montagem: {item.assembly.sources.reduce((sum, source) => sum + source.quantity, 0)} UN de {item.product.code}. Origens: {item.assembly.sources.map((source) => `${source.position.stockLocation.name} / ${source.position.batch.code}: ${source.quantity} UN`).join('; ')}</span>}
       {item.observation && <span><strong>Observação do produto:</strong> {item.observation}</span>}
     </div>
-    {photoLimits && <ShipmentPhotoInput photos={item.photos} limits={photoLimits} productName={item.product.name}
+    {photoLimits && <ShipmentPhotoInput photos={item.photos} limits={photoLimits} productName={item.assembly?.packageProduct.name ?? item.product.name}
       remainingTotal={100 - photoTotal} onAdd={(files) => attachPhotos(item.key, files)} onRemove={(index) => removePhoto(item.key, index)} readOnly={confirming} />}
     {!confirming && <button type="button" className="secondary" onClick={() => removeItem(item.key)}>Remover item</button>}
   </li>)}</ul>;
   return <>
     <PageHeader eyebrow="Envios entre setores" title={outgoing ? 'Novo envio' : 'Novo envio para Revisão'} action={<button className="secondary" onClick={onClose}>Voltar</button>} />
     {error && !adding && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
-    <section className="surface form-panel"><h2>1. Destino</h2>{outgoing ? <label>Enviar para<select value={destination} onChange={(event) => setDestination(event.target.value as ShipmentSector)}><option value="PRODUCAO">Produção</option><option value="EXPEDICAO">Expedição</option></select></label> : <p>Revisão · entrada em A Revisar somente após confirmação.</p>}
+    <section className="surface form-panel"><h2>1. Destino</h2>{outgoing ? <label>Enviar para<select value={destination} disabled={items.length > 0} onChange={(event) => { setDestination(event.target.value as ShipmentSector); setAssemblyMode(false); }}><option value="PRODUCAO">Produção</option><option value="EXPEDICAO">Expedição</option></select></label> : <p>Revisão · entrada em A Revisar somente após confirmação.</p>}
+      {outgoing && destination === 'EXPEDICAO' && <label className="assembly-mixed-toggle"><input type="checkbox" checked={assemblyMode} disabled={items.length > 0} onChange={(event) => setAssemblyMode(event.target.checked)} /> Montar fardos/caixas com unidades disponíveis</label>}
       {outgoing && <p className="muted">Ao enviar, a quantidade sai do disponível e fica em trânsito. Uma recusa devolve o saldo à posição original.</p>}</section>
     {adding && <Modal labelledBy="add-product-title" onClose={closeItem}><div className="panel-heading item-list-heading"><h2 id="add-product-title">Adicionar produto</h2><button type="button" className="secondary" onClick={closeItem}>Cancelar</button></div>
       {error && <Notice kind="error">{error}</Notice>}
-      <form className="form-grid" onSubmit={add}>
+      {assemblyMode ? <AssemblyItemForm onAdd={addAssemblyItem} excludedPositions={items.flatMap((item) => item.assembly?.sources.map((source) => source.position) ?? [])} /> : <form className="form-grid" onSubmit={add}>
         <ProductAutocomplete key={productResetKey} onChange={changeProduct} />
         {product && <div className="selected-product wide"><strong>Produto selecionado: {product.code}</strong><span>{product.name} · {product.defaultUnit}</span><button type="button" className="secondary" onClick={clearProduct}>Trocar produto</button></div>}
         {outgoing && product && <fieldset className="shipment-position-filter wide"><legend>Lote e posição disponível</legend>
@@ -228,7 +237,7 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
         <label>Quantidade *<input required type="number" inputMode="numeric" min="1" step="1" max={position?.quantity} value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label>
         <label className="wide">Observação deste produto (opcional)<textarea value={itemObservation} onChange={(event) => setItemObservation(event.target.value)} maxLength={1000} rows={2} /></label>
         <div className="form-actions"><button disabled={!product || items.length >= 100 || (outgoing ? !position : !ready)}>Adicionar item</button></div>
-      </form>
+      </form>}
     </Modal>}
     <section className="surface form-panel"><div className="panel-heading item-list-heading"><h2>Produtos ({items.length})</h2><button type="button" onClick={() => { setError(''); setAdding(true); }}>Adicionar produto</button></div>{summary}
       <label>Observação geral do envio (opcional)<textarea value={observation} onChange={(event) => setObservation(event.target.value)} maxLength={1000} rows={3} /></label>
@@ -241,7 +250,10 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
       {submission.conflict && <Notice kind="info">{submission.conflict.message}</Notice>}
       {submission.error && <Notice kind="error">{submission.error}</Notice>}
       {observation.trim() && <p><strong>Observação geral:</strong> {observation.trim()}</p>}
-      <div className="dialog-actions"><button className="secondary" disabled={submission.busy} onClick={() => setConfirming(false)}>Voltar para conferir</button><button disabled={submission.busy || !allPhotosReady} onClick={() => void submission.submit({ destinationSector: destination, observation: observation.trim() || undefined, items: items.map((item) => ({ productId: item.product.id, quantity: item.quantity, observation: item.observation ?? undefined, photoCount: item.photos.length, ...(item.position ? { batchId: item.position.batchId, stockLocationId: item.position.stockLocationId } : { lot: item.lot }) })) }, items.flatMap((item) => item.photos.map((photo) => photo.file)))}>{submission.busy ? 'Enviando…' : submission.conflict ? 'Confirmar validade diferente e enviar' : 'Enviar ao destinatário'}</button></div>
+      <div className="dialog-actions"><button className="secondary" disabled={submission.busy} onClick={() => setConfirming(false)}>Voltar para conferir</button><button disabled={submission.busy || !allPhotosReady} onClick={() => void submission.submit({ destinationSector: destination, observation: observation.trim() || undefined, items: items.map((item) => ({ productId: item.product.id, quantity: item.quantity, observation: item.observation ?? undefined, photoCount: item.photos.length,
+        ...(item.assembly ? { assembly: { packageProductId: item.assembly.packageProduct.id, mixedDates: item.assembly.mixedDates,
+          sources: item.assembly.sources.map((source) => ({ batchId: source.position.batchId, stockLocationId: source.position.stockLocationId, quantity: source.quantity })) } }
+          : item.position ? { batchId: item.position.batchId, stockLocationId: item.position.stockLocationId } : { lot: item.lot }) })) }, items.flatMap((item) => item.photos.map((photo) => photo.file)))}>{submission.busy ? 'Enviando…' : submission.conflict ? 'Confirmar validade diferente e enviar' : 'Enviar ao destinatário'}</button></div>
     </Modal>}
   </>;
 }

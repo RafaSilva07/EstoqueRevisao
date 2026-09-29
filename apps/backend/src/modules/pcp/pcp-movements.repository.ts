@@ -46,7 +46,8 @@ export class PcpMovementsRepository {
     ))`, { destinationLocationId: query.destinationLocationId });
     if (query.search) builder.andWhere(`(movement.codigo_movimentacao = :publicCode
       OR item.codigo_registro = :publicCode OR product.code ILIKE :search OR product.name ILIKE :search
-      OR batch.code ILIKE :search)`, { publicCode: query.search.trim().toUpperCase(), search: `%${query.search}%` });
+      OR batch.code ILIKE :search OR item.assembly->'packageProductSnapshot'->>'code' ILIKE :search
+      OR item.assembly->'packageProductSnapshot'->>'name' ILIKE :search)`, { publicCode: query.search.trim().toUpperCase(), search: `%${query.search}%` });
     const direction = query.sort === 'DESC' ? 'DESC' : 'ASC';
     const primary = query.sort === 'PCP_STATUS' ? 'item.pcpExecutionStatus' : 'movement.occurredAt';
     const [items, total] = await builder.orderBy(primary, direction)
@@ -72,7 +73,7 @@ export class PcpMovementsRepository {
     return [items.map((item) => ({ ...item.movement, recordId: item.id, itemCount: 1,
       codigoGrupo: item.movement.codigoMovimentacao, codigoRegistro: item.codigoRegistro,
       product: item.product, productSnapshot: item.productSnapshot, batch: item.batch,
-      quantity: item.quantity, pcpExecutionStatus: item.pcpExecutionStatus,
+      quantity: item.quantity, assembly: item.assembly, pcpExecutionStatus: item.pcpExecutionStatus,
       pcpExecutedByUserId: item.pcpExecutedByUserId, pcpExecutedAt: item.pcpExecutedAt,
       pcpExecutionObservation: item.pcpExecutionObservation,
       sentBy: (item.movement.shipmentId ? shipmentById.get(item.movement.shipmentId)?.createdBy.username : null)
@@ -118,6 +119,8 @@ export class PcpMovementsRepository {
       INNER JOIN batches searched_batch ON searched_batch.id IN (searched_item.batch_id, searched_item.destination_batch_id, searched_item.output_batch_id)
       WHERE searched_item.movement_id = movement.id AND (
         searched_item.codigo_registro = :publicCode OR searched_product.code ILIKE :search OR searched_product.name ILIKE :search OR searched_batch.code ILIKE :search
+        OR searched_item.assembly->'packageProductSnapshot'->>'code' ILIKE :search
+        OR searched_item.assembly->'packageProductSnapshot'->>'name' ILIKE :search
       )))`, { search: `%${query.search}%`, publicCode: query.search.trim().toUpperCase() });
 
     const direction = query.sort === 'DESC' ? 'DESC' : 'ASC';

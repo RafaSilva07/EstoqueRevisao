@@ -17,12 +17,13 @@ import { MovementItemEntity } from '../movements/entities/movement-item.entity';
 import { MovementType } from '../movements/domain/movement-type.enum';
 import { MovementStatus } from '../movements/domain/movement-status.enum';
 import { PaginatedResult, paginate } from '../../shared/pagination/paginated-result.interface';
-import { AvailableShipmentPositionsQueryDto, CompleteSeparationDto, CreateShipmentDto, ExpirationConfirmationDto, SeparationDraftDto, ShipmentQueryDto } from './shipment.dto';
-import { Sector, ShipmentEntity, ShipmentItemAdditionalPhotoEntity, ShipmentItemEntity, ShipmentSeparationDraftEntity } from './shipment.entity';
+import { AssemblyOptionsQueryDto, AvailableShipmentPositionsQueryDto, CompleteSeparationDto, CreateShipmentDto, ExpirationConfirmationDto, SeparationDraftDto, ShipmentItemDto, ShipmentQueryDto } from './shipment.dto';
+import { Sector, ShipmentAssembly, ShipmentEntity, ShipmentItemAdditionalPhotoEntity, ShipmentItemEntity, ShipmentSeparationDraftEntity } from './shipment.entity';
 import { StoredImage, StorageService, UploadedImage } from '../storage/storage.service';
 import { SettingsService } from '../settings/settings.service';
 import { AuditLogEntity } from '../audit/entities/audit-log.entity';
 import { validatePhotoCounts } from './shipment-photo-counts';
+import { assemblyOutput } from './shipment-assembly';
 
 @Injectable()
 export class ShipmentsService {
@@ -124,6 +125,66 @@ export class ShipmentsService {
     return paginate(items, total, query.page, query.limit);
   }
 
+  async assemblyOptions(query: AssemblyOptionsQueryDto, user: AuthenticatedUser): Promise<{
+    packages: Array<Pick<ProductEntity, 'id' | 'code' | 'name' | 'defaultUnit' | 'unitsPerPackage'>>;
+    availableUnits: number;
+    availableByBatch: Array<{ batchId: string; code: string; manufacturingDate: string; expirationDate: string; availableUnits: number;
+      positions: Array<{ positionId: string; stockLocationName: string; availableUnits: number }> }>;
+    positions: PaginatedResult<StockPositionEntity>;
+  }> {
+    if (this.sector(user) !== 'REVISAO') throw new ForbiddenException('Somente a Revisão pode montar embalagens.');
+    const unit = await this.dataSource.getRepository(ProductEntity).findOneBy({ id: query.productId, active: true });
+    if (!unit || unit.defaultUnit !== 'UN') throw new BadRequestException('Selecione um produto unitário ativo.');
+    const packages = await this.dataSource.getRepository(ProductEntity).createQueryBuilder('package')
+      .innerJoin('package.unitProducts', 'unit', 'unit.id = :unitId', { unitId: unit.id })
+      .where('package.active = true').andWhere("package.defaultUnit IN ('FD', 'CX')")
+      .orderBy('package.code', 'ASC').getMany();
+    const builder = this.dataSource.getRepository(StockPositionEntity).createQueryBuilder('position')
+      .innerJoinAndSelect('position.product', 'product')
+      .innerJoinAndSelect('position.batch', 'batch')
+      .innerJoinAndSelect('position.stockLocation', 'stockLocation')
+      .where('position.productId = :unitId AND position.quantity > 0', { unitId: unit.id })
+      .andWhere('stockLocation.active = true').andWhere("stockLocation.kind <> 'EXTERNAL'");
+    const availability = await builder.clone()
+      .select('batch.id', 'batchId').addSelect('batch.code', 'code')
+      .addSelect("TO_CHAR(batch.manufacturingDate, 'YYYY-MM-DD')", 'manufacturingDate')
+      .addSelect("TO_CHAR(batch.expirationDate, 'YYYY-MM-DD')", 'expirationDate')
+      .addSelect('position.id', 'positionId').addSelect('position.quantity', 'availableUnits')
+      .addSelect('stockLocation.name', 'stockLocationName')
+      .addSelect("CASE WHEN stockLocation.code = 'LATA_BOA' THEN 0 ELSE 1 END", 'location_priority')
+      .orderBy('batch.manufacturingDate', 'ASC').addOrderBy('batch.expirationDate', 'ASC')
+      .addOrderBy('batch.code', 'ASC').addOrderBy('location_priority', 'ASC')
+      .addOrderBy('stockLocation.name', 'ASC').addOrderBy('position.id', 'ASC')
+      .getRawMany<{ batchId: string; code: string; manufacturingDate: string; expirationDate: string;
+        positionId: string; stockLocationName: string; availableUnits: string }>();
+    const availableByBatch: Array<{ batchId: string; code: string; manufacturingDate: string; expirationDate: string;
+      availableUnits: number; positions: Array<{ positionId: string; stockLocationName: string; availableUnits: number }> }> = [];
+    const batchesById = new Map<string, typeof availableByBatch[number]>();
+    for (const row of availability) {
+      let batch = batchesById.get(row.batchId);
+      if (!batch) {
+        batch = { batchId: row.batchId, code: row.code, manufacturingDate: row.manufacturingDate,
+          expirationDate: row.expirationDate, availableUnits: 0, positions: [] };
+        availableByBatch.push(batch);
+        batchesById.set(row.batchId, batch);
+      }
+      const units = Number(row.availableUnits);
+      batch.availableUnits += units;
+      batch.positions.push({ positionId: row.positionId, stockLocationName: row.stockLocationName, availableUnits: units });
+    }
+    const positionBuilder = builder.clone();
+    if (query.batchId) positionBuilder.andWhere('position.batchId = :batchId', { batchId: query.batchId });
+    const [positions, total] = await positionBuilder
+      .addSelect("CASE WHEN stockLocation.code = 'LATA_BOA' THEN 0 ELSE 1 END", 'location_priority')
+      .orderBy('location_priority', 'ASC').addOrderBy('stockLocation.name', 'ASC')
+      .addOrderBy('batch.manufacturingDate', 'ASC').addOrderBy('position.id', 'ASC')
+      .skip((query.page - 1) * query.limit).take(query.limit).getManyAndCount();
+    return { packages: packages.map((product) => ({ id: product.id, code: product.code, name: product.name,
+      defaultUnit: product.defaultUnit, unitsPerPackage: product.unitsPerPackage })),
+      availableUnits: availableByBatch.reduce((sum, batch) => sum + batch.availableUnits, 0),
+      availableByBatch, positions: paginate(positions, total, query.page, query.limit) };
+  }
+
   async create(dto: CreateShipmentDto, files: UploadedImage[], user: AuthenticatedUser, metadata: AuditRequestMetadata): Promise<ShipmentEntity> {
     const existing = await this.dataSource.getRepository(ShipmentEntity).findOneBy({ requestKey: dto.requestKey });
     if (existing) {
@@ -157,6 +218,13 @@ export class ShipmentsService {
         if (existing.createdById !== user.id || existing.originSector !== sector) throw new ConflictException('Chave de envio já utilizada.');
         return { id: existing.id, created: false };
       }
+      const assembling = dto.items.some((item) => Boolean(item.assembly));
+      if (assembling) {
+        if (sector !== 'REVISAO' || dto.destinationSector !== 'EXPEDICAO' || dto.items.some((item) => !item.assembly)) {
+          throw new BadRequestException('A montagem exige envio da Revisão para Expedição e todos os itens montados.');
+        }
+        await manager.query("SELECT pg_advisory_xact_lock(hashtext('product-packaging'))");
+      }
       const externalSector = sector === 'REVISAO' ? dto.destinationSector : sector;
       const external = await manager.findOneBy(StockLocationEntity, { sector: externalSector, active: true });
       const source = await manager.getRepository(StockLocationEntity).createQueryBuilder('location')
@@ -167,6 +235,7 @@ export class ShipmentsService {
         createdById: user.id, originLocationId: sector === 'REVISAO' ? null : external.id,
         destinationLocationId: sector === 'REVISAO' ? external.id : source.id,
         observation: dto.observation?.trim() || null,
+        shipmentKind: assembling ? 'MONTAGEM' : 'NORMAL',
       });
       // Same product lock order as inline entries. Outgoing reservations lock locations before stock.
       const products = new Map<string, ProductEntity>();
@@ -178,7 +247,10 @@ export class ShipmentsService {
         products.set(productId, product);
       }
       if (sector === 'REVISAO') {
-        for (const locationId of [...new Set(dto.items.map((item) => item.stockLocationId).filter((id): id is string => Boolean(id)))].sort()) {
+        const locationIds = dto.items.flatMap((item) => item.assembly
+          ? item.assembly.sources.map((source) => source.stockLocationId)
+          : item.stockLocationId ? [item.stockLocationId] : []);
+        for (const locationId of [...new Set(locationIds)].sort()) {
           await manager.query('SELECT id FROM stock_locations WHERE id = $1 FOR NO KEY UPDATE', [locationId]);
         }
       }
@@ -187,7 +259,12 @@ export class ShipmentsService {
       let photoIndex = 0;
       for (const [index, input] of dto.items.entries()) {
         let batch: BatchEntity | null;
-        if (sector === 'REVISAO') {
+        let assembly: ShipmentAssembly | null = null;
+        if (input.assembly) {
+          if (input.batchId || input.stockLocationId || input.lot) throw new BadRequestException('Informe as parcelas de origem somente na montagem.');
+          assembly = await this.resolveAssembly(input, manager);
+          batch = await manager.findOneBy(BatchEntity, { id: assembly.sources[0].batchId, productId: input.productId });
+        } else if (sector === 'REVISAO') {
           if (!input.batchId || !input.stockLocationId || input.lot) throw new BadRequestException('Selecione uma posição disponível, sem alterar o lote.');
           const location = await manager.findOneBy(StockLocationEntity, { id: input.stockLocationId });
           if (!location?.active || location.kind === StockLocationKind.External) throw new BadRequestException('Origem interna inválida.');
@@ -208,7 +285,9 @@ export class ShipmentsService {
           id: shipmentItemId,
           recordOrdinal: index + 1,
           shipmentId: shipment.id, productId: product.id, batchId: batch.id,
-          stockLocationId: input.stockLocationId ?? null, quantity: input.quantity,
+          stockLocationId: assembly?.sources[0].stockLocationId ?? input.stockLocationId ?? null,
+          quantity: assembly ? assembly.packageQuantity * assembly.unitsPerPackage : input.quantity,
+          assembly,
           observation: input.observation?.trim() || null,
           photoStorageKey: firstPhoto.key, photoMimeType: firstPhoto.mimeType, photoSize: firstPhoto.size,
           productSnapshot: { code: product.code, name: product.name, defaultUnit: product.defaultUnit },
@@ -220,6 +299,16 @@ export class ShipmentsService {
       // Reject repeated positions to make the available balance check unambiguous.
       const keys = new Set<string>();
       for (const item of this.ordered(items)) {
+        if (item.assembly) {
+          for (const source of item.assembly.sources) {
+            const key = `${item.productId}:${source.batchId}:${source.stockLocationId}`;
+            if (keys.has(key)) throw new BadRequestException('A mesma posição não pode ser repetida no envio.');
+            keys.add(key);
+            await this.stock.removeQuantity({ productId: item.productId, batchId: source.batchId,
+              stockLocationId: source.stockLocationId }, source.quantity, manager);
+          }
+          continue;
+        }
         const key = `${item.productId}:${item.batchId}:${item.stockLocationId}`;
         if (sector === 'REVISAO' && keys.has(key)) throw new BadRequestException('A mesma posição não pode ser repetida no envio.');
         keys.add(key);
@@ -230,7 +319,7 @@ export class ShipmentsService {
       if (additionalPhotos.length) await manager.save(additionalPhotos);
       await this.record(shipment, user.id, 'SHIPMENT_CREATE', manager, metadata, {
         items: items.map((item, index) => ({ productId: item.productId, batchId: item.batchId, stockLocationId: item.stockLocationId,
-          quantity: item.quantity, observation: item.observation, productSnapshot: item.productSnapshot, photoCount: counts[index] })),
+          quantity: item.quantity, assembly: item.assembly, observation: item.observation, productSnapshot: item.productSnapshot, photoCount: counts[index] })),
         confirmedExpirationKeys: dto.confirmedExpirationKeys ?? [],
       });
       return { id: shipment.id, created: true };
@@ -310,7 +399,7 @@ export class ShipmentsService {
         }
       }
       if (status === 'RECUSADO' && shipment.originSector === 'REVISAO' && shipment.shipmentKind !== 'RETORNO_IMEDIATO') {
-        for (const item of items) await this.stock.restoreQuantity(this.stockKey(item), item.quantity, manager);
+        await this.restoreSources(items, manager);
       }
       shipment.status = status;
       shipment.decidedById = user.id;
@@ -341,9 +430,7 @@ export class ShipmentsService {
       }
       const shipment = await this.details(manager).where('shipment.id = :id', { id }).getOneOrFail();
       if (shipment.originSector === 'REVISAO' && shipment.shipmentKind !== 'RETORNO_IMEDIATO') {
-        for (const item of this.ordered(shipment.items)) {
-          await this.stock.restoreQuantity(this.stockKey(item), item.quantity, manager);
-        }
+        await this.restoreSources(shipment.items, manager);
       }
       const canceledAt = new Date();
       shipment.status = 'CANCELADO';
@@ -533,6 +620,55 @@ export class ShipmentsService {
   private ordered(items: ShipmentItemEntity[]): ShipmentItemEntity[] {
     return [...items].sort((a,b) => `${a.productId}:${a.batchId}:${a.stockLocationId}`.localeCompare(`${b.productId}:${b.batchId}:${b.stockLocationId}`));
   }
+  private async resolveAssembly(input: ShipmentItemDto, manager: EntityManager): Promise<ShipmentAssembly> {
+    const request = input.assembly!;
+    const unit = await manager.findOneBy(ProductEntity, { id: input.productId, active: true });
+    const packaged = await manager.findOneBy(ProductEntity, { id: request.packageProductId, active: true });
+    if (!unit || unit.defaultUnit !== 'UN' || !packaged || !['FD', 'CX'].includes(packaged.defaultUnit)
+      || !Number.isSafeInteger(packaged.unitsPerPackage) || packaged.unitsPerPackage! < 1) {
+      throw new BadRequestException('Selecione uma unidade e uma embalagem ativas e compatíveis.');
+    }
+    const linked = await manager.query<Array<{ package_product_id: string }>>(
+      'SELECT package_product_id FROM product_unit_options WHERE package_product_id = $1 AND unit_product_id = $2',
+      [packaged.id, unit.id]);
+    if (!linked.length) throw new BadRequestException('A unidade não está vinculada à embalagem escolhida.');
+    const totalUnits = input.quantity * packaged.unitsPerPackage!;
+    if (!Number.isSafeInteger(totalUnits) || totalUnits < 1) throw new BadRequestException('Quantidade de montagem inválida.');
+    const sources: ShipmentAssembly['sources'] = [];
+    const seen = new Set<string>();
+    for (const source of request.sources) {
+      const key = `${source.batchId}:${source.stockLocationId}`;
+      if (seen.has(key)) throw new BadRequestException('Cada posição de origem deve aparecer apenas uma vez.');
+      seen.add(key);
+      const position = await manager.getRepository(StockPositionEntity).createQueryBuilder('position')
+        .innerJoinAndSelect('position.batch', 'batch')
+        .innerJoinAndSelect('position.stockLocation', 'location')
+        .where('position.productId = :productId AND position.batchId = :batchId AND position.stockLocationId = :locationId',
+          { productId: unit.id, batchId: source.batchId, locationId: source.stockLocationId }).getOne();
+      if (!position || !position.stockLocation.active || position.stockLocation.kind === StockLocationKind.External
+        || position.quantity < source.quantity) throw new BadRequestException('Parcela de origem indisponível ou com saldo insuficiente.');
+      sources.push({ batchId: source.batchId, stockLocationId: source.stockLocationId, quantity: source.quantity,
+        lot: position.batch.code, manufacturingDate: position.batch.manufacturingDate,
+        expirationDate: position.batch.expirationDate, locationName: position.stockLocation.name });
+    }
+    const output = assemblyOutput(input.quantity, packaged.unitsPerPackage!, sources, request.mixedDates);
+    sources.sort((a, b) => `${a.batchId}:${a.stockLocationId}`.localeCompare(`${b.batchId}:${b.stockLocationId}`));
+    return { packageProductId: packaged.id,
+      packageProductSnapshot: { code: packaged.code, name: packaged.name, defaultUnit: packaged.defaultUnit },
+      packageQuantity: input.quantity, unitsPerPackage: packaged.unitsPerPackage!, mixedDates: request.mixedDates,
+      ...output,
+      sources };
+  }
+  private sources(item: ShipmentItemEntity): Array<{ batchId: string; stockLocationId: string; quantity: number }> {
+    return item.assembly?.sources ?? [{ batchId: item.batchId, stockLocationId: item.stockLocationId!, quantity: item.quantity }];
+  }
+  private async restoreSources(items: ShipmentItemEntity[], manager: EntityManager): Promise<void> {
+    const sources = items.flatMap((item) => this.sources(item).map((source) => ({ productId: item.productId, ...source })));
+    for (const source of sources.sort((a, b) => `${a.productId}:${a.batchId}:${a.stockLocationId}`.localeCompare(`${b.productId}:${b.batchId}:${b.stockLocationId}`))) {
+      await this.stock.restoreQuantity({ productId: source.productId, batchId: source.batchId,
+        stockLocationId: source.stockLocationId }, source.quantity, manager);
+    }
+  }
   private stockKey(item: ShipmentItemEntity): StockPositionKey {
     return { productId: item.productId, batchId: item.batchId, stockLocationId: item.stockLocationId! };
   }
@@ -559,6 +695,7 @@ export class ShipmentsService {
         movementId: movement.id, productId: item.productId, batchId: item.batchId,
         recordOrdinal: item.recordOrdinal, shipmentItemId: item.id,
         destinationBatchId: null, quantity: item.quantity, productSnapshot: item.productSnapshot,
+        assembly: item.assembly,
       })), manager);
       await this.audit.record({ ...metadata, manager, userId: shipment.decidedById, action: 'SHIPMENT_MOVEMENT_CREATE', entityType: 'MOVEMENT',
         entityId: movement.id, result: 'SUCCESS', newValues: { codigoMovimentacao: movement.codigoMovimentacao, shipmentId: shipment.id, type: movement.type, items } });

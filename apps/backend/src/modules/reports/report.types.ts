@@ -18,6 +18,7 @@ export interface MovementReportItem {
   outputProductCode?: string | null;
   outputProductName?: string | null;
   outputQuantity?: number | null;
+  outputUnit?: string | null;
   itemId: string;
   movementId: string;
   occurredAt: string;
@@ -106,4 +107,13 @@ export interface StockReportItem {
 export interface StockReportTotals {
   positions: number;
   quantityByUnit: QuantityByUnit[];
+}
+
+export interface StockProductReportItem {
+  productId: string;
+  productCode: string;
+  productName: string;
+  unit: string;
+  quantity: number;
+  positions: StockReportItem[];
 }

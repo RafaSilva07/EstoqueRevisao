@@ -67,7 +67,7 @@ export function MovementRecordRow({ code, occurredAt, status, statusTone, produc
       </div>
       <div className="movement-record-line-fields">
         <RecordFact label="Produto" value={[productCode, productName].filter(Boolean).join(' · ') || 'Produto não informado'} />
-        <RecordFact label="Lote · prod." value={`${batchCode ?? '—'} · ${manufacturingDate ? formatDate(manufacturingDate) : '—'}`} />
+        <RecordFact label="Lote · prod." value={batchCode === '0' && !manufacturingDate ? '0 · datas misturadas' : `${batchCode ?? '—'} · ${manufacturingDate ? formatDate(manufacturingDate) : '—'}`} />
         <RecordFact label="Quantidade" value={`${quantity ?? '—'} ${unit ?? ''}`.trim()} />
         <RecordFact label="Origem → destino" value={`${origin} → ${destination}`} />
         <RecordFact label="Enviou" value={sentBy ?? 'Pendente'} muted={!sentBy} />

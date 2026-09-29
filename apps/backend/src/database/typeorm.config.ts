@@ -43,6 +43,8 @@ import { MultipleShipmentPhotos1790467200000 } from './migrations/1790467200000-
 import { AreaAdministrators1790553600000 } from './migrations/1790553600000-area-administrators';
 import { ProductCodeFormat1790640000000 } from './migrations/1790640000000-product-code-format';
 import { MovementRecords1790726400000 } from './migrations/1790726400000-movement-records';
+import { StockLocationDisplayMode1790812800000 } from './migrations/1790812800000-stock-location-display-mode';
+import { ShipmentAssembly1790899200000 } from './migrations/1790899200000-shipment-assembly';
 import { ReviewDestinationEntity } from '../modules/settings/review-destination.entity';
 
 export const databaseEntities = [
@@ -93,6 +95,8 @@ export const databaseMigrations = [
   AreaAdministrators1790553600000,
   ProductCodeFormat1790640000000,
   MovementRecords1790726400000,
+  StockLocationDisplayMode1790812800000,
+  ShipmentAssembly1790899200000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {

@@ -6,6 +6,7 @@ import { MovementEntity } from './movement.entity';
 import { MovementItemDistributionEntity } from './movement-item-distribution.entity';
 import { PcpExecutionStatus } from '../../pcp/domain/pcp-execution-status.enum';
 import { UserEntity } from '../../users/entities/user.entity';
+import type { ShipmentAssembly } from '../../shipments/shipment.entity';
 
 const numericTransformer: ValueTransformer = {
   to: (value: number): number => value,
@@ -58,6 +59,9 @@ export class MovementItemEntity {
 
   @Column({ name: 'product_snapshot', type: 'jsonb', nullable: true })
   productSnapshot!: { code: string; name: string; defaultUnit: string } | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  assembly!: ShipmentAssembly | null;
 
   @Column({ name: 'output_product_id', type: 'uuid', nullable: true })
   outputProductId!: string | null;

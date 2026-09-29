@@ -2,6 +2,7 @@ import { Transform } from 'class-transformer';
 import { IsEnum, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import { emptyStringToNull, trimString, uppercaseString } from '../../../shared/validation/transforms';
 import { StockLocationKind } from '../domain/stock-location-kind.enum';
+import { StockDisplayMode } from '../domain/stock-display-mode.enum';
 
 export class CreateStockLocationDto {
   @Transform(uppercaseString)
@@ -24,6 +25,10 @@ export class CreateStockLocationDto {
 
   @IsEnum(StockLocationKind)
   kind!: StockLocationKind;
+
+  @IsOptional()
+  @IsEnum(StockDisplayMode)
+  displayMode?: StockDisplayMode;
 
   @IsOptional()
   @Transform(emptyStringToNull)

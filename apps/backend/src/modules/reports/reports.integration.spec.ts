@@ -196,6 +196,33 @@ describeWithDatabase('Reports (PostgreSQL)', () => {
     });
   });
 
+  it('agrupa o produto sem perder lotes, filtros ou paginação por produto', async () => {
+    const query = Object.assign(new StockReportQueryDto(), {
+      referenceDate: '2026-09-07', stockLocationId: reviewId, limit: 1,
+    });
+    const report = await service.stockProducts(query);
+    expect(report.meta).toMatchObject({ total: 1, totalPages: 1 });
+    expect(report.totals).toEqual({ positions: 3, quantityByUnit: [{ unit: 'UN', quantity: 9 }] });
+    expect(report.items).toHaveLength(1);
+    expect(report.items[0]).toMatchObject({ productId, quantity: 9, unit: 'UN' });
+    expect(report.items[0].positions.map((position) => position.quantity)).toEqual([2, 3, 4]);
+
+    const filtered = await service.stockProducts(Object.assign(new StockReportQueryDto(), {
+      referenceDate: '2026-09-07', stockLocationId: reviewId,
+      expirationStatus: ExpirationStatus.Expired,
+    }));
+    expect(filtered.items[0]).toMatchObject({ quantity: 2 });
+    expect(filtered.items[0].positions).toHaveLength(1);
+
+    const source = await dataSource.getRepository(StockLocationEntity).findOneByOrFail({ id: reviewId });
+    expect(source.parentId).not.toBeNull();
+    const parentReport = await service.stockProducts(Object.assign(new StockReportQueryDto(), {
+      referenceDate: '2026-09-07', stockLocationId: source.parentId,
+      includeSubstocks: 'true',
+    }));
+    expect(parentReport.items[0]).toMatchObject({ productId, quantity: 9 });
+  });
+
   it('gera CSV com exatamente os dados do filtro', async () => {
     const csv = await service.reviewsCsv(Object.assign(new ReviewReportQueryDto(), {
       destinationLocationId: lataBoaId,
@@ -203,5 +230,31 @@ describeWithDatabase('Reports (PostgreSQL)', () => {
     expect(csv).toContain('"Lata Boa";"5";"UN"');
     expect(csv).not.toContain('"Varejo";"3";"UN"');
     expect(csv).not.toContain('"TUF";"4";"UN"');
+  });
+
+  it('mostra embalagem montada sem perder consumo UN e filtra todas as origens', async () => {
+    const packageId = randomUUID();
+    const movementId = randomUUID();
+    await dataSource.query(`INSERT INTO products(id,code,name,default_unit,units_per_package,created_by,updated_by)
+      VALUES ($1,'700002','Fardo do relatorio','FD',10,$2,$2)`, [packageId, userId]);
+    await dataSource.query(`INSERT INTO movements(id,request_key,type,origin_location_id,destination_location_id,responsible_user_id,occurred_at,status)
+      VALUES ($1,$2,'SAIDA_EXTERNA',$3,$4,$5,'2026-09-10T12:00:00Z','EFETIVADA')`,
+    [movementId, randomUUID(), lataBoaId, productionId, userId]);
+    const assembly = { packageProductId: packageId, packageProductSnapshot: { code: '700002', name: 'Fardo do relatorio', defaultUnit: 'FD' },
+      packageQuantity: 1, unitsPerPackage: 10, mixedDates: true, outputLot: '0', outputManufacturingDate: null, outputExpirationDate: null,
+      sources: [
+        { batchId: expiredBatchId, stockLocationId: lataBoaId, quantity: 6, lot: 'COCINV', manufacturingDate: '2026-09-01', expirationDate: '2026-09-06', locationName: 'Lata Boa' },
+        { batchId: soonBatchId, stockLocationId: varejoId, quantity: 4, lot: 'CNCINV', manufacturingDate: '2026-09-02', expirationDate: '2026-09-20', locationName: 'Varejo' },
+      ] };
+    await dataSource.query(`INSERT INTO movement_items(id,movement_id,product_id,batch_id,quantity,assembly)
+      VALUES ($1,$2,$3,$4,10,$5::jsonb)`, [randomUUID(), movementId, productId, expiredBatchId, JSON.stringify(assembly)]);
+    const result = await service.movements(Object.assign(new MovementReportQueryDto(), {
+      productId: packageId, batchId: soonBatchId, batch: '0', originLocationId: varejoId,
+      product: 'Fardo', origin: 'Varejo', type: MovementType.ExternalExit,
+    }));
+    expect(result.items).toMatchObject([{ quantity: 10, unit: 'UN', outputProductCode: '700002',
+      outputQuantity: 1, outputUnit: 'FD' }]);
+    expect(result.items[0].origin).toContain('Varejo');
+    expect(result.totals.effectiveQuantityByUnit).toEqual([{ unit: 'UN', quantity: 10 }]);
   });
 });

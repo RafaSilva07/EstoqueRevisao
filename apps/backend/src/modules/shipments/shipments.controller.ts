@@ -5,7 +5,7 @@ import { RequirePermissions } from '../auth/decorators/require-permissions.decor
 import { getAuditRequestMetadata } from '../audit/audit-request-metadata';
 import { OperationalLotsService } from '../batches/operational-lots.service';
 import { ResolveOperationalLotDto } from '../batches/dto/operational-lot.dto';
-import { AvailableShipmentPositionsQueryDto, CancelShipmentDto, CreateShipmentDto, ExpirationConfirmationDto, RefuseShipmentDto, SeparationDraftDto, ShipmentQueryDto } from './shipment.dto';
+import { AssemblyOptionsQueryDto, AvailableShipmentPositionsQueryDto, CancelShipmentDto, CreateShipmentDto, ExpirationConfirmationDto, RefuseShipmentDto, SeparationDraftDto, ShipmentQueryDto } from './shipment.dto';
 import { ShipmentsService } from './shipments.service';
 import { CreateShipmentMultipartPipe } from './create-shipment-multipart.pipe';
 import { UploadedImage } from '../storage/storage.service';
@@ -32,6 +32,10 @@ export class ShipmentsController {
   @Get('available-positions') @RequirePermissions('shipments.create')
   availablePositions(@Query() query: AvailableShipmentPositionsQueryDto, @Req() req: Request): ReturnType<ShipmentsService['availablePositions']> {
     return this.service.availablePositions(query, req.user as AuthenticatedUser);
+  }
+  @Get('assembly-options') @RequirePermissions('shipments.create')
+  assemblyOptions(@Query() query: AssemblyOptionsQueryDto, @Req() req: Request): ReturnType<ShipmentsService['assemblyOptions']> {
+    return this.service.assemblyOptions(query, req.user as AuthenticatedUser);
   }
   @Get(':id/audit-history') @RequirePermissions('shipments.read') @UseGuards(AdminGuard)
   auditHistory(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request): ReturnType<ShipmentsService['auditHistory']> {

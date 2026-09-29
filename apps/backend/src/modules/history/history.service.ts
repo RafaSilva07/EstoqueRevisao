@@ -91,7 +91,9 @@ export class HistoryService {
           linked_shipment.separation_completed_at IS NOT NULL AND EXISTS (
             SELECT 1 FROM shipments returned WHERE returned.source_shipment_id = linked_shipment.id AND returned.shipment_kind = 'RETORNO_IMEDIATO')))
       ), records AS (
-        SELECT item.id, entry.kind, item.codigo_registro AS code, entry.type, entry.origin,
+        SELECT item.id, entry.kind, item.codigo_registro AS code, entry.type,
+          COALESCE((SELECT string_agg(DISTINCT source->>'locationName', ', ')
+            FROM jsonb_array_elements(item.assembly->'sources') source), entry.origin) AS origin,
           entry.destination, entry.responsible, entry.occurred_at, entry.status,
           CASE WHEN entry.scope IN ('OPEN', 'CLOSED') THEN entry.scope
             WHEN linked_item.id IS NOT NULL AND linked_movement.requires_pcp_execution
@@ -100,10 +102,14 @@ export class HistoryService {
           1 AS item_count, entry.direction, entry.parent_shipment_id, entry.parent_code,
           entry.id AS group_id, entry.code AS group_code, entry.item_count AS group_item_count,
           item.record_ordinal,
-          item.product_snapshot->>'code' AS product_code, item.product_snapshot->>'name' AS product_name,
-          item.product_snapshot->>'defaultUnit' AS product_unit, batch.code AS batch_code,
-          item.quantity, linked_item.pcp_execution_status,
-          batch.manufacturing_date::text AS manufacturing_date,
+          COALESCE(item.assembly->'packageProductSnapshot'->>'code', item.product_snapshot->>'code') AS product_code,
+          COALESCE(item.assembly->'packageProductSnapshot'->>'name', item.product_snapshot->>'name') AS product_name,
+          COALESCE(item.assembly->'packageProductSnapshot'->>'defaultUnit', item.product_snapshot->>'defaultUnit') AS product_unit,
+          COALESCE(item.assembly->>'outputLot', batch.code) AS batch_code,
+          COALESCE((item.assembly->>'packageQuantity')::numeric, item.quantity) AS quantity,
+          linked_item.pcp_execution_status,
+          CASE WHEN item.assembly IS NOT NULL THEN item.assembly->>'outputManufacturingDate'
+            ELSE batch.manufacturing_date::text END AS manufacturing_date,
           entry.responsible AS sent_by,
           CASE WHEN shipment.status IN ('CONFIRMADO', 'EM_SEPARACAO')
             THEN COALESCE(receiver.username, early_receiver.username) ELSE NULL END AS received_by,
@@ -120,7 +126,9 @@ export class HistoryService {
           LEFT JOIN users pcp_user ON pcp_user.id = linked_item.pcp_executed_by_user_id
         WHERE entry.kind = 'SHIPMENT'
         UNION ALL
-        SELECT item.id, entry.kind, item.codigo_registro AS code, entry.type, entry.origin,
+        SELECT item.id, entry.kind, item.codigo_registro AS code, entry.type,
+          COALESCE((SELECT string_agg(DISTINCT source->>'locationName', ', ')
+            FROM jsonb_array_elements(item.assembly->'sources') source), entry.origin) AS origin,
           COALESCE(review.destination_names, entry.destination) AS destination,
           entry.responsible, entry.occurred_at, entry.status,
           CASE WHEN entry.status = 'CANCELADA' THEN 'CLOSED'
@@ -129,11 +137,14 @@ export class HistoryService {
           1 AS item_count, entry.direction, entry.parent_shipment_id, entry.parent_code,
           entry.id AS group_id, entry.code AS group_code, entry.item_count AS group_item_count,
           item.record_ordinal,
-          COALESCE(item.product_snapshot->>'code', product.code) AS product_code,
-          COALESCE(item.product_snapshot->>'name', product.name) AS product_name,
-          COALESCE(item.product_snapshot->>'defaultUnit', product.default_unit) AS product_unit,
-          batch.code AS batch_code, item.quantity, item.pcp_execution_status,
-          batch.manufacturing_date::text AS manufacturing_date,
+          COALESCE(item.assembly->'packageProductSnapshot'->>'code', item.product_snapshot->>'code', product.code) AS product_code,
+          COALESCE(item.assembly->'packageProductSnapshot'->>'name', item.product_snapshot->>'name', product.name) AS product_name,
+          COALESCE(item.assembly->'packageProductSnapshot'->>'defaultUnit', item.product_snapshot->>'defaultUnit', product.default_unit) AS product_unit,
+          COALESCE(item.assembly->>'outputLot', batch.code) AS batch_code,
+          COALESCE((item.assembly->>'packageQuantity')::numeric, item.quantity) AS quantity,
+          item.pcp_execution_status,
+          CASE WHEN item.assembly IS NOT NULL THEN item.assembly->>'outputManufacturingDate'
+            ELSE batch.manufacturing_date::text END AS manufacturing_date,
           COALESCE(sender.username, entry.responsible) AS sent_by,
           COALESCE(receiver.username, early_receiver.username) AS received_by,
           pcp_user.username AS pcp_executed_by,
@@ -177,12 +188,16 @@ export class HistoryService {
                 AND searched_shipment.shipment_id = source.id AND
                 (searched_shipment.codigo_registro ILIKE '%' || $6 || '%'
                   OR searched_shipment.product_snapshot->>'code' ILIKE '%' || $6 || '%'
-                  OR searched_shipment.product_snapshot->>'name' ILIKE '%' || $6 || '%'))
+                  OR searched_shipment.product_snapshot->>'name' ILIKE '%' || $6 || '%'
+                  OR searched_shipment.assembly->'packageProductSnapshot'->>'code' ILIKE '%' || $6 || '%'
+                  OR searched_shipment.assembly->'packageProductSnapshot'->>'name' ILIKE '%' || $6 || '%'))
               OR EXISTS (SELECT 1 FROM movement_items searched_movement WHERE source.kind = 'MOVEMENT'
                 AND searched_movement.movement_id = source.id AND
                 (searched_movement.codigo_registro ILIKE '%' || $6 || '%'
                   OR searched_movement.product_snapshot->>'code' ILIKE '%' || $6 || '%'
-                  OR searched_movement.product_snapshot->>'name' ILIKE '%' || $6 || '%'))`
+                  OR searched_movement.product_snapshot->>'name' ILIKE '%' || $6 || '%'
+                  OR searched_movement.assembly->'packageProductSnapshot'->>'code' ILIKE '%' || $6 || '%'
+                  OR searched_movement.assembly->'packageProductSnapshot'->>'name' ILIKE '%' || $6 || '%'))`
               : `OR source.group_code ILIKE '%' || $6 || '%'
                 OR source.parent_code ILIKE '%' || $6 || '%'
                 OR source.product_code ILIKE '%' || $6 || '%'

@@ -7,6 +7,7 @@ import { MovementItemEntity } from './entities/movement-item.entity';
 import { MovementEntity } from './entities/movement.entity';
 import { MovementItemDistributionEntity } from './entities/movement-item-distribution.entity';
 import { PcpExecutionStatus } from '../pcp/domain/pcp-execution-status.enum';
+import type { ShipmentAssembly } from '../shipments/shipment.entity';
 
 export type MovementListEntry = MovementEntity & {
   recordId?: string;
@@ -15,6 +16,7 @@ export type MovementListEntry = MovementEntity & {
   product?: ProductEntity;
   batch?: MovementItemEntity['batch'];
   quantity?: number;
+  assembly?: ShipmentAssembly | null;
   itemCount?: number;
   executedCount?: number;
   sentBy?: string | null;

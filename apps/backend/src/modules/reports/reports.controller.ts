@@ -12,6 +12,7 @@ import {
   ReviewReportItem,
   ReviewReportTotals,
   StockReportItem,
+  StockProductReportItem,
   StockReportTotals,
 } from './report.types';
 
@@ -45,6 +46,12 @@ export class ReportsController {
   reviewsCsv(@Query() query: ReviewReportQueryDto, @Res({ passthrough: true }) response: Response): Promise<string> {
     this.attachment(response, 'revisoes.csv');
     return this.service.reviewsCsv(query);
+  }
+
+  @Get('stock/products')
+  @RequirePermissions('stock-positions.read')
+  stockProducts(@Query() query: StockReportQueryDto): Promise<ReportResult<StockProductReportItem, StockReportTotals>> {
+    return this.service.stockProducts(query);
   }
 
   @Get('stock')

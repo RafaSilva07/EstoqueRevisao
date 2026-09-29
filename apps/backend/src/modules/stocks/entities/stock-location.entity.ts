@@ -12,6 +12,7 @@ import {
 import { UserEntity } from '../../users/entities/user.entity';
 import { StockLocationKind } from '../domain/stock-location-kind.enum';
 import { ReviewLocationRole } from '../domain/review-location-role.enum';
+import { StockDisplayMode } from '../domain/stock-display-mode.enum';
 
 @Entity({ name: 'stock_locations' })
 export class StockLocationEntity {
@@ -32,6 +33,9 @@ export class StockLocationEntity {
 
   @Column({ type: 'varchar', length: 20 })
   kind!: StockLocationKind;
+
+  @Column({ name: 'display_mode', type: 'varchar', length: 20, default: StockDisplayMode.Lots })
+  displayMode: StockDisplayMode = StockDisplayMode.Lots;
 
   @Column({ name: 'review_role', type: 'varchar', length: 20, nullable: true })
   reviewRole!: ReviewLocationRole | null;

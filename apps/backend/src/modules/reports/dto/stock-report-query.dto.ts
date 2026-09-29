@@ -36,6 +36,10 @@ export class StockReportQueryDto extends PaginationQueryDto {
   stockLocationId?: string;
 
   @IsOptional()
+  @IsIn(['true'])
+  includeSubstocks?: 'true';
+
+  @IsOptional()
   @Transform(trimString)
   @IsString()
   @MaxLength(150)

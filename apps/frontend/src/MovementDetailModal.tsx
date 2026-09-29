@@ -68,7 +68,7 @@ export function MovementDetailModal({ movementId, initialMovement, onClose, chil
         {recordId && <div className="movement-detail-group">Grupo {movement.codigoMovimentacao ?? 'sem código público'} · {movement.items.length} {movement.items.length === 1 ? 'registro' : 'registros'} <button className="text-button" onClick={onViewGroup}>Ver grupo</button></div>}
       </div><button className="secondary" onClick={onClose}>Fechar</button></div>
       <section className="movement-route" aria-label="Origem e destino">
-        <div className="movement-route-place"><span>Origem</span><strong>{movement.originLocation.name}</strong></div>
+        <div className="movement-route-place"><span>Origem</span><strong>{[...new Set(visibleItems.flatMap((item) => item.assembly?.sources.map((source) => source.locationName) ?? []))].join(', ') || movement.originLocation.name}</strong></div>
         <span className="movement-route-arrow" aria-hidden="true">→</span>
         <div className="movement-route-place"><span>Destino</span><strong>{destinations.length ? destinations.join(' · ') : 'Distribuição da revisão'}</strong></div>
       </section>
@@ -81,15 +81,17 @@ export function MovementDetailModal({ movementId, initialMovement, onClose, chil
             && (!photo.stockLocationId || photo.stockLocationId === movement.originLocationId) && (photo.photoMimeType || photo.additionalPhotos?.length)) ?? [];
         return <li key={item.id}>
         {item.codigoRegistro && (onSelectRecord && !recordId ? <button type="button" className="text-button" onClick={() => onSelectRecord(item.id)}>{item.codigoRegistro} · Ver registro</button> : <small>Registro {item.codigoRegistro}</small>)}
-        <div className="movement-product-heading"><strong>{(item.productSnapshot ?? item.product).code} — {(item.productSnapshot ?? item.product).name}</strong><b>{item.quantity} {(item.productSnapshot ?? item.product).defaultUnit}</b></div>
+        <div className="movement-product-heading"><strong>{(item.assembly?.packageProductSnapshot ?? item.productSnapshot ?? item.product).code} — {(item.assembly?.packageProductSnapshot ?? item.productSnapshot ?? item.product).name}</strong><b>{item.assembly?.packageQuantity ?? item.quantity} {(item.assembly?.packageProductSnapshot ?? item.productSnapshot ?? item.product).defaultUnit}</b></div>
         {movement.type === 'TRANSFERENCIA_INTERNA' ? <>
           <span>Origem: lote {item.batch.code} · fabricação {formatDate(item.batch.manufacturingDate)} · validade {formatDate(item.batch.expirationDate)} · {movement.originLocation.name}</span>
           <span>Destino: lote {item.destinationBatch?.code} · fabricação {formatDate(item.destinationBatch?.manufacturingDate ?? '')} · validade {formatDate(item.destinationBatch?.expirationDate ?? '')} · {movement.destinationLocation?.name}</span>
-        </> : <span>Lote {item.batch.code} · fabricação {formatDate(item.batch.manufacturingDate)} · validade {formatDate(item.batch.expirationDate)}</span>}
+        </> : item.assembly?.mixedDates ? <span>Lote 0 · datas misturadas</span>
+          : <span>Lote {item.assembly?.outputLot ?? item.batch.code} · fabricação {formatDate(item.assembly?.outputManufacturingDate ?? item.batch.manufacturingDate)} · validade {formatDate(item.assembly?.outputExpirationDate ?? item.batch.expirationDate)}</span>}
+        {item.assembly && <span>Montagem: {item.quantity} UN de {(item.productSnapshot ?? item.product).code}. Origens: {item.assembly.sources.map((source) => `${source.locationName} / ${source.lot}: ${source.quantity} UN`).join('; ')}</span>}
         {item.outputProductSnapshot && <span>Desmontagem: {item.quantity} {(item.productSnapshot ?? item.product).defaultUnit} × {item.unitsPerPackage} → {item.outputQuantity} UN de {item.outputProductSnapshot.code} — {item.outputProductSnapshot.name}</span>}
         {item.distributions?.length > 0 && <ul className="distribution-detail">{item.distributions.map((distribution) => <li key={distribution.id}>{distribution.destinationLocation.name}: <strong>{distribution.quantity} {(item.outputProductSnapshot ?? item.productSnapshot ?? item.product).defaultUnit}</strong></li>)}</ul>}
         {evidence.length > 0 && <MovementEvidence key={`${item.pcpExecutionStatus ?? movement.pcpExecutionStatus}:${item.id}`} pendingPcp={movement.status === 'EFETIVADA' && movement.requiresPcpExecution && (item.pcpExecutionStatus ?? movement.pcpExecutionStatus) === 'PENDENTE'}>
-          <div className="pcp-evidence-grid">{evidence.map((photo) => <ShipmentPhoto key={'itemId' in photo ? photo.itemId : photo.id} shipmentId={'itemId' in photo ? photo.shipmentId : shipment!.id} itemId={'itemId' in photo ? photo.itemId : photo.id} productName={(item.productSnapshot ?? item.product).name} available={Boolean(photo.photoMimeType)} additionalPhotos={photo.additionalPhotos} />)}</div>
+          <div className="pcp-evidence-grid">{evidence.map((photo) => <ShipmentPhoto key={'itemId' in photo ? photo.itemId : photo.id} shipmentId={'itemId' in photo ? photo.shipmentId : shipment!.id} itemId={'itemId' in photo ? photo.itemId : photo.id} productName={(item.assembly?.packageProductSnapshot ?? item.productSnapshot ?? item.product).name} available={Boolean(photo.photoMimeType)} additionalPhotos={photo.additionalPhotos} />)}</div>
         </MovementEvidence>}
       </li>})}</ul>
       </section>

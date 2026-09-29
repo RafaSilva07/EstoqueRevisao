@@ -38,13 +38,14 @@ function ShipmentPhotoThumbnail({ shipmentId, itemId, productName, ordinal, tota
 export function ShipmentItems({ shipment, onSelectRecord }: { shipment: Shipment; onSelectRecord?: (id: string) => void }) {
   return <ul className="movement-detail-items shipment-items">{shipment.items.map((item) => <li className="shipment-item-card" key={item.id}>
     {item.codigoRegistro && (onSelectRecord ? <button type="button" className="text-button" onClick={() => onSelectRecord(item.id)}>{item.codigoRegistro} · Ver registro</button> : <small>Registro {item.codigoRegistro}</small>)}
-    <div className="shipment-item-heading"><strong>{item.productSnapshot.code} — {item.productSnapshot.name}</strong><b>{item.quantity} {item.productSnapshot.defaultUnit}</b></div>
-    <div className="shipment-item-data"><span>Lote {item.batch.code} · fabricação {formatDate(item.batch.manufacturingDate)}</span>
-      <span>Validade {formatDate(item.batch.expirationDate)}</span>
-      {item.stockLocation && <span>Origem: {item.stockLocation.name}</span>}
+    <div className="shipment-item-heading"><strong>{item.assembly?.packageProductSnapshot.code ?? item.productSnapshot.code} — {item.assembly?.packageProductSnapshot.name ?? item.productSnapshot.name}</strong><b>{item.assembly?.packageQuantity ?? item.quantity} {item.assembly?.packageProductSnapshot.defaultUnit ?? item.productSnapshot.defaultUnit}</b></div>
+    <div className="shipment-item-data"><span>{item.assembly?.mixedDates ? 'Lote 0 · datas misturadas' : `Lote ${item.assembly?.outputLot ?? item.batch.code} · fabricação ${formatDate(item.assembly?.outputManufacturingDate ?? item.batch.manufacturingDate)}`}</span>
+      {!item.assembly?.mixedDates && <span>Validade {formatDate(item.assembly?.outputExpirationDate ?? item.batch.expirationDate)}</span>}
+      {item.assembly ? <span>Montagem de {item.quantity} UN ({item.productSnapshot.code}). Origens: {item.assembly.sources.map((source) => `${source.locationName} / ${source.lot}: ${source.quantity} UN`).join('; ')}</span>
+        : item.stockLocation && <span>Origem: {item.stockLocation.name}</span>}
       {item.observation && <span><strong>Observação do produto:</strong> {item.observation}</span>}
     </div>
-    <ShipmentPhoto shipmentId={shipment.id} itemId={item.id} productName={item.productSnapshot.name} available={Boolean(item.photoMimeType)} additionalPhotos={item.additionalPhotos} />
+    <ShipmentPhoto shipmentId={shipment.id} itemId={item.id} productName={item.assembly?.packageProductSnapshot.name ?? item.productSnapshot.name} available={Boolean(item.photoMimeType)} additionalPhotos={item.additionalPhotos} />
   </li>)}</ul>;
 }
 
@@ -198,9 +199,9 @@ export function ShipmentsPage({ user, initialView = 'pending', initialCreating =
           code={item.codigoRegistro ?? shipment.codigoMovimentacao} occurredAt={shipment.createdAt}
           status={shipment.status === 'AGUARDANDO_RECEBIMENTO' ? 'Aguardando recebimento' : shipment.status === 'EM_SEPARACAO' ? 'Em separação' : shipmentStatusLabel[shipment.status]}
           statusTone={['RECUSADO', 'CANCELADO'].includes(shipment.status) ? 'canceled' : shipment.status === 'CONFIRMADO' ? 'active' : 'warning'}
-          productCode={item.productSnapshot.code} productName={item.productSnapshot.name}
-          batchCode={item.batch.code} manufacturingDate={item.batch.manufacturingDate}
-          unit={item.productSnapshot.defaultUnit} quantity={item.quantity}
+          productCode={item.assembly?.packageProductSnapshot.code ?? item.productSnapshot.code} productName={item.assembly?.packageProductSnapshot.name ?? item.productSnapshot.name}
+          batchCode={item.assembly?.outputLot ?? item.batch.code} manufacturingDate={item.assembly ? item.assembly.outputManufacturingDate : item.batch.manufacturingDate}
+          unit={item.assembly?.packageProductSnapshot.defaultUnit ?? item.productSnapshot.defaultUnit} quantity={item.assembly?.packageQuantity ?? item.quantity}
           origin={sectorLabel[shipment.originSector]} destination={sectorLabel[shipment.destinationSector]}
           sentBy={shipment.createdBy.username} receivedBy={shipment.decidedBy?.username ?? shipment.receivedBy?.username}
           pcpExecutedBy={null} receiptRequired pcpRequired={shipment.shipmentKind !== 'RETORNO_IMEDIATO'}

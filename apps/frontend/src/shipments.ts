@@ -11,20 +11,32 @@ export interface ShipmentAuditEvent {
   user: { id: string; username: string } | null;
   newValues: Record<string, unknown> | null;
 }
+export interface ShipmentAssembly {
+  packageProductId: string;
+  packageProductSnapshot: Pick<Product, 'code' | 'name' | 'defaultUnit'>;
+  packageQuantity: number;
+  unitsPerPackage: number;
+  mixedDates: boolean;
+  outputLot: string;
+  outputManufacturingDate: string | null;
+  outputExpirationDate: string | null;
+  sources: Array<{ batchId: string; stockLocationId: string; quantity: number; lot: string;
+    manufacturingDate: string; expirationDate: string; locationName: string }>;
+}
 export interface Shipment {
   codigoMovimentacao: string;
   movements?: Array<{ id: string; codigoMovimentacao: string | null; pcpExecutionStatus: 'PENDENTE' | 'EXECUTADA'; requiresPcpExecution: boolean;
       occurredAt: string; items?: Array<{ id: string; shipmentItemId?: string | null; codigoRegistro?: string | null; quantity: number; productSnapshot: Pick<Product, 'code' | 'name' | 'defaultUnit'> | null; batch: Batch }> }>;
 
   id: string; originSector: ShipmentSector; destinationSector: ShipmentSector; status: ShipmentStatus;
-  shipmentKind: 'NORMAL' | 'RETORNO_IMEDIATO'; sourceShipmentId: string | null;
+  shipmentKind: 'NORMAL' | 'RETORNO_IMEDIATO' | 'MONTAGEM'; sourceShipmentId: string | null;
   sourceShipment?: { id: string; codigoMovimentacao: string } | null;
   derivedShipments?: Array<{ id: string; status: ShipmentStatus }>;
   receivedAt: string | null; separationStartedAt: string | null; separationExpiresAt: string | null; separationCompletedAt: string | null;
   observation: string | null;
   createdAt: string; createdBy: { id: string; username: string };
   decidedAt: string | null; decidedBy: { username: string } | null; receivedBy?: { username: string } | null; refusalReason: string | null;
-  items: { id: string; codigoRegistro?: string; recordOrdinal?: number; productId: string; batchId: string; stockLocationId: string | null; quantity: number; productSnapshot: Pick<Product, 'code' | 'name' | 'defaultUnit'>;
+  items: { id: string; codigoRegistro?: string; recordOrdinal?: number; productId: string; batchId: string; stockLocationId: string | null; quantity: number; productSnapshot: Pick<Product, 'code' | 'name' | 'defaultUnit'>; assembly?: ShipmentAssembly | null;
     batch: Batch; stockLocation: StockLocation | null; observation: string | null; photoMimeType: string | null; photoSize: number | null;
     additionalPhotos?: Array<{ ordinal: number; mimeType: string; size: number }>;
     separationDraft?: { returnQuantity: number } | null }[];

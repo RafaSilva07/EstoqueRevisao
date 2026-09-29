@@ -59,6 +59,7 @@ export interface UnitConversion {
 }
 
 export type StockLocationKind = 'STOCK' | 'SUBSTOCK' | 'EXTERNAL';
+export type StockDisplayMode = 'LOTS' | 'PRODUCTS';
 
 export interface StockLocation {
   sector?: string | null;
@@ -67,6 +68,7 @@ export interface StockLocation {
   name: string;
   description: string | null;
   kind: StockLocationKind;
+  displayMode: StockDisplayMode;
   parentId: string | null;
   active: boolean;
   reviewRole: 'SOURCE' | 'DESTINATION' | null;
@@ -94,6 +96,7 @@ export interface StockPosition {
 }
 
 export interface MovementItem {
+  assembly?: import('./shipments').ShipmentAssembly | null;
   codigoRegistro?: string | null;
   recordOrdinal?: number;
   shipmentItemId?: string | null;
@@ -162,6 +165,7 @@ export interface Movement {
 }
 
 export interface PcpMovementSummary extends Omit<Movement, 'items' | 'canceledByUser'> {
+    assembly?: import('./shipments').ShipmentAssembly | null;
     reviewDistributions?: ReviewDistributionSummary[];
     reviewDistributionUnit?: string | null;
     sentBy?: string | null;
@@ -216,6 +220,7 @@ export interface MovementReportItem {
   outputProductCode?: string | null;
   outputProductName?: string | null;
   outputQuantity?: number | null;
+  outputUnit?: string | null;
   itemId: string;
   movementId: string;
   occurredAt: string;
@@ -280,6 +285,7 @@ export type ExpirationStatus = 'VENCIDO' | 'PROXIMO_VENCIMENTO' | 'VALIDO';
 
 export interface StockReportItem {
   positionId: string;
+  productId: string;
   productCode: string;
   productName: string;
   batchCode: string;
@@ -289,6 +295,15 @@ export interface StockReportItem {
   quantity: number;
   unit: string;
   expirationStatus: ExpirationStatus;
+}
+
+export interface StockProductReportItem {
+  productId: string;
+  productCode: string;
+  productName: string;
+  unit: string;
+  quantity: number;
+  positions: StockReportItem[];
 }
 
 export interface StockReportTotals {

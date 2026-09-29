@@ -5,6 +5,17 @@ import { PaginationQueryDto } from '../../shared/pagination/pagination-query.dto
 import { trimString } from '../../shared/validation/transforms';
 import { Sector, ShipmentStatus } from './shipment.entity';
 
+export class ShipmentAssemblySourceDto {
+  @IsUUID() batchId!: string;
+  @IsUUID() stockLocationId!: string;
+  @Type(() => Number) @IsInt() @Min(1) quantity!: number;
+}
+export class ShipmentAssemblyDto {
+  @IsUUID() packageProductId!: string;
+  @IsBoolean() mixedDates!: boolean;
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => ShipmentAssemblySourceDto)
+  sources!: ShipmentAssemblySourceDto[];
+}
 export class ShipmentItemDto {
   @IsUUID() productId!: string;
   @IsOptional() @IsUUID() batchId?: string;
@@ -13,6 +24,7 @@ export class ShipmentItemDto {
   @Type(() => Number) @IsInt() @Min(1) quantity!: number;
   @IsOptional() @Transform(trimString) @IsString() @MaxLength(1000) observation?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(10) photoCount?: number;
+  @IsOptional() @ValidateNested() @Type(() => ShipmentAssemblyDto) assembly?: ShipmentAssemblyDto;
 }
 export class ExpirationConfirmationDto {
   @IsOptional() @IsArray() @ArrayMaxSize(1000)
@@ -69,4 +81,9 @@ export class AvailableShipmentPositionsQueryDto extends PaginationQueryDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   @IsDateString({ strict: true })
   manufacturingDate?: string;
+}
+
+export class AssemblyOptionsQueryDto extends PaginationQueryDto {
+  @IsUUID() productId!: string;
+  @IsOptional() @IsUUID() batchId?: string;
 }

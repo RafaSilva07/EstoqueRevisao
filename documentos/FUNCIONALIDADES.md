@@ -22,6 +22,8 @@ Todas as entradas, saídas, transferências e distribuições de revisão aceita
 
 O frontend possui login, restauração da sessão pelo cookie HttpOnly e navegação condicionada às permissões.
 
+A interface usa transições curtas em botões, cartões, campos, filtros e diálogos, com rolagem suave. Quando o dispositivo solicita redução de movimento, as animações e a rolagem suave são desativadas.
+
 Usuários `ADMIN` possuem no cabeçalho da aplicação o seletor **Modo operacional**, com as opções Admin, Revisão, Produção, Expedição e PCP. O login administrativo inicia em **Admin**, modo completo que usa a Revisão como contexto físico e reúne as ações exclusivas de administração. Ao selecionar um modo operacional, a interface e a API aplicam o escopo desse perfil: gestão de produtos continua disponível, enquanto gestão de usuários, entrada/saída direta, estorno e alteração dos demais cadastros ficam restritos ao modo Admin. A identidade real do administrador continua registrada no histórico e na auditoria.
 
 Administradores de área usam o mesmo seletor limitado a **Revisão + Expedição** ou **Produção + PCP**, conforme o perfil atribuído pelo admin geral. Iniciam no setor cadastrado, podem operar nos dois modos com as permissões já existentes e não acessam o modo Admin nem a gestão de usuários.
@@ -54,6 +56,9 @@ Novo envio aceita vários itens e exige conferência do resumo. A seleção de p
 
 Usuários externos reutilizam o produto selecionado e os campos CONSERVADI/fabricação/validade. Na saída da Revisão, após selecionar o produto, o operador informa o lote ou a fabricação; o par é completado imediatamente pelo resolvedor central de lotes e fica visível antes da escolha da posição. A consulta é paginada no backend, aceita os filtros combinados e apresenta primeiro as posições de Lata Boa, seguidas dos demais locais por nome; lote, fabricação, validade, local e saldo continuam visíveis para distinguir a posição exata. A Revisão pode incluir posições de locais diferentes no mesmo envio.
 
+Em **Revisão → Expedição**, a opção **Montar fardos/caixas** usa o mesmo fluxo de novo envio. O operador escolhe o código `UN` e uma embalagem `FD/CX` vinculada. No modo comum, vê quantas embalagens cada posição (local + lote/data) forma isoladamente e o total combinado do lote; escolhe o lote e distribui as unidades entre suas posições paginadas. Apenas com **datas misturadas** vê a capacidade pelo saldo total, usa lotes/datas distintos e mostra **Lote 0 — datas misturadas** sem datas únicas. Resumo, recebimento, histórico e PCP exibem a embalagem e as parcelas de origem. Recusa/cancelamento restaura as unidades a cada origem.
+No relatório de movimentações, a saída mantém a unidade/quantidade debitada do estoque como origem e informa separadamente o FD/CX resultante, com quantidade e unidade próprias; filtros por produto encontram tanto a unidade consumida quanto a embalagem montada.
+
 Em todos os sentidos de envio, cada produto pode receber uma observação opcional e o envio pode receber uma observação geral. Os textos são conferidos antes do envio, ficam disponíveis ao destinatário e no histórico e não podem ser editados após a criação. A observação geral também acompanha a movimentação gerada quando o recebimento é confirmado.
 
 Cada produto do envio aceita fotos conforme mínimo e máximo definidos em **Configurações** (inicialmente 1 a 5, até 100 por envio). O operador pode capturar pela câmera ou escolher várias imagens, conferir e remover cada uma antes do envio. A conferência é bloqueada se algum produto estiver fora dos limites. A captura é reduzida para até aproximadamente 1600 px e enviada como JPEG; o backend também aceita PNG/WebP de até 5 MB e aplica a validação definitiva. Retornos da separação imediata usam os mesmos limites por item retornado.
@@ -65,13 +70,14 @@ Não há edição posterior: destinatário confirma ou recusa com motivo e respo
 ```text
 GET/POST        /api/v1/shipments
 GET             /api/v1/shipments/available-positions
+GET             /api/v1/shipments/assembly-options
 GET             /api/v1/shipments/:id
 POST            /api/v1/shipments/resolve-lot
 POST            /api/v1/shipments/:id/confirmation
 POST            /api/v1/shipments/:id/refusal
 ```
 
-Listagem: `view=pending|sent|history|updates|open`, `status`, `page` e `limit`; `sent` mostra apenas envios ainda em andamento criados pelo usuário, `open` reúne envios aguardando recebimento ou em separação dos quais o setor participa, e `updates` retorna decisões recentes dos próprios envios. Consultas respeitam o setor. `available-positions` é exclusivo da Revisão, exige `productId` e ao menos `batchCode` ou `manufacturingDate`, e retorna somente saldo positivo de produto/local ativos. Criação recebe multipart com `payload` contendo `requestKey`, `destinationSector` e `items` com `photoCount`, além dos arquivos `photos` agrupados na ordem dos itens; origem é inferida do usuário. Itens externos recebem `productId/lot/quantity` (ou variante existente via `batchId`); itens da Revisão recebem `productId/batchId/stockLocationId/quantity`. Confirmação aceita `confirmedExpirationKeys` quando houver divergência apresentada; recusa exige `reason`.
+Listagem: `view=pending|sent|history|updates|open`, `status`, `page` e `limit`; `sent` mostra apenas envios ainda em andamento criados pelo usuário, `open` reúne envios aguardando recebimento ou em separação dos quais o setor participa, e `updates` retorna decisões recentes dos próprios envios. Consultas respeitam o setor. `available-positions` é exclusivo da Revisão, exige `productId` e ao menos `batchCode` ou `manufacturingDate`, e retorna somente saldo positivo de produto/local ativos. `assembly-options` é exclusivo da Revisão e retorna embalagens vinculadas, saldo total em UN, capacidades por lote e por posição, além das posições paginadas de um produto unitário; `batchId` opcional filtra as posições paginadas, sem alterar os totais. Criação recebe multipart com `payload` contendo `requestKey`, `destinationSector` e `items` com `photoCount`, além dos arquivos `photos` agrupados na ordem dos itens; origem é inferida do usuário. Itens externos recebem `productId/lot/quantity` (ou variante existente via `batchId`); itens da Revisão recebem `productId/batchId/stockLocationId/quantity`. Na montagem, `productId` identifica a unidade, `quantity` indica embalagens e `assembly` informa `packageProductId`, `mixedDates` e `sources[]` com lote/local/quantidade de UN. Confirmação aceita `confirmedExpirationKeys` quando houver divergência apresentada; recusa exige `reason`.
 
 Somente a confirmação gera entradas/saídas nos relatórios existentes. Nas saídas da Revisão, o saldo já fica indisponível desde a criação e aparece como **em trânsito** nos envios pendentes; recusa ou cancelamento pré-recebimento restaura o disponível. O autor pode cancelar enquanto o envio estiver aguardando recebimento, com motivo obrigatório; o envio permanece no histórico como `CANCELADO`, e administradores visualizam a auditoria no detalhe. Estoque/Home/relatório de validades mostram saldo disponível. Movimentos vinculados exibem o identificador do envio na observação e não oferecem cancelamento isolado; devoluções são novos envios. Regras completas em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#envios-entre-setores).
 
@@ -123,6 +129,8 @@ GET             /api/v1/stock-positions/:id
 ```
 
 A entrada principal **Estoque e validades** consulta posições com saldo positivo, fabricação, validade, situação e totais, com filtros de produto, lote, local e vencimento. Cada validade mantém seu próprio saldo; os totais da Home e da consulta continuam usando essas posições reais.
+
+Abaixo dos filtros há dois níveis de seleção rápida: **Todos** ou um estoque principal; ao escolher um estoque, **Geral** (principal e filhos) ou um local filho. Cada local configura no cadastro se a consulta mostra posições separadas por lote/validade ou total por produto com os lotes e validades expansíveis. A opção por produto é paginada no backend e respeita os mesmos filtros; não modifica os saldos. Com **Todos**, a consulta continua por posições.
 
 ## Entrada externa
 
@@ -238,6 +246,8 @@ Revisões com desmontagem mostram o código unitário e as quantidades de saída
 ## Relatório de estoque e validades
 
 `GET /api/v1/reports/stock` retorna somente posições atuais com saldo positivo, incluindo produto, lote, local/classificação, quantidade, fabricação e validade. Aceita filtros de produto, lote, local e situação da validade. A situação é calculada em relação à data de referência e à janela configurada, resultando em `VALIDO`, `PROXIMO_VENCIMENTO` ou `VENCIDO`; fabricação e validade trafegam como data civil `YYYY-MM-DD`.
+
+`GET /api/v1/reports/stock/products` reutiliza os mesmos filtros e totais, mas pagina por produto e inclui as posições filtradas de cada produto. `includeSubstocks=true` com `stockLocationId` inclui as classificações filhas de um estoque principal nas duas consultas.
 
 A interface principal **Estoque e validades** apresenta saldo, lote, fabricação, validade e situação, com destaque visual simples para cada estado. Possui os mesmos filtros, paginação da API, estados de carregamento, vazio e erro e ação para limpar filtros. O acesso exige `stock-positions.read`; exportação não faz parte desta interface.
 
