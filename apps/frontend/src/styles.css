@@ -163,7 +163,13 @@ h3 { color: #24495a; font-size: 1rem; }
 .home-attention-card small { color: inherit; }
 .home-attention-card.danger { border-color: #e9aeb7; background: #fff3f4; color: #842f3a; }
 .home-attention-card.warning { border-color: #e8c66e; background: #fffaf0; color: #71500d; }
-.home-operation-panel { min-width: 0; padding: 1rem; }
+.home-operation-panel { --panel-accent: #2b7990; --panel-surface: #eaf2f5; min-width: 0; border-color: #d5e4e9; border-top: 3px solid var(--panel-accent); background: var(--panel-surface); padding: 1rem; }
+.home-operation-panel--pcp { --panel-accent: #9a6b12; --panel-surface: #f8f3e9; border-color: #e9dfcb; }
+.home-operation-panel--finished { --panel-accent: #347b59; --panel-surface: #edf5f0; border-color: #d8e8df; }
+.home-operation-panel .dashboard-section-heading { margin-bottom: .85rem; }
+.home-operation-panel .dashboard-section-heading .eyebrow { display: block; margin-bottom: .18rem; color: var(--panel-accent); font-size: .62rem; }
+.home-operation-panel .dashboard-section-heading h2 { font-size: 1.03rem; }
+.home-operation-panel .home-operation-card { border-color: #cbdde3; background: #fff; box-shadow: 0 1px 3px rgb(21 70 88 / 5%); }
 .home-operation-list { display: grid; gap: .65rem; }
 .home-operation-card { display: grid; min-width: 0; justify-items: start; gap: .3rem; border: 1px solid var(--line); background: #fff; color: var(--ink); padding: .85rem; text-align: left; }
 .home-operation-card:hover { border-color: #8dbbc7; background: #f7fbfc; }
@@ -549,29 +555,44 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
 .pcp-list { overflow: hidden; }
 .pcp-list code { color: var(--primary-dark); font-weight: 700; }
 .pcp-detail-dialog { width: min(100%, 60rem); }
-.movement-detail-dialog { width: min(100%, 62rem); }
+.movement-detail-dialog { width: min(100%, 56rem); }
 .shipment-detail-dialog { width: min(100%, 60rem); }
 .movement-detail-dialog, .shipment-detail-dialog { overflow-x: hidden; min-width: 0; }
-.movement-detail-heading { margin-bottom: 1rem; }
-.movement-route { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: stretch; gap: .5rem; border: 1px solid #bcd9e1; border-radius: .75rem; background: #eef8fa; padding: .65rem; }
-.movement-route-place { display: grid; align-content: center; gap: .25rem; min-width: 0; border-radius: .5rem; background: #fff; padding: .85rem; }
+.movement-detail-heading { align-items: flex-start; margin-bottom: .9rem; border-bottom: 1px solid var(--line); padding-bottom: .9rem; }
+.movement-detail-heading-content { min-width: 0; }
+.movement-detail-heading h2 { margin: 0 0 .55rem; font-size: 1.45rem; }
+.movement-detail-heading-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.movement-detail-heading-meta code { max-width: 100%; overflow-wrap: anywhere; border-radius: .35rem; background: #e8f2f5; color: var(--primary-dark); padding: .25rem .5rem; font-family: inherit; font-size: .8rem; font-weight: 750; }
+.movement-detail-group { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem; margin-top: .4rem; color: var(--muted); font-size: .78rem; }
+.movement-detail-group .text-button { min-height: 0; padding: 0 .2rem; font-size: inherit; }
+.movement-route { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: stretch; gap: .55rem; border: 1px solid #c3dfe7; border-left: 4px solid #4b9ab0; border-radius: .65rem; background: #eaf5f7; padding: .7rem .85rem; }
+.movement-route-place { display: grid; align-content: center; gap: .2rem; min-width: 0; padding: .15rem .25rem; }
 .movement-route-place > span, .movement-facts > div > span { color: var(--muted); font-size: .75rem; font-weight: 700; }
-.movement-route-place strong { color: var(--primary-dark); font-size: clamp(1rem, 3vw, 1.3rem); line-height: 1.25; overflow-wrap: anywhere; }
+.movement-route-place strong { color: var(--primary-dark); font-size: clamp(1rem, 3vw, 1.18rem); line-height: 1.25; overflow-wrap: anywhere; }
 .movement-route-arrow { align-self: center; color: var(--primary); font-size: 1.35rem; font-weight: 700; }
-.movement-detail-section { min-width: 0; margin-top: 1.2rem; }
+.movement-detail-section { min-width: 0; margin-top: 1.05rem; }
 .movement-detail-section h3 { margin-bottom: .65rem; }
 .movement-detail-section .movement-detail-items { margin: 0; }
-.movement-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
-.movement-facts > div { display: grid; align-content: start; gap: .25rem; min-width: 0; border: 1px solid var(--line); border-radius: .6rem; padding: .7rem .8rem; }
+.movement-product-list > li { gap: .35rem; border: 1px solid #d5e3e8; border-left: 3px solid #6ba9b8; border-radius: .6rem; background: #fff; padding: .8rem .9rem; }
+.movement-product-list > li > small, .movement-product-list > li > .text-button { justify-self: start; color: var(--muted); font-size: .76rem; }
+.movement-product-heading { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: .35rem .75rem; min-width: 0; }
+.movement-product-heading strong { min-width: 0; flex: 1 1 16rem; overflow-wrap: anywhere; color: var(--ink); }
+.movement-product-heading b { flex: 0 0 auto; border-radius: .35rem; background: #e7f3f6; color: var(--primary-dark); padding: .2rem .5rem; font-size: .84rem; white-space: nowrap; }
+.movement-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: .15rem; border: 1px solid #e0e9ed; border-radius: .6rem; background: #f3f7f8; padding: .45rem; }
+.movement-facts > div { display: grid; align-content: start; gap: .25rem; min-width: 0; padding: .45rem .6rem; }
 .movement-facts strong, .movement-facts small { min-width: 0; overflow-wrap: anywhere; }
 .movement-facts small { color: var(--muted); }
 .movement-detail-event { margin: .75rem 0 0; color: var(--muted); font-size: .85rem; }
-.movement-notes { border-top: 1px solid var(--line); padding-top: 1rem; }
+.movement-notes { border-left: 3px solid #dab567; border-radius: .5rem; background: #fbf7ed; padding: .8rem .9rem; }
 .movement-notes p { margin: 0 0 .5rem; overflow-wrap: anywhere; }
+.movement-notes p:last-child { margin-bottom: 0; }
+.movement-detail-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; margin-top: 1.2rem; border-top: 1px solid var(--line); padding-top: .85rem; }
+.movement-detail-footer:empty { display: none; }
+.movement-detail-footer .button-wide { width: auto; min-width: 12rem; }
 @media (max-width: 540px) {
   .movement-route { grid-template-columns: minmax(0, 1fr); }
   .movement-route-arrow { justify-self: center; line-height: 1; transform: rotate(90deg); }
-  .movement-facts { grid-template-columns: minmax(0, 1fr); }
+  .movement-detail-footer .button-wide { width: 100%; }
 }
 .home-operation-card small { overflow-wrap: anywhere; }
 .pcp-detail-dialog h2 small { color: var(--muted); font-size: .8rem; }
@@ -597,10 +618,12 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
   .shipment-list-entry > .shipment-card, .pcp-table-mobile { display: none; }
   .pcp-record-lines, .shipment-record-lines { display: grid; gap: .4rem; min-width: 0; }
   .movement-record-line { display: grid; min-width: 0; border: 1px solid var(--line); border-radius: .55rem; background: #fff; overflow: hidden; }
+  .home-operation-panel .movement-record-line { border-color: #cbdde3; box-shadow: 0 1px 3px rgb(21 70 88 / 5%); }
   .movement-record-line:hover { border-color: #9ec8d2; background: #f9fcfd; }
   .movement-record-line-main { display: block; width: 100%; min-width: 0; min-height: 0; border-radius: 0; background: transparent; color: var(--ink); padding: 0; text-align: left; font-weight: 400; }
   .movement-record-line-main:hover { background: transparent; }
   .movement-record-line-header { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: .7rem; min-width: 0; border-bottom: 1px solid #edf1f4; padding: .4rem .7rem; }
+  .home-operation-panel .movement-record-line-header { background: #f9fbfc; }
   .movement-record-line-header > strong { min-width: 0; overflow: hidden; color: var(--primary-dark); font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
   .movement-record-line-header time { color: var(--muted); font-size: .72rem; white-space: nowrap; }
   .movement-record-line-header .badge { justify-self: end; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .7rem; }

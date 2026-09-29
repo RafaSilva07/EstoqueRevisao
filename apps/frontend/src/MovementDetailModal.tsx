@@ -30,6 +30,7 @@ export function MovementDetailModal({ movementId, initialMovement, onClose, chil
   const visibleItems = recordId ? movement?.items.filter((item) => item.id === recordId) ?? [] : movement?.items ?? [];
   const selectedRecord = recordId ? visibleItems[0] : undefined;
   const pcpStatus = selectedRecord?.pcpExecutionStatus ?? movement?.pcpExecutionStatus;
+  const linkedShipment = shipment ?? (pcp ? (movement as PcpMovementDetail | null)?.shipment : null);
   const destinations = movement?.destinationLocation
     ? [movement.destinationLocation.name]
     : [...new Set(visibleItems.flatMap((item) => item.distributions?.map((distribution) => distribution.destinationLocation.name) ?? []))];
@@ -56,28 +57,35 @@ export function MovementDetailModal({ movementId, initialMovement, onClose, chil
     {!movement && !error && <LoadingState label="Carregando detalhes" />}
     {error && <Notice kind="error">{error}</Notice>}
     {movement && <>
-      <div className="panel-heading movement-detail-heading"><div><p className="eyebrow">Detalhes da movimentação</p><h2 id="movement-detail-title">{typeLabel[movement.type]}</h2></div><button className="secondary" onClick={onClose}>Fechar</button></div>
+      <div className="panel-heading movement-detail-heading"><div className="movement-detail-heading-content">
+        <p className="eyebrow">Detalhes da movimentação</p>
+        <h2 id="movement-detail-title">{typeLabel[movement.type]}</h2>
+        <div className="movement-detail-heading-meta">
+          <code>{recordId && !selectedRecord ? 'Registro não encontrado' : selectedRecord?.codigoRegistro ?? movement.codigoMovimentacao ?? 'Sem código público'}</code>
+          <span className={`badge ${movement.status === 'EFETIVADA' ? 'active' : 'canceled'}`}>{movement.status === 'EFETIVADA' ? 'Efetivada' : 'Cancelada'}</span>
+          <span className={`badge ${movement.requiresPcpExecution === false ? '' : pcpStatus === 'EXECUTADA' ? 'active' : 'pending'}`}>PCP: {movement.requiresPcpExecution === false ? 'Não necessário' : pcpStatus === 'EXECUTADA' ? 'Executada' : 'Pendente'}</span>
+        </div>
+        {recordId && <div className="movement-detail-group">Grupo {movement.codigoMovimentacao ?? 'sem código público'} · {movement.items.length} {movement.items.length === 1 ? 'registro' : 'registros'} <button className="text-button" onClick={onViewGroup}>Ver grupo</button></div>}
+      </div><button className="secondary" onClick={onClose}>Fechar</button></div>
       <section className="movement-route" aria-label="Origem e destino">
         <div className="movement-route-place"><span>Origem</span><strong>{movement.originLocation.name}</strong></div>
         <span className="movement-route-arrow" aria-hidden="true">→</span>
         <div className="movement-route-place"><span>Destino</span><strong>{destinations.length ? destinations.join(' · ') : 'Distribuição da revisão'}</strong></div>
       </section>
-      {recordId && <p><strong>Registro: {visibleItems[0]?.codigoRegistro ?? 'Não encontrado'}</strong> · Grupo: {movement.codigoMovimentacao ?? 'Sem código público'} · {movement.items.length} registros neste grupo <button className="text-button" onClick={onViewGroup}>Ver grupo</button></p>}
       <section className="movement-detail-section" aria-labelledby="movement-products-title">
       <h3 id="movement-products-title">Produtos e quantidades</h3>
-      <ul className="movement-detail-items">{visibleItems.map((item) => {
+      <ul className="movement-detail-items movement-product-list">{visibleItems.map((item) => {
         const evidence = pcp
           ? (movement as PcpMovementDetail).shipmentEvidence?.filter((photo) => (item.shipmentItemId ? photo.itemId === item.shipmentItemId : photo.productId === item.productId && photo.batchId === item.batchId) && (photo.photoMimeType || photo.additionalPhotos?.length)) ?? []
           : shipment?.items.filter((photo) => (item.shipmentItemId ? photo.id === item.shipmentItemId : photo.productId === item.productId && photo.batchId === item.batchId)
             && (!photo.stockLocationId || photo.stockLocationId === movement.originLocationId) && (photo.photoMimeType || photo.additionalPhotos?.length)) ?? [];
         return <li key={item.id}>
         {item.codigoRegistro && (onSelectRecord && !recordId ? <button type="button" className="text-button" onClick={() => onSelectRecord(item.id)}>{item.codigoRegistro} · Ver registro</button> : <small>Registro {item.codigoRegistro}</small>)}
-        <strong>{(item.productSnapshot ?? item.product).code} — {(item.productSnapshot ?? item.product).name}</strong>
+        <div className="movement-product-heading"><strong>{(item.productSnapshot ?? item.product).code} — {(item.productSnapshot ?? item.product).name}</strong><b>{item.quantity} {(item.productSnapshot ?? item.product).defaultUnit}</b></div>
         {movement.type === 'TRANSFERENCIA_INTERNA' ? <>
           <span>Origem: lote {item.batch.code} · fabricação {formatDate(item.batch.manufacturingDate)} · validade {formatDate(item.batch.expirationDate)} · {movement.originLocation.name}</span>
           <span>Destino: lote {item.destinationBatch?.code} · fabricação {formatDate(item.destinationBatch?.manufacturingDate ?? '')} · validade {formatDate(item.destinationBatch?.expirationDate ?? '')} · {movement.destinationLocation?.name}</span>
         </> : <span>Lote {item.batch.code} · fabricação {formatDate(item.batch.manufacturingDate)} · validade {formatDate(item.batch.expirationDate)}</span>}
-        <b>{item.quantity} {(item.productSnapshot ?? item.product).defaultUnit}</b>
         {item.outputProductSnapshot && <span>Desmontagem: {item.quantity} {(item.productSnapshot ?? item.product).defaultUnit} × {item.unitsPerPackage} → {item.outputQuantity} UN de {item.outputProductSnapshot.code} — {item.outputProductSnapshot.name}</span>}
         {item.distributions?.length > 0 && <ul className="distribution-detail">{item.distributions.map((distribution) => <li key={distribution.id}>{distribution.destinationLocation.name}: <strong>{distribution.quantity} {(item.outputProductSnapshot ?? item.productSnapshot ?? item.product).defaultUnit}</strong></li>)}</ul>}
         {evidence.length > 0 && <MovementEvidence key={`${item.pcpExecutionStatus ?? movement.pcpExecutionStatus}:${item.id}`} pendingPcp={movement.status === 'EFETIVADA' && movement.requiresPcpExecution && (item.pcpExecutionStatus ?? movement.pcpExecutionStatus) === 'PENDENTE'}>
@@ -86,12 +94,12 @@ export function MovementDetailModal({ movementId, initialMovement, onClose, chil
       </li>})}</ul>
       </section>
       <section className="movement-detail-section" aria-labelledby="movement-info-title">
-        <h3 id="movement-info-title">Dados da movimentação</h3>
+        <h3 id="movement-info-title">Responsáveis e data</h3>
         <div className="movement-facts">
           <div><span>Responsável</span><strong>{movement.responsibleUser.username}</strong></div>
           <div><span>Data e hora</span><strong>{formatDateTime(movement.occurredAt)}</strong></div>
-          <div><span>Código</span><strong>{selectedRecord?.codigoRegistro ?? movement.codigoMovimentacao ?? 'Não se aplica'}</strong>{shipment && <small>Envio original: {shipment.codigoMovimentacao}</small>}</div>
-          <div><span>Status</span><strong><span className={`badge ${movement.status === 'EFETIVADA' ? 'active' : 'canceled'}`}>{movement.status === 'EFETIVADA' ? 'Efetivada' : 'Cancelada'}</span></strong><small>PCP: {movement.requiresPcpExecution === false ? 'Não necessária' : pcpStatus === 'EXECUTADA' ? 'Executada' : 'Pendente'}</small></div>
+          {linkedShipment && <div><span>Enviado por</span><strong>{linkedShipment.createdBy.username}</strong></div>}
+          {linkedShipment && <div><span>Recebido por</span><strong>{shipment?.receivedBy?.username ?? linkedShipment.decidedBy?.username ?? 'Pendente'}</strong></div>}
         </div>
         {pcpStatus === 'EXECUTADA' && <p className="movement-detail-event">Executada no PCP por <strong>{selectedRecord?.pcpExecutedByUser?.username ?? movement.pcpExecutedByUser?.username ?? '—'}</strong> em {selectedRecord?.pcpExecutedAt || movement.pcpExecutedAt ? formatDateTime(selectedRecord?.pcpExecutedAt ?? movement.pcpExecutedAt!) : '—'}.</p>}
         {movement.status === 'CANCELADA' && <p className="movement-detail-event">Cancelada por <strong>{movement.canceledByUser?.username ?? '—'}</strong> em {movement.canceledAt ? formatDateTime(movement.canceledAt) : '—'}.</p>}
@@ -102,7 +110,7 @@ export function MovementDetailModal({ movementId, initialMovement, onClose, chil
         {movement.pcpExecutionObservation && <p><strong>PCP:</strong> {movement.pcpExecutionObservation}</p>}
         {movement.cancellationReason && <p><strong>Motivo do cancelamento:</strong> {movement.cancellationReason}</p>}
       </section>}
-      {children?.(movement)}
+      {children && <div className="movement-detail-footer">{children(movement)}</div>}
     </>}
   </Modal>;
 }

@@ -104,17 +104,17 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
     {loading && <LoadingState label="Carregando resumo operacional..." />}
     {error && <Notice kind="error">{error}</Notice>}
 
-    {!loading && !error && canReadShipments && <section className="surface dashboard-section home-operation-panel" aria-labelledby="open-shipments-title">
+    {!loading && !error && canReadShipments && <section className="surface dashboard-section home-operation-panel home-operation-panel--open" aria-labelledby="open-shipments-title">
       <PanelHeading id="open-shipments-title" eyebrow="Prioridade" title="Envios em aberto" action={<button className="text-button" onClick={() => navigate('shipments')}>Ver envios</button>} />
       {openShipments.length === 0 ? <EmptyState title="Nenhuma movimentação em aberto" description="Não há envios aguardando aceite, recebimento ou separação neste setor." /> : <HomeRecordList items={openShipments} onOpen={openMovement} />}
     </section>}
 
-    {!loading && !error && (canReadMovements || canReadPcp) && <section className="surface dashboard-section home-operation-panel" aria-labelledby="pending-pcp-title">
+    {!loading && !error && (canReadMovements || canReadPcp) && <section className="surface dashboard-section home-operation-panel home-operation-panel--pcp" aria-labelledby="pending-pcp-title">
       <PanelHeading id="pending-pcp-title" eyebrow="PCP" title="Concluídas no estoque · aguardando PCP" action={<button className="text-button" onClick={() => navigate(canReadPcp ? 'pcp' : 'history')}>Ver todas</button>} />
       {pendingPcp.length === 0 ? <EmptyState title="Nenhuma movimentação aguardando o PCP" description="As movimentações concluídas pendentes de execução aparecerão aqui." /> : <HomeRecordList items={pendingPcp} onOpen={openMovement} />}
     </section>}
 
-    {!loading && !error && (canReadShipments || canReadMovements || canReadPcp) && <section className="surface dashboard-section home-operation-panel" aria-labelledby="recent-finished-title">
+    {!loading && !error && (canReadShipments || canReadMovements || canReadPcp) && <section className="surface dashboard-section home-operation-panel home-operation-panel--finished" aria-labelledby="recent-finished-title">
       <PanelHeading id="recent-finished-title" eyebrow="Histórico" title="Últimas movimentações finalizadas" action={<button className="text-button" onClick={() => navigate('history')}>Ver histórico</button>} />
       {recentFinished.length === 0 ? <EmptyState title="Nenhuma movimentação finalizada" description="Somente operações sem ação pendente aparecerão aqui." /> : <HomeRecordList items={recentFinished} onOpen={openMovement} />}
     </section>}

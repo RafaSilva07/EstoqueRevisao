@@ -201,6 +201,8 @@ No desktop, registros individuais aparecem em linhas compactas na Home, Históri
 
 O detalhe de movimentação apresenta identificador, tipo, estados operacional e PCP, data/hora, responsável, rota, observação, itens, lotes, fabricação, validade, quantidades e distribuições. Os dados do produto confirmados em novos itens são preservados por snapshot; datas são preservadas nas variantes imutáveis. Relatórios históricos e CSVs existentes também mostram as datas de origem/destino. Registros efetivados e cancelados permanecem consultáveis.
 
+Na interface, o detalhe prioriza identificação e estados no cabeçalho, rota e produtos; responsáveis/data aparecem em uma faixa compacta, observações depois e ações ao final. As listas da Home usam fundos suaves diferentes para envios abertos, pendências PCP e finalizadas, mantendo os registros individuais em destaque.
+
 ## Cancelamento e estorno
 
 `POST /api/v1/movements/:id/cancellation`

@@ -37,6 +37,10 @@ describe('detalhe da movimentação', () => {
     const products = host.querySelector('#movement-products-title')!;
     const facts = host.querySelector('#movement-info-title')!;
     const notes = host.querySelector('#movement-notes-title')!;
+    expect(host.querySelector('.movement-detail-heading-meta')?.textContent).toContain('REV-000001');
+    expect(host.querySelector('.movement-detail-heading-meta')?.textContent).toContain('PCP: Não necessário');
+    expect(host.querySelector('.movement-product-heading b')?.textContent).toBe('10 UN');
+    expect(host.querySelectorAll('.movement-facts > div')).toHaveLength(2);
     expect(route.textContent).toContain('Revisar');
     expect(route.textContent).toContain('Lata Boa · TUF');
     expect(route.compareDocumentPosition(products) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

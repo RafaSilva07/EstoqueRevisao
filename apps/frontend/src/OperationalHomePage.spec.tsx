@@ -53,6 +53,7 @@ describe('Resumo operacional da Home', () => {
   it('exibe código e abre resumo ao clicar, navegando somente pela ação', async () => { await Promise.resolve();
     await act(async () => { root.render(<OperationalHomePage user={user} navigate={navigate} onOpenRecord={onOpenRecord} />); await Promise.resolve(); });
     expect(host.textContent).toContain('ENT-000153');
+    expect(host.querySelectorAll('.home-operation-panel--open, .home-operation-panel--pcp, .home-operation-panel--finished')).toHaveLength(3);
     await click('Entrada externa');
     expect(host.querySelector('[role="dialog"]')?.textContent).toContain('ENT-000153');
     expect(navigate).not.toHaveBeenCalled();
