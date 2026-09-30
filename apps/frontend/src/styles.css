@@ -734,41 +734,32 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
 }
 .assembly-form .assembly-source {
   min-width: 0;
-  display: grid;
+  display: flex;
   grid-column: 1 / -1;
-  grid-template-columns: minmax(0, 1fr) minmax(7rem, 10rem);
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: .75rem;
   padding: .7rem;
   border: 1px solid var(--border, #d8e3e9);
   border-radius: .7rem;
   background: var(--surface-muted, #f5f8fa);
 }
-.assembly-form .assembly-source span { min-width: 0; overflow-wrap: anywhere; }
-.assembly-batches { display: grid; gap: .45rem; min-width: 0; }
-.assembly-batches > p { margin: 0 0 .2rem; }
-.assembly-form .assembly-batch-option {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: .3rem .8rem;
-  min-width: 0;
-  padding: .65rem .75rem;
-  border: 1px solid var(--border, #d8e3e9);
-  border-radius: .7rem;
-  background: var(--surface-muted, #f5f8fa);
-  color: var(--ink);
-  text-align: left;
-}
-.assembly-form .assembly-batch-option.is-selected { border-color: var(--primary); background: #edf5f6; }
-.assembly-form .assembly-batch-option:disabled { opacity: .6; cursor: not-allowed; }
-.assembly-batch-positions { display: flex; flex-wrap: wrap; gap: .3rem .65rem; flex-basis: 100%; padding-top: .4rem; border-top: 1px solid var(--border, #d8e3e9); }
-.assembly-batch-positions > span { min-width: 0; font-size: .85rem; color: var(--muted); }
+.assembly-form .assembly-source.is-selected { border-color: var(--primary); }
+.assembly-source-heading { display: grid; gap: .35rem; }
+.assembly-source-heading p { margin: 0; }
+.assembly-source-heading button { justify-self: start; }
+.assembly-source-choice { display: flex; align-items: flex-start; gap: .6rem; flex: 1 1 16rem; min-width: 0; cursor: pointer; }
+.assembly-source-choice input { width: auto; flex: 0 0 auto; margin: .15rem 0 0; }
+.assembly-source-choice span { min-width: 0; overflow-wrap: anywhere; }
+.assembly-source-quantity { flex: 0 1 10rem; min-width: 8rem; }
+.assembly-source-quantity input { margin-top: .2rem; }
+.assembly-source-auto { color: var(--muted); font-size: .9rem; font-weight: 600; }
+.assembly-more { justify-self: start; }
 .assembly-mixed-toggle { display: flex; align-items: center; gap: .55rem; padding: .8rem 0; }
 .assembly-mixed-toggle input { width: auto; flex: 0 0 auto; }
 @media (max-width: 640px) {
-  .assembly-form .assembly-source { grid-template-columns: minmax(0, 1fr); }
+  .assembly-source-quantity { flex-basis: 100%; }
 }
 
 .preferences-panel { display: grid; gap: 1.25rem; max-width: 48rem; }
@@ -798,7 +789,8 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
 :root[data-theme="dark"] :is(button.secondary:hover, .position-select-trigger:hover:not(:disabled), .position-select-list button:hover, .autocomplete-option:hover, .report-tabs button:not(.current):hover, .stock-location-tabs button:not(.current):hover) { background: var(--primary-soft); color: var(--ink); }
 :root[data-theme="dark"] :is(.action-card, .quick-action:not(.primary-action), .metric, .dashboard-balance-card, .home-attention-card, .home-operation-panel .home-operation-card, .home-operation-card, .menu-card, .responsive-table tr, .report-summary article, .movement-product-list > li, .review-distribution-grid, .movement-record-line, .shipment-photo-trigger) { background: var(--surface); color: var(--ink); }
 :root[data-theme="dark"] :is(.action-card:hover, .quick-action:not(.primary-action):hover, .dashboard-balance-card:hover, .home-operation-card:hover, .menu-card:hover, .responsive-table tr.selected, .movement-record-line:hover) { background: var(--primary-soft); color: var(--ink); }
-:root[data-theme="dark"] :is(.linked-fields, .conversion-list li, .movement-detail-items li, .stock-location-picker, .stock-product-position, .movement-detail-items .shipment-item-card, .movement-facts, .separation-items .shipment-item-card, .review-distribution-matrix, .home-operation-panel, .movement-record-line-header, .assembly-form .assembly-source, .assembly-form .assembly-batch-option) { background: var(--surface-muted); color: var(--ink); border-color: var(--line); }
+:root[data-theme="dark"] :is(.linked-fields, .conversion-list li, .movement-detail-items li, .stock-location-picker, .stock-product-position, .movement-detail-items .shipment-item-card, .movement-facts, .separation-items .shipment-item-card, .review-distribution-matrix, .home-operation-panel, .movement-record-line-header, .assembly-form .assembly-source) { background: var(--surface-muted); color: var(--ink); border-color: var(--line); }
+:root[data-theme="dark"] .assembly-form .assembly-source.is-selected { border-color: var(--primary); }
 :root[data-theme="dark"] :is(.home-attention, .home-attention-card.warning, .dashboard-alert-card.warning, .movement-notes) { background: #392f1d; color: #f3d797; border-color: #775b2c; }
 :root[data-theme="dark"] :is(.home-attention-card.danger, .dashboard-alert-card.danger, .notice-error) { background: #3b2630; color: #ffb5be; border-color: #75404d; }
 :root[data-theme="dark"] .notice-success { background: #1f3a33; color: #ace6c9; border-color: #3a7460; }

@@ -30,7 +30,9 @@ export function AssemblyItemForm({ onAdd, excludedPositions }: {
   const [packageQuantity, setPackageQuantity] = useState('');
   const [mixedDates, setMixedDates] = useState(false);
   const [selectedBatchId, setSelectedBatchId] = useState('');
-  const [sources, setSources] = useState<Array<{ position: StockPosition; quantity: number }>>([]);
+  const [selectedPositions, setSelectedPositions] = useState<StockPosition[]>([]);
+  const [sourceInputs, setSourceInputs] = useState<Record<string, string>>({});
+  const [showOtherPositions, setShowOtherPositions] = useState(false);
   const [observation, setObservation] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -50,6 +52,10 @@ export function AssemblyItemForm({ onAdd, excludedPositions }: {
   const factor = packaged?.unitsPerPackage ?? 0;
   const amount = Number(packageQuantity);
   const needed = amount * factor;
+  const sources = selectedPositions.flatMap((position) => {
+    const quantity = selectedPositions.length === 1 ? needed : Number(sourceInputs[position.id]);
+    return Number.isSafeInteger(quantity) && quantity > 0 ? [{ position, quantity }] : [];
+  });
   const allocated = sources.reduce((sum, source) => sum + source.quantity, 0);
   const excludedForUnit = [...new Map(excludedPositions.filter((position) => position.productId === unit?.id)
     .map((position) => [position.id, position])).values()];
@@ -58,8 +64,6 @@ export function AssemblyItemForm({ onAdd, excludedPositions }: {
     .reduce((sum, position) => sum + position.quantity, 0);
   const availableByBatch = options?.availableByBatch.map((batch) => ({
     ...batch,
-    positions: batch.positions.map((position) => ({ ...position,
-      availableUnits: excludedIds.has(position.positionId) ? 0 : position.availableUnits })),
     availableUnits: Math.max(0, batch.availableUnits - excludedForUnit
       .filter((position) => position.batchId === batch.batchId)
       .reduce((sum, position) => sum + position.quantity, 0)),
@@ -69,11 +73,19 @@ export function AssemblyItemForm({ onAdd, excludedPositions }: {
     ? Math.max(0, (options?.availableUnits ?? 0) - excludedUnits)
     : selectedBatch?.availableUnits ?? 0;
   const availablePackages = factor ? Math.floor(availableUnits / factor) : 0;
+  const currentPositions = options?.positions.items ?? [];
+  const primaryPositions = [
+    ...selectedPositions.filter((position) => !currentPositions.some((item) => item.id === position.id)),
+    ...currentPositions.filter((position) => position.stockLocation.code === 'LATA_BOA' || selectedPositions.some((item) => item.id === position.id)),
+  ];
+  const otherPositions = currentPositions.filter((position) => position.stockLocation.code !== 'LATA_BOA'
+    && !selectedPositions.some((item) => item.id === position.id));
 
-  function chooseBatch(batchId: string) {
-    if (batchId === selectedBatchId) return;
-    setSelectedBatchId(batchId);
-    setSources([]);
+  function changeBatch() {
+    setSelectedBatchId('');
+    setSelectedPositions([]);
+    setSourceInputs({});
+    setShowOtherPositions(false);
     setPackageQuantity('');
     setPage(1);
     setLoading(true);
@@ -83,20 +95,27 @@ export function AssemblyItemForm({ onAdd, excludedPositions }: {
   function toggleMixed(checked: boolean) {
     setMixedDates(checked);
     setSelectedBatchId('');
-    setSources([]);
+    setSelectedPositions([]);
+    setSourceInputs({});
+    setShowOtherPositions(false);
     setPackageQuantity('');
     setPage(1);
     setLoading(true);
     setError('');
   }
 
-  function changeSource(position: StockPosition, input: string) {
-    const quantity = Number(input);
-    setSources((current) => {
-      const other = current.filter((source) => source.position.id !== position.id);
-      return input && Number.isSafeInteger(quantity) && quantity > 0
-        ? [...other, { position, quantity }] : other;
-    });
+  function togglePosition(position: StockPosition) {
+    if (excludedIds.has(position.id)) return;
+    if (!mixedDates && !selectedBatchId) {
+      setSelectedBatchId(position.batchId);
+      setSelectedPositions([position]);
+      setPage(1);
+      setLoading(true);
+      return;
+    }
+    setSelectedPositions((current) => current.some((item) => item.id === position.id)
+      ? current.filter((item) => item.id !== position.id) : [...current, position]);
+    setSourceInputs((current) => { const next = { ...current }; delete next[position.id]; return next; });
   }
 
   function add(event: FormEvent) {
@@ -105,7 +124,7 @@ export function AssemblyItemForm({ onAdd, excludedPositions }: {
       || !Number.isSafeInteger(amount) || amount < 1 || amount > availablePackages) {
       setError('Selecione unidade, embalagem e quantidade inteira dentro do saldo disponível.'); return;
     }
-    if (!sources.length || sources.some((source) => source.quantity > source.position.quantity) || allocated !== needed) {
+    if (sources.length !== selectedPositions.length || sources.some((source) => excludedIds.has(source.position.id) || source.quantity > source.position.quantity) || allocated !== needed) {
       setError(`Distribua exatamente ${needed} UN entre as posições de origem (informado: ${allocated} UN).`); return;
     }
     const batches = new Set(sources.map((source) => source.position.batchId));
@@ -116,9 +135,21 @@ export function AssemblyItemForm({ onAdd, excludedPositions }: {
     onAdd(unit, { packageProduct: packaged, packageQuantity: amount, mixedDates, sources }, observation.trim());
   }
 
+  function renderPosition(position: StockPosition) {
+    const excluded = excludedIds.has(position.id);
+    const checked = selectedPositions.some((item) => item.id === position.id);
+    return <div className={`assembly-source ${checked ? 'is-selected' : ''}`} key={position.id}>
+      <label className="assembly-source-choice"><input type="checkbox" checked={checked} disabled={excluded} onChange={() => togglePosition(position)} />
+        <span><strong>{position.stockLocation.name}</strong> · lote {position.batch.code} · prod: {formatDate(position.batch.manufacturingDate)} · val: {formatDate(position.batch.expirationDate)} · saldo {position.quantity} UN · até {excluded ? 0 : Math.floor(position.quantity / factor)} {packaged?.defaultUnit} nesta posição{excluded ? ' · já usado neste envio' : ''}</span>
+      </label>
+      {checked && selectedPositions.length > 1 && <label className="assembly-source-quantity">UN desta posição<input type="number" inputMode="numeric" min="1" max={position.quantity} step="1" value={sourceInputs[position.id] ?? ''} onChange={(event) => setSourceInputs((current) => ({ ...current, [position.id]: event.target.value }))} /></label>}
+      {checked && selectedPositions.length === 1 && <span className="assembly-source-auto">{Number.isSafeInteger(needed) && needed > 0 ? `${needed} UN desta posição` : 'Informe a quantidade de embalagens'}</span>}
+    </div>;
+  }
+
   return <form className="form-grid assembly-form" onSubmit={add}>
     {error && <div className="wide"><Notice kind="error" onClose={() => setError('')}>{error}</Notice></div>}
-    <div className="wide"><ProductAutocomplete onChange={(selected) => { setUnit(selected); setOptions(null); setLoading(Boolean(selected && selected.defaultUnit === 'UN')); setPage(1); setPackageId(''); setSelectedBatchId(''); setMixedDates(false); setSources([]); }} /></div>
+    <div className="wide"><ProductAutocomplete onChange={(selected) => { setUnit(selected); setOptions(null); setLoading(Boolean(selected && selected.defaultUnit === 'UN')); setPage(1); setPackageId(''); setSelectedBatchId(''); setMixedDates(false); setSelectedPositions([]); setSourceInputs({}); setShowOtherPositions(false); }} /></div>
     {unit && unit.defaultUnit !== 'UN' && <p className="wide photo-required">Selecione o código unitário (UN) que será usado na montagem.</p>}
     {unit?.defaultUnit === 'UN' && <>
       <label className="wide">Embalagem vinculada *<select value={packageId} onChange={(event) => { setPackageId(event.target.value); setPackageQuantity(''); }} disabled={loading} required>
@@ -128,31 +159,20 @@ export function AssemblyItemForm({ onAdd, excludedPositions }: {
       {!loading && options?.packages.length === 0 && <p className="wide muted">Nenhum fardo/caixa vinculado a esta unidade.</p>}
       {packaged && <>
         <label className="wide assembly-mixed-toggle"><input type="checkbox" checked={mixedDates} onChange={(event) => toggleMixed(event.target.checked)} /> Usar datas misturadas (Lote 0)</label>
-        {!mixedDates && <div className="wide assembly-batches">
-          <strong>Escolha a data/lote de origem *</strong>
-          <p className="muted">Veja quantas embalagens cada posição forma sozinha. O total do lote combina seus locais.</p>
-          {availableByBatch.length === 0 && !loading && <p className="muted">Nenhuma data com unidades disponíveis.</p>}
-          {availableByBatch.map((batch) => { const capacity = Math.floor(batch.availableUnits / factor); return <button
-            key={batch.batchId} type="button" className={`assembly-batch-option ${selectedBatchId === batch.batchId ? 'is-selected' : ''}`}
-            aria-pressed={selectedBatchId === batch.batchId} disabled={loading || capacity === 0}
-            onClick={() => chooseBatch(batch.batchId)}>
-            <span><strong>Prod: {formatDate(batch.manufacturingDate)}</strong> · lote {batch.code} · val: {formatDate(batch.expirationDate)}</span>
-            <span>Total do lote: {batch.availableUnits} UN · até <strong>{capacity} {packaged.defaultUnit}</strong></span>
-            <span className="assembly-batch-positions">{batch.positions.map((position) => <span key={position.positionId}>
-              {position.stockLocationName}: {position.availableUnits} UN · até <strong>{Math.floor(position.availableUnits / factor)} {packaged.defaultUnit}</strong> nesta posição
-            </span>)}</span>
-          </button>; })}
-        </div>}
         {mixedDates && <p className="wide available-balance">Total disponível para Lote 0: {availableUnits} UN · até <strong>{availablePackages} {packaged.defaultUnit}</strong> de {factor} UN.</p>}
-        {!mixedDates && selectedBatch && <p className="wide available-balance">Data/lote escolhido: {selectedBatch.availableUnits} UN · até <strong>{availablePackages} {packaged.defaultUnit}</strong> de {factor} UN.</p>}
         <label>Quantidade de {packaged.defaultUnit} para enviar *<input type="number" inputMode="numeric" min="1" max={availablePackages} step="1" value={packageQuantity} onChange={(event) => setPackageQuantity(event.target.value)} disabled={!mixedDates && !selectedBatchId} required /></label>
-        <div className="wide"><strong>Parcelas de origem</strong><p className="muted">Informe quantas unidades retirar de cada posição. {mixedDates ? 'Selecione posições com datas diferentes; a embalagem ficará como “Lote 0 — datas misturadas”.' : 'As posições devem ser do mesmo lote.'}</p></div>
-        {!mixedDates && !selectedBatchId && <p className="wide muted">Escolha uma data/lote acima para informar as parcelas.</p>}
-        {!loading && (mixedDates || selectedBatchId) && options?.positions.items.map((position) => { const excluded = excludedIds.has(position.id); const selected = sources.find((source) => source.position.id === position.id); return <label className="assembly-source" key={position.id}>
-          <span>{position.stockLocation.name} · lote {position.batch.code} · prod: {formatDate(position.batch.manufacturingDate)} · val: {formatDate(position.batch.expirationDate)} · saldo {position.quantity} UN · até {excluded ? 0 : Math.floor(position.quantity / factor)} {packaged.defaultUnit} nesta posição{excluded ? ' · já usado neste envio' : ''}</span>
-          <input type="number" inputMode="numeric" min="0" max={position.quantity} step="1" value={selected?.quantity ?? ''} disabled={excluded} placeholder="UN desta posição" onChange={(event) => changeSource(position, event.target.value)} />
-        </label>; })}
-        {(mixedDates || selectedBatchId) && options && options.positions.meta.totalPages > 1 && <div className="wide row-actions"><button type="button" className="secondary" disabled={page <= 1 || loading} onClick={() => { setLoading(true); setPage((current) => current - 1); }}>Anteriores</button><span>{page}/{options.positions.meta.totalPages}</span><button type="button" className="secondary" disabled={page >= options.positions.meta.totalPages || loading} onClick={() => { setLoading(true); setPage((current) => current + 1); }}>Próximas</button></div>}
+        <div className="wide assembly-source-heading">
+          <strong>Posições de origem</strong>
+          <p className="muted">Marque uma posição para usar nela as unidades necessárias. Ao marcar mais de uma, informe a parcela de cada uma. {mixedDates ? 'Lote 0 exige datas diferentes.' : 'As posições devem ser do mesmo lote.'}</p>
+          {!mixedDates && selectedBatch && <button type="button" className="secondary" onClick={changeBatch}>Trocar lote {selectedBatch.code}</button>}
+        </div>
+        {!loading && availableByBatch.length === 0 && <p className="wide muted">Nenhuma posição com unidades disponíveis.</p>}
+        {!loading && options && <>
+          {primaryPositions.map(renderPosition)}
+          {otherPositions.length > 0 && <button type="button" className="wide secondary assembly-more" aria-expanded={showOtherPositions} onClick={() => setShowOtherPositions((current) => !current)}>{showOtherPositions ? 'Ocultar outras posições' : `Ver outras posições (${otherPositions.length})`}</button>}
+          {showOtherPositions && otherPositions.map(renderPosition)}
+        </>}
+        {options && options.positions.meta.totalPages > 1 && <div className="wide row-actions"><button type="button" className="secondary" disabled={page <= 1 || loading} onClick={() => { setLoading(true); setPage((current) => current - 1); }}>Anteriores</button><span>{page}/{options.positions.meta.totalPages}</span><button type="button" className="secondary" disabled={page >= options.positions.meta.totalPages || loading} onClick={() => { setLoading(true); setPage((current) => current + 1); }}>Próximas</button></div>}
         <p className="wide available-balance">Parcela informada: <strong>{allocated} de {Number.isSafeInteger(needed) ? needed : 0} UN</strong></p>
       </>}
     </>}
