@@ -6,6 +6,7 @@ import { StockLocationEntity } from '../stocks/entities/stock-location.entity';
 
 export type Sector = 'REVISAO' | 'PRODUCAO' | 'EXPEDICAO';
 export type ShipmentStatus = 'AGUARDANDO_RECEBIMENTO' | 'EM_SEPARACAO' | 'CONFIRMADO' | 'RECUSADO' | 'CANCELADO';
+export type ShipmentLoadingStatus = 'CARREGADO' | 'NAO_CARREGADO';
 export interface ShipmentAssembly {
   packageProductId: string;
   packageProductSnapshot: { code: string; name: string; defaultUnit: string };
@@ -30,6 +31,8 @@ export class ShipmentEntity {
   @Column({ name: 'request_key', type: 'uuid' }) requestKey!: string;
   @Column({ name: 'origin_sector', type: 'varchar' }) originSector!: Sector;
   @Column({ name: 'destination_sector', type: 'varchar' }) destinationSector!: Sector;
+  @Column({ name: 'loading_status', type: 'varchar', length: 15, nullable: true }) loadingStatus!: ShipmentLoadingStatus | null;
+  @Column({ name: 'vehicle_plate', type: 'varchar', length: 20, nullable: true }) vehiclePlate!: string | null;
   @Column({ name: 'created_by_id', type: 'uuid' }) createdById!: string;
   @ManyToOne(() => UserEntity) @JoinColumn({ name: 'created_by_id' }) createdBy!: UserEntity;
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;

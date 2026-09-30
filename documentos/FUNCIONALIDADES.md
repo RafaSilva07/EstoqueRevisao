@@ -59,6 +59,8 @@ A Revisão acessa **Envios e recebimentos** pela Home ou menu; Produção/Expedi
 
 Novo envio aceita vários itens e exige conferência do resumo. A seleção de produto possui campos independentes de código e descrição com sugestões filtradas durante a digitação; escolher em qualquer campo identifica o produto único e preenche o outro automaticamente, sem uma terceira seleção. A lista também pode ser aberta pelos botões dos campos e refinada por teclado.
 
+No envio **Expedição → Revisão**, o formulário exige escolher **Carregado** ou **Não carregado**. Em **Carregado**, a placa do veículo é obrigatória. Situação e placa aparecem na conferência, no recebimento e no detalhe histórico do envio; envios antigos sem o campo continuam legíveis.
+
 Usuários externos reutilizam o produto selecionado e os campos CONSERVADI/fabricação/validade. Na saída da Revisão, após selecionar o produto, o operador informa o lote ou a fabricação; o par é completado imediatamente pelo resolvedor central de lotes e fica visível antes da escolha da posição. A consulta é paginada no backend, aceita os filtros combinados e apresenta primeiro as posições de Lata Boa, seguidas dos demais locais por nome; lote, fabricação, validade, local e saldo continuam visíveis para distinguir a posição exata. A Revisão pode incluir posições de locais diferentes no mesmo envio.
 
 Em **Revisão → Expedição**, a opção **Montar fardos/caixas** usa o mesmo fluxo de novo envio. O operador escolhe o código `UN` e uma embalagem `FD/CX` vinculada. No modo comum, vê quantas embalagens cada posição (local + lote/data) forma isoladamente e o total combinado do lote; escolhe o lote e distribui as unidades entre suas posições paginadas. Apenas com **datas misturadas** vê a capacidade pelo saldo total, usa lotes/datas distintos e mostra **Lote 0 — datas misturadas** sem datas únicas. Resumo, recebimento, histórico e PCP exibem a embalagem e as parcelas de origem. Recusa/cancelamento restaura as unidades a cada origem.
@@ -143,7 +145,9 @@ Abaixo dos filtros há dois níveis de seleção rápida: **Todos** ou um estoqu
 
 `POST /api/v1/movements/external-entries`
 
-Para Produção/Expedição, use Envios. A entrada direta rejeita esses locais no backend e os omite na seleção. Para outras origens, o fluxo seleciona origem externa, destino controlado e um ou mais itens. Recebe `items[].lot` com código e/ou fabricação e validade, sem cadastro prévio, mostra produto/lote/datas/quantidade no resumo antes da confirmação e protege reenvio por chave idempotente. Ao confirmar, incrementa o destino e abre o documento no histórico.
+O administrador geral pode registrar entrada direta a partir de qualquer origem externa ativa, inclusive Produção e Expedição, sem criar Envio nem exigir aceite do setor. O fluxo seleciona origem externa, destino controlado e um ou mais itens. Recebe `items[].lot` com código e/ou fabricação e validade, sem cadastro prévio, mostra produto/lote/datas/quantidade no resumo antes da confirmação e protege reenvio por chave idempotente. Ao confirmar, incrementa o destino imediatamente e abre a movimentação no histórico, com responsável e auditoria. A tela alerta para não registrar a mesma entrega também por Envio.
+
+A seleção da origem consulta especificamente todos os locais externos ativos. Se nenhum estiver cadastrado, a tela oferece acesso ao cadastro de uma origem externa antes de continuar.
 
 ## Saída externa
 

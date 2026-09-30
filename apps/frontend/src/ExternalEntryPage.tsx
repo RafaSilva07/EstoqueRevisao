@@ -9,9 +9,10 @@ import { ProductAutocomplete } from './ProductAutocomplete';
 
 interface EntryItem { key: string; product: Product; lot: OperationalLot; quantity: number }
 
-export function ExternalEntryPage({ onCreated }: { onCreated: (id: string) => void }) {
+export function ExternalEntryPage({ onCreated, onManageLocations }: { onCreated: (id: string) => void; onManageLocations: () => void }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [locations, setLocations] = useState<StockLocation[]>([]);
+  const [originLocations, setOriginLocations] = useState<StockLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
@@ -31,13 +32,14 @@ export function ExternalEntryPage({ onCreated }: { onCreated: (id: string) => vo
     void Promise.all([
       api.get<Paginated<Product>>('/products?limit=100&active=true'),
       api.get<Paginated<StockLocation>>('/stocks?limit=100&active=true'),
-    ]).then(([p, l]) => { if (active) { setProducts(p.items); setLocations(l.items); } })
+      api.get<Paginated<StockLocation>>('/stocks?kind=EXTERNAL&limit=100&active=true'),
+    ]).then(([p, l, origins]) => { if (active) { setProducts(p.items); setLocations(l.items); setOriginLocations(origins.items); } })
       .catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'Erro ao carregar produtos.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
   const product = products.find((item) => item.id === productId);
-  const locationName = (id: string) => locations.find((item) => item.id === id)?.name;
+  const locationName = (id: string) => originLocations.find((item) => item.id === id)?.name ?? locations.find((item) => item.id === id)?.name;
   function resetLot() { setLot(emptyLot); setLotReady(false); setLotKey((key) => key + 1); }
   function closeItem() { setAdding(false); setError(''); setProductId(''); resetLot(); setQuantity(''); }
 
@@ -54,14 +56,14 @@ export function ExternalEntryPage({ onCreated }: { onCreated: (id: string) => vo
   if (loading) return <LoadingState label="Preparando entrada" />;
   return <>
     <PageHeader eyebrow="Movimentação" title="Entrada externa" description="Selecione o produto e informe lote ou fabricação, validade e quantidade." />
-    <Notice kind="info">Produção e Expedição utilizam Envios com confirmação do destinatário. Esta entrada é somente para outras origens.</Notice>
+    <Notice kind="info">A entrada manual credita o estoque imediatamente, sem confirmação do setor de origem. Para uma entrega acompanhada pelo destinatário, use Envios. Não registre a mesma entrega nos dois fluxos.</Notice>
     <OperationGuide />
     {error && !adding && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
     <section className="surface form-panel"><h2>1. Origem e destino</h2><div className="form-grid">
-      <label>Origem externa *<select value={originId} onChange={(event) => setOriginId(event.target.value)} required><option value="">Selecione</option>{locations.filter((item) => item.kind === 'EXTERNAL' && !item.sector).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+      <label>Origem externa *<select value={originId} onChange={(event) => setOriginId(event.target.value)} required><option value="">Selecione</option>{originLocations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       <label>Destino controlado *<select value={destinationId} onChange={(event) => setDestinationId(event.target.value)} required><option value="">Selecione</option>{locations.filter((item) => item.kind !== 'EXTERNAL').map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       <label className="wide">Observação (opcional)<textarea value={observation} onChange={(event) => setObservation(event.target.value)} maxLength={1000} rows={2} /></label>
-    </div></section>
+    </div>{originLocations.length === 0 && <Notice kind="info">Não há origem externa ativa cadastrada. Cadastre um local do tipo “Origem/destino externo” para continuar. <button type="button" className="secondary" onClick={onManageLocations}>Cadastrar origem externa</button></Notice>}</section>
     {adding && <Modal labelledBy="add-product-title" onClose={closeItem}><div className="panel-heading item-list-heading"><h2 id="add-product-title">Adicionar produto</h2><button type="button" className="secondary" onClick={closeItem}>Cancelar</button></div>
       {error && <Notice kind="error">{error}</Notice>}<form className="form-grid" onSubmit={addItem}>
       <ProductAutocomplete availableProducts={products} initialProduct={product} onChange={(selected) => { setProductId(selected?.id ?? ''); resetLot(); }} />
@@ -76,6 +78,7 @@ export function ExternalEntryPage({ onCreated }: { onCreated: (id: string) => vo
     {confirming && <Modal labelledBy="entry-title" busy={submission.busy} onClose={() => setConfirming(false)}>
       <h2 id="entry-title">{submission.conflict ? 'Mesmo lote com outra validade' : 'Confirmar entrada?'}</h2>
       <p>{locationName(originId)} → {locationName(destinationId)}</p>
+      {originLocations.find((item) => item.id === originId)?.sector && <Notice kind="info">Esta entrada de Produção ou Expedição será efetivada agora, sem Envio nem confirmação do remetente. Confira se a mesma entrega ainda não foi registrada em Envios.</Notice>}
       {submission.conflict && <Notice kind="info">{submission.conflict.message}</Notice>}
       {submission.error && <Notice kind="error">{submission.error}</Notice>}
       <div className="entry-items">{items.map((item) => <article className="entry-item" key={item.key}><div>{itemSummary(item)}</div></article>)}</div>

@@ -1,5 +1,13 @@
 # Histórico de desenvolvimento
 
+## Origem externa da entrada manual e revisão de segurança
+
+A entrada direta passou a consultar origens externas separadamente e a orientar o cadastro quando não houver opções. Por decisão posterior, o administrador geral também pode usar Produção/Expedição como origem de uma entrada manual, efetivada e auditada sem Envio; saídas para esses setores continuam por Envios. A revisão de segurança registrou pendências de rate limiting, IP atrás de proxy e cabeçalhos HTTP; ver [relatório da etapa 57](./relatorios/RELATORIO_ETAPA_57_ORIGEM_ENTRADA_REVISAO_SEGURANCA.md).
+
+## Carregamento no envio Expedição → Revisão
+
+`ShipmentLoading1791158400000` adiciona situação de carregamento e placa opcional conforme a situação ao envio, com constraint para proteger a combinação e manter envios anteriores sem valores inventados. A informação é exigida nos novos envios dessa rota e aparece na conferência, no recebimento e no histórico. Ver [relatório da etapa 56](./relatorios/RELATORIO_ETAPA_56_CARREGAMENTO_ENVIO_EXP_REV.md).
+
 ## Grupos e registros individuais de movimentação
 
 `MovementRecords1790726400000` atribui a cada item um código filho do grupo (`-A` até `-Z`, depois `-AA`...), inclusive em operações com um único item. Envios preservam o código do filho após confirmação. Histórico, movimentos, Home e PCP passam a consultar registros por padrão, com visão opcional por grupo; PCP executa filhos independentemente, mantendo o cabeçalho como resumo. A migration preserva saldos e dados antigos, preenche códigos legados e transporta o estado PCP anterior para cada filho. Transferências mantêm a ausência de código público documentada anteriormente.

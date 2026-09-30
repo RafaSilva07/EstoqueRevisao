@@ -23,4 +23,13 @@ describe('Interface de envios', () => {
     expect(html).toContain('Observação geral do envio');
     expect(html).toContain('<button disabled="">Conferir e enviar</button>');
   });
+  it('oferece situação de carregamento somente no envio da Expedição', () => {
+    const expedition = renderToStaticMarkup(<NewShipment sector="EXPEDICAO" onCreated={() => undefined} onClose={() => undefined} />);
+    expect(expedition).toContain('Carregamento *');
+    expect(expedition).toContain('Carregado');
+    expect(expedition).toContain('Não carregado');
+    expect(expedition).toContain('<button disabled="">Conferir e enviar</button>');
+    const production = renderToStaticMarkup(<NewShipment sector="PRODUCAO" onCreated={() => undefined} onClose={() => undefined} />);
+    expect(production).not.toContain('Carregamento *');
+  });
 });

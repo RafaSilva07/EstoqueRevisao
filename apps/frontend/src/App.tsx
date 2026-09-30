@@ -289,7 +289,7 @@ export function App() {
       {activeSector !== 'PCP' && ['shipments', 'shipment-new', 'shipment-sent'].includes(page) && can('shipments.read') && <ShipmentsPage key={`${activeSector}:${page}`} user={activeUser} initialId={selectedRecordId} initialView={page === 'shipment-sent' ? 'sent' : 'pending'} initialCreating={page === 'shipment-new'} onHistory={() => go('history')} />}
       {activeSector === 'PCP' && ['pcp', 'pcp-all', 'pcp-executed'].includes(page) && can('pcp.movements.read') && <PcpPage key={page} initialId={selectedRecordId} initialStatus={page === 'pcp-all' ? '' : page === 'pcp-executed' ? 'EXECUTADA' : 'PENDENTE'} />}
       {reviewSector && <>
-        {page === 'new-entry' && adminMode && can('movements.create') && <ExternalEntryPage onCreated={(id) => completeMovement(id, 'Entrada registrada com sucesso.')} />}
+        {page === 'new-entry' && adminMode && can('movements.create') && <ExternalEntryPage onCreated={(id) => completeMovement(id, 'Entrada registrada com sucesso.')} onManageLocations={() => navigate('stocks')} />}
         {page === 'new-exit' && adminMode && can('movements.create') && <ExternalExitPage onCreated={(id) => completeMovement(id, 'Saida registrada com sucesso.')} />}
         {page === 'new-transfer' && can('movements.create') && <InternalTransferPage prefill={transferPrefill} onCreated={(id) => completeMovement(id, 'Transferencia realizada com sucesso.')} />}
         {page === 'new-review' && can('movements.create') && <ReviewPage prefill={reviewPrefill} onCreated={(id) => completeMovement(id, 'Revisao realizada com sucesso.')} />}

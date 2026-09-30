@@ -124,6 +124,7 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 - Usuários possuem setor `REVISAO`, `PRODUCAO`, `EXPEDICAO` ou `PCP`. O setor atribuído vem da sessão validada no banco, nunca de um campo operacional comum. PCP é um setor administrativo e não participa como origem ou destino de envios de mercadoria.
 - Somente o `ADMIN` geral pode acessar o modo completo `ADMIN`. Administradores de área alternam apenas entre os dois setores de seu perfil. O modo escolhido vale por requisição, aplica todas as restrições operacionais do setor e não altera o setor cadastrado nem a identidade registrada em histórico e auditoria. Cabeçalhos de alternância fora dos modos atribuídos são rejeitados.
 - Produção/Expedição enviam somente para Revisão e decidem somente recebimentos destinados ao próprio setor. Não acessam operações, saldos ou relatórios internos da Revisão.
+- Em novos envios **Expedição → Revisão**, o remetente informa obrigatoriamente se a carga está **Carregada** ou **Não carregada**. Se carregada, informa a placa do veículo; se não carregada, não informa placa. Essa informação pertence ao envio inteiro, permanece no histórico/auditoria e não altera o cálculo de estoque. Não se aplica aos demais sentidos de envio. Envios históricos anteriores ao campo continuam consultáveis sem essa informação.
 - Revisão envia para Produção/Expedição e decide os envios desses setores. Permissões `shipments.read/create/decide` complementam a validação do setor.
 - Um envio tem vários itens e nasce `AGUARDANDO_RECEBIMENTO`. Os itens não são editáveis depois do envio. Somente o destinatário pode decidir uma única vez: `CONFIRMADO` ou `RECUSADO`; recusa exige motivo de até 1000 caracteres.
 - Enquanto permanecer `AGUARDANDO_RECEBIMENTO`, somente o usuário autor pode cancelar o envio inteiro, informando motivo obrigatório de até 1000 caracteres. O registro passa a `CANCELADO`, permanece no histórico e não pode ser cancelado novamente. Depois de confirmação, recusa ou início da separação, o cancelamento pelo remetente é bloqueado.
@@ -150,7 +151,8 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 
 ## Entrada externa
 
-- Para Produção/Expedição, o fluxo obrigatório é **Envios**. Entrada direta atende somente outros locais externos ativos, sem setor associado.
+- A entrada direta permite qualquer origem externa ativa, inclusive Produção e Expedição, quando o administrador geral registra manualmente o recebimento na Revisão. Ela é uma movimentação independente e efetivada imediatamente, sem confirmação do setor remetente; não deve duplicar um Envio da mesma entrega.
+- A origem, o usuário responsável, a data/hora, os itens e a operação ficam preservados no histórico e na auditoria. Correções seguem o estorno existente, sem editar ou excluir fisicamente a entrada.
 - Destino deve ser local ativo `STOCK` ou `SUBSTOCK`.
 - A origem externa não possui saldo controlado a reduzir.
 - Cada item soma sua quantidade à posição de destino; posição inexistente é criada e posição existente é acumulada.

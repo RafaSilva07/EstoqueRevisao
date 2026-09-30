@@ -3,6 +3,7 @@ export type Sector = 'REVISAO' | 'PRODUCAO' | 'EXPEDICAO' | 'PCP';
 export type ShipmentSector = Exclude<Sector, 'PCP'>;
 export const sectorLabel: Record<Sector, string> = { REVISAO: 'Revisão', PRODUCAO: 'Produção', EXPEDICAO: 'Expedição', PCP: 'PCP' };
 export type ShipmentStatus = 'AGUARDANDO_RECEBIMENTO' | 'EM_SEPARACAO' | 'CONFIRMADO' | 'RECUSADO' | 'CANCELADO';
+export type ShipmentLoadingStatus = 'CARREGADO' | 'NAO_CARREGADO';
 export const shipmentStatusLabel: Record<ShipmentStatus, string> = {
   AGUARDANDO_RECEBIMENTO: 'Aguardando recebimento', EM_SEPARACAO: 'Em separação pela Revisão', CONFIRMADO: 'Confirmado', RECUSADO: 'Recusado', CANCELADO: 'Cancelado pelo remetente',
 };
@@ -29,6 +30,7 @@ export interface Shipment {
       occurredAt: string; items?: Array<{ id: string; shipmentItemId?: string | null; codigoRegistro?: string | null; quantity: number; productSnapshot: Pick<Product, 'code' | 'name' | 'defaultUnit'> | null; batch: Batch }> }>;
 
   id: string; originSector: ShipmentSector; destinationSector: ShipmentSector; status: ShipmentStatus;
+  loadingStatus: ShipmentLoadingStatus | null; vehiclePlate: string | null;
   shipmentKind: 'NORMAL' | 'RETORNO_IMEDIATO' | 'MONTAGEM'; sourceShipmentId: string | null;
   sourceShipment?: { id: string; codigoMovimentacao: string } | null;
   derivedShipments?: Array<{ id: string; status: ShipmentStatus }>;

@@ -138,6 +138,21 @@ describe('MovementsService', () => {
     expect(stock.removeQuantity).not.toHaveBeenCalled();
   });
 
+  it.each(['PRODUCAO', 'EXPEDICAO'] as const)('aceita entrada manual de %s com saldo, responsável e auditoria', async (sector) => {
+    locations.findById.mockImplementation((id: string) => Promise.resolve(Object.assign(new StockLocationEntity(), {
+      id, active: true, kind: id === originId ? StockLocationKind.External : StockLocationKind.Substock,
+      sector: id === originId ? sector : null,
+    })));
+    await service.createExternalEntry(dto, userId, { requestId: dto.requestKey, ipAddress: null, userAgent: null });
+    expect(stock.addQuantity).toHaveBeenCalledTimes(2);
+    expect(repository.save).toHaveBeenCalledWith(expect.objectContaining({ type: MovementType.ExternalEntry,
+      originLocationId: originId, responsibleUserId: userId }), manager);
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'EXTERNAL_ENTRY_CREATE', userId }));
+    const auditCalls = audit.record.mock.calls as Array<[{ newValues: { originLocationId: string } }]>;
+    const auditInput = auditCalls[0][0];
+    expect(auditInput.newValues.originLocationId).toBe(originId);
+  });
+
   it('rejeita origem que nao seja externa e ativa', async () => {
     locations.findById.mockResolvedValue(Object.assign(new StockLocationEntity(), { active: true, kind: StockLocationKind.Stock }));
     await expect(service.createExternalEntry(dto, userId, { requestId: dto.requestKey, ipAddress: null, userAgent: null })).rejects.toBeInstanceOf(BadRequestException);
@@ -238,6 +253,16 @@ describe('MovementsService', () => {
         stockLocationId: destinationId,
       }, 3, manager);
       expect(stock.addQuantity).not.toHaveBeenCalled();
+    });
+
+    it('continua exigindo Envio para saída destinada à Expedição', async () => {
+      locations.findById.mockImplementation((id: string) => Promise.resolve(Object.assign(new StockLocationEntity(), {
+        id, active: true, kind: id === originId ? StockLocationKind.External : StockLocationKind.Substock,
+        sector: id === originId ? 'EXPEDICAO' : null,
+      })));
+      await expect(service.createExternalExit(exitDto, userId, { requestId: exitDto.requestKey, ipAddress: null, userAgent: null }))
+        .rejects.toMatchObject({ response: { code: 'SECTOR_SHIPMENT_REQUIRED' } });
+      expect(stock.removeQuantity).not.toHaveBeenCalled();
     });
 
     it('grava tipo, responsavel e auditoria de saida', async () => {

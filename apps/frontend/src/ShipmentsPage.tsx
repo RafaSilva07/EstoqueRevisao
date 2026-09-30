@@ -19,6 +19,7 @@ function ShipmentDecision({ shipment, refuse, onClose, onDone }: { shipment: Shi
   const submission = useMovementSubmission(`/shipments/${shipment.id}/${refuse ? 'refusal' : 'confirmation'}`, onDone, false);
   return <Modal labelledBy="shipment-decision-title" busy={submission.busy} onClose={onClose}>
     <h2 id="shipment-decision-title">{refuse ? 'Recusar envio' : 'Confirmar recebimento'}</h2>
+    {shipment.loadingStatus && <p><strong>Carregamento:</strong> {shipment.loadingStatus === 'CARREGADO' ? `Carregado · placa ${shipment.vehiclePlate}` : 'Não carregado'}</p>}
     {shipment.observation && <p><strong>Observação geral:</strong> {shipment.observation}</p>}
     <ShipmentItems shipment={shipment} />
     <p>{refuse ? shipment.originSector === 'REVISAO' ? 'O saldo em trânsito voltará às posições originais da Revisão.' : 'Nenhum saldo será adicionado à Revisão.' : shipment.destinationSector === 'REVISAO' ? 'Os itens serão adicionados a A Revisar.' : 'A saída será concluída. O saldo reservado não será descontado novamente.'}</p>

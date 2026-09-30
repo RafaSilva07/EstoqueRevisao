@@ -57,6 +57,12 @@ export function ShipmentDetailView({ shipment, titleId, recordId, onSelectRecord
       <div className="movement-route-place"><span>Destino</span><strong>{sectorLabel[shipment.destinationSector]}</strong></div>
     </section>
 
+    {shipment.loadingStatus && <section className="movement-detail-section" aria-labelledby="shipment-loading-title">
+      <h3 id="shipment-loading-title">Carregamento</h3>
+      <div className="movement-facts"><div><span>Situação</span><strong>{shipment.loadingStatus === 'CARREGADO' ? 'Carregado' : 'Não carregado'}</strong></div>
+        {shipment.vehiclePlate && <div><span>Placa do veículo</span><strong>{shipment.vehiclePlate}</strong></div>}</div>
+    </section>}
+
     <section className="movement-detail-section" aria-labelledby="shipment-products-title">
       <h3 id="shipment-products-title">Produtos e quantidades</h3>
       {recordId && !selectedItem ? <p className="muted">Este registro não foi encontrado no envio.</p>

@@ -39,6 +39,14 @@ describe('DTOs de envios', () => {
     });
     expect((await validate(invalid)).length).toBeGreaterThan(0);
   });
+  it('valida estado do carregamento e normaliza a placa informada', async () => {
+    const base = { requestKey: randomUUID(), destinationSector: 'REVISAO', items: [{ productId: randomUUID(), batchId: randomUUID(), quantity: 1 }] };
+    const valid = plainToInstance(CreateShipmentDto, { ...base, loadingStatus: 'CARREGADO', vehiclePlate: '  abc1d23  ' });
+    expect(await validate(valid)).toHaveLength(0);
+    expect(valid.vehiclePlate).toBe('abc1d23');
+    expect((await validate(plainToInstance(CreateShipmentDto, { ...base, loadingStatus: 'INDEFINIDO' }))).length).toBeGreaterThan(0);
+    expect((await validate(plainToInstance(CreateShipmentDto, { ...base, vehiclePlate: 'x'.repeat(21) }))).length).toBeGreaterThan(0);
+  });
   it('valida parcelas inteiras da montagem e rejeita origem inválida', async () => {
     const data = { requestKey: randomUUID(), destinationSector: 'EXPEDICAO', items: [{ productId: randomUUID(),
       quantity: 2, assembly: { packageProductId: randomUUID(), mixedDates: true,

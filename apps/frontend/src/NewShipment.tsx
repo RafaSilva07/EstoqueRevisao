@@ -7,7 +7,7 @@ import { ProductAutocomplete } from './ProductAutocomplete';
 import { emptyLot, OperationalLot } from './operational-lot';
 import { formatDate } from './format';
 import { useMovementSubmission } from './useMovementSubmission';
-import { ShipmentSector, sectorLabel } from './shipments';
+import { ShipmentLoadingStatus, ShipmentSector, sectorLabel } from './shipments';
 import { allShipmentPhotosReady, PhotoAttachment } from './shipment-photo-state';
 import { ShipmentPhotoInput } from './ShipmentPhotoInput';
 import { AssemblyDraft, AssemblyItemForm } from './AssemblyItemForm';
@@ -17,6 +17,8 @@ interface DraftItem { key: string; product: Product; lot: OperationalLot; quanti
 export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSector; onCreated: (id: string) => void; onClose: () => void }) {
   const outgoing = sector === 'REVISAO';
   const [destination, setDestination] = useState<ShipmentSector>(outgoing ? 'PRODUCAO' : 'REVISAO');
+  const [loadingStatus, setLoadingStatus] = useState<ShipmentLoadingStatus | ''>('');
+  const [vehiclePlate, setVehiclePlate] = useState('');
   const [assemblyMode, setAssemblyMode] = useState(false);
   const [product, setProduct] = useState<Product | null>(null);
   const [productResetKey, setProductResetKey] = useState(0);
@@ -45,6 +47,7 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
   const canQueryPositions = outgoing && Boolean(product) && Boolean(batchCode.trim() || manufacturingDate);
   const allPhotosReady = allShipmentPhotosReady(items, photoLimits);
   const photoTotal = items.reduce((sum, item) => sum + item.photos.length, 0);
+  const loadingReady = sector !== 'EXPEDICAO' || (loadingStatus !== '' && (loadingStatus !== 'CARREGADO' || vehiclePlate.trim().length > 0));
 
   useEffect(() => () => { photoUrls.current.forEach((url) => URL.revokeObjectURL(url)); }, []);
 
@@ -213,6 +216,8 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
     <PageHeader eyebrow="Envios entre setores" title={outgoing ? 'Novo envio' : 'Novo envio para Revisão'} action={<button className="secondary" onClick={onClose}>Voltar</button>} />
     {error && !adding && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
     <section className="surface form-panel"><h2>1. Destino</h2>{outgoing ? <label>Enviar para<select value={destination} disabled={items.length > 0} onChange={(event) => { setDestination(event.target.value as ShipmentSector); setAssemblyMode(false); }}><option value="PRODUCAO">Produção</option><option value="EXPEDICAO">Expedição</option></select></label> : <p>Revisão · entrada em A Revisar somente após confirmação.</p>}
+      {sector === 'EXPEDICAO' && <div className="form-grid"><label>Carregamento *<select required value={loadingStatus} onChange={(event) => { setLoadingStatus(event.target.value as ShipmentLoadingStatus | ''); setVehiclePlate(''); }}><option value="">Selecione</option><option value="CARREGADO">Carregado</option><option value="NAO_CARREGADO">Não carregado</option></select></label>
+        {loadingStatus === 'CARREGADO' && <label>Placa do veículo *<input required value={vehiclePlate} onChange={(event) => setVehiclePlate(event.target.value.toUpperCase())} maxLength={20} autoCapitalize="characters" placeholder="Informe a placa" /></label>}</div>}
       {outgoing && destination === 'EXPEDICAO' && <label className="assembly-mixed-toggle"><input type="checkbox" checked={assemblyMode} disabled={items.length > 0} onChange={(event) => setAssemblyMode(event.target.checked)} /> Montar fardos/caixas com unidades disponíveis</label>}
       {outgoing && <p className="muted">Ao enviar, a quantidade sai do disponível e fica em trânsito. Uma recusa devolve o saldo à posição original.</p>}</section>
     {adding && <Modal labelledBy="add-product-title" onClose={closeItem}><div className="panel-heading item-list-heading"><h2 id="add-product-title">Adicionar produto</h2><button type="button" className="secondary" onClick={closeItem}>Cancelar</button></div>
@@ -243,14 +248,17 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
       <label>Observação geral do envio (opcional)<textarea value={observation} onChange={(event) => setObservation(event.target.value)} maxLength={1000} rows={3} /></label>
       {!photoLimits && <p className="action-hint">Carregando os limites de fotos…</p>}
       {!allPhotosReady && photoLimits && items.length > 0 && <p className="action-hint photo-required">Adicione de {photoLimits.minimum} a {photoLimits.maximum} foto(s) por produto, até 100 no envio.</p>}
-      <button disabled={!allPhotosReady} onClick={() => { submission.resetConfirmation(); setConfirming(true); }}>Conferir e enviar</button></section>
+      <button disabled={!allPhotosReady || !loadingReady} onClick={() => { submission.resetConfirmation(); setConfirming(true); }}>Conferir e enviar</button></section>
     {confirming && <Modal labelledBy="shipment-summary-title" busy={submission.busy} onClose={() => setConfirming(false)}>
       <h2 id="shipment-summary-title">{sectorLabel[sector]} → {sectorLabel[destination]}</h2>{summary}
+      {sector === 'EXPEDICAO' && <p><strong>Carregamento:</strong> {loadingStatus === 'CARREGADO' ? `Carregado · placa ${vehiclePlate.trim().toUpperCase()}` : 'Não carregado'}</p>}
       <p>Após enviar, os itens não poderão ser editados. O destinatário confirmará ou recusará o recebimento.</p>
       {submission.conflict && <Notice kind="info">{submission.conflict.message}</Notice>}
       {submission.error && <Notice kind="error">{submission.error}</Notice>}
       {observation.trim() && <p><strong>Observação geral:</strong> {observation.trim()}</p>}
-      <div className="dialog-actions"><button className="secondary" disabled={submission.busy} onClick={() => setConfirming(false)}>Voltar para conferir</button><button disabled={submission.busy || !allPhotosReady} onClick={() => void submission.submit({ destinationSector: destination, observation: observation.trim() || undefined, items: items.map((item) => ({ productId: item.product.id, quantity: item.quantity, observation: item.observation ?? undefined, photoCount: item.photos.length,
+      <div className="dialog-actions"><button className="secondary" disabled={submission.busy} onClick={() => setConfirming(false)}>Voltar para conferir</button><button disabled={submission.busy || !allPhotosReady || !loadingReady} onClick={() => void submission.submit({ destinationSector: destination, observation: observation.trim() || undefined,
+        ...(sector === 'EXPEDICAO' ? { loadingStatus, ...(loadingStatus === 'CARREGADO' ? { vehiclePlate: vehiclePlate.trim().toUpperCase() } : {}) } : {}),
+        items: items.map((item) => ({ productId: item.product.id, quantity: item.quantity, observation: item.observation ?? undefined, photoCount: item.photos.length,
         ...(item.assembly ? { assembly: { packageProductId: item.assembly.packageProduct.id, mixedDates: item.assembly.mixedDates,
           sources: item.assembly.sources.map((source) => ({ batchId: source.position.batchId, stockLocationId: source.position.stockLocationId, quantity: source.quantity })) } }
           : item.position ? { batchId: item.position.batchId, stockLocationId: item.position.stockLocationId } : { lot: item.lot }) })) }, items.flatMap((item) => item.photos.map((photo) => photo.file)))}>{submission.busy ? 'Enviando…' : submission.conflict ? 'Confirmar validade diferente e enviar' : 'Enviar ao destinatário'}</button></div>

@@ -81,7 +81,8 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
   const image = (): UploadedImage => ({ buffer: Buffer.from('valid-photo'), mimetype: 'image/jpeg', size: 11, originalname: 'ignored.jpg' });
   const createShipment = (dto: CreateShipmentDto, user: AuthenticatedUser, meta: AuditRequestMetadata): Promise<ShipmentEntity> =>
     service.create(dto, dto.items.map(image), user, meta);
-  const incoming = (sector: 'PRODUCAO' | 'EXPEDICAO' = 'PRODUCAO'): Promise<ShipmentEntity> => createShipment({ requestKey: randomUUID(), destinationSector: 'REVISAO', items: [{ productId, batchId, quantity: 10 }] }, users[sector], metadata());
+  const incoming = (sector: 'PRODUCAO' | 'EXPEDICAO' = 'PRODUCAO'): Promise<ShipmentEntity> => createShipment({ requestKey: randomUUID(), destinationSector: 'REVISAO',
+    ...(sector === 'EXPEDICAO' ? { loadingStatus: 'NAO_CARREGADO' as const } : {}), items: [{ productId, batchId, quantity: 10 }] }, users[sector], metadata());
   const reserve = (destinationSector: 'PRODUCAO' | 'EXPEDICAO' = 'PRODUCAO', quantity = 6, requestKey = randomUUID()): Promise<ShipmentEntity> => createShipment({ requestKey, destinationSector, items: [{ productId, batchId, stockLocationId: sourceId, quantity }] }, users.REVISAO, metadata());
   const balance = (location = sourceId): Promise<number> => stock.getBalance({ productId, batchId, stockLocationId: location });
   const seed = (quantity = 10, location = sourceId): Promise<StockPositionEntity> => db.transaction((manager) => stock.addQuantity({ productId, batchId, stockLocationId: location }, quantity, manager));
@@ -197,6 +198,24 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
       'SELECT codigo_registro FROM movement_items WHERE movement_id=$1', [movement.id]))[0].codigo_registro;
     expect(linkedCode).toBe(shipment.items[0].codigoRegistro);
     expect(await db.getRepository(AuditLogEntity).countBy({ entityId: shipment.id })).toBe(2);
+  });
+  it('Expedição → Revisão exige carregamento, registra placa quando carregado e protege a rota no banco', async () => {
+    const base: CreateShipmentDto = { requestKey: randomUUID(), destinationSector: 'REVISAO', items: [{ productId, batchId, quantity: 2 }] };
+    await expect(createShipment(base, users.EXPEDICAO, metadata())).rejects.toBeInstanceOf(BadRequestException);
+    await expect(createShipment({ ...base, loadingStatus: 'CARREGADO', vehiclePlate: '  ' }, users.EXPEDICAO, metadata())).rejects.toBeInstanceOf(BadRequestException);
+    await expect(createShipment({ ...base, loadingStatus: 'NAO_CARREGADO', vehiclePlate: 'ABC1D23' }, users.EXPEDICAO, metadata())).rejects.toBeInstanceOf(BadRequestException);
+    await expect(createShipment({ ...base, loadingStatus: 'CARREGADO', vehiclePlate: 'ABC1D23' }, users.PRODUCAO, metadata())).rejects.toBeInstanceOf(BadRequestException);
+    expect(await db.getRepository(ShipmentEntity).count()).toBe(0);
+    const loaded = await createShipment({ ...base, loadingStatus: 'CARREGADO', vehiclePlate: ' abc1d23 ' }, users.EXPEDICAO, metadata());
+    expect(loaded).toMatchObject({ loadingStatus: 'CARREGADO', vehiclePlate: 'ABC1D23' });
+    expect((await db.getRepository(ShipmentEntity).findOneByOrFail({ id: loaded.id })).vehiclePlate).toBe('ABC1D23');
+    const expeditionLocation = await db.getRepository(StockLocationEntity).findOneByOrFail({ sector: 'EXPEDICAO' });
+    await expect(db.query(`INSERT INTO shipments
+      (id, request_key, origin_sector, destination_sector, created_by_id, origin_location_id, destination_location_id, loading_status)
+      VALUES ($1, $2, 'EXPEDICAO', 'REVISAO', $3, $4, $5, 'CARREGADO')`,
+    [randomUUID(), randomUUID(), users.EXPEDICAO.id, expeditionLocation.id, sourceId])).rejects.toMatchObject({ constraint: 'shipments_loading_check' });
+    const unloaded = await incoming('EXPEDICAO');
+    expect(unloaded).toMatchObject({ loadingStatus: 'NAO_CARREGADO', vehiclePlate: null });
   });
   it('consolida separação vencida com request UUID válido sem derrubar as consultas', async () => {
     const shipment = await incoming('EXPEDICAO');

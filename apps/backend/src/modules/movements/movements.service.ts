@@ -424,7 +424,9 @@ export class MovementsService {
           throw new BadRequestException(rules.invalidDestination);
         }
 
-        if (origin.sector || destination.sector) throw new BadRequestException({ code: 'SECTOR_SHIPMENT_REQUIRED', message: 'Para Produção ou Expedição, utilize Envios e aguarde a confirmação do destinatário.' });
+        if (destination.sector || (origin.sector && rules.type !== MovementType.ExternalEntry)) {
+          throw new BadRequestException({ code: 'SECTOR_SHIPMENT_REQUIRED', message: 'Para saídas destinadas à Produção ou Expedição, utilize Envios e aguarde a confirmação do destinatário.' });
+        }
 
         // Resolve all inline lots within the movement transaction. Lock products before stock
         // rows, in a stable order, so competing entries cannot create duplicate variants.

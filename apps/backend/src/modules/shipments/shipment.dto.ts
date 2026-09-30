@@ -3,7 +3,7 @@ import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsIn, IsI
 import { OperationalLotDto } from '../batches/dto/operational-lot.dto';
 import { PaginationQueryDto } from '../../shared/pagination/pagination-query.dto';
 import { trimString } from '../../shared/validation/transforms';
-import { Sector, ShipmentStatus } from './shipment.entity';
+import { Sector, ShipmentLoadingStatus, ShipmentStatus } from './shipment.entity';
 
 export class ShipmentAssemblySourceDto {
   @IsUUID() batchId!: string;
@@ -48,6 +48,8 @@ export class CompleteSeparationDto extends SeparationDraftDto {}
 export class CreateShipmentDto extends ExpirationConfirmationDto {
   @IsUUID() requestKey!: string;
   @IsIn(['REVISAO','PRODUCAO','EXPEDICAO']) destinationSector!: Sector;
+  @IsOptional() @IsIn(['CARREGADO', 'NAO_CARREGADO']) loadingStatus?: ShipmentLoadingStatus;
+  @IsOptional() @Transform(trimString) @IsString() @MaxLength(20) vehiclePlate?: string;
   @IsOptional() @Transform(trimString) @IsString() @MaxLength(1000) observation?: string;
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => ShipmentItemDto)
   items!: ShipmentItemDto[];

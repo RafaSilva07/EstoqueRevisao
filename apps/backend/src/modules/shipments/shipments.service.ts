@@ -24,6 +24,7 @@ import { SettingsService } from '../settings/settings.service';
 import { AuditLogEntity } from '../audit/entities/audit-log.entity';
 import { validatePhotoCounts } from './shipment-photo-counts';
 import { assemblyOutput } from './shipment-assembly';
+import { resolveShipmentLoading } from './shipment-loading';
 
 @Injectable()
 export class ShipmentsService {
@@ -210,6 +211,7 @@ export class ShipmentsService {
   private async persist(dto: CreateShipmentDto, photos: StoredImage[], counts: number[], user: AuthenticatedUser, metadata: AuditRequestMetadata): Promise<{ id: string; created: boolean }> {
     const sector = this.sector(user);
     if ((sector === 'REVISAO') === (dto.destinationSector === 'REVISAO')) throw new BadRequestException('O envio deve ocorrer entre Revisão e Produção ou Expedição.');
+    const loading = resolveShipmentLoading(sector, dto.destinationSector, dto.loadingStatus, dto.vehiclePlate);
     return this.dataSource.transaction(async (manager) => {
       // Serializes retries before reserving stock or creating immutable lots.
       await manager.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [dto.requestKey]);
@@ -232,6 +234,7 @@ export class ShipmentsService {
       if (!external || !source) throw new ConflictException('Locais dos setores ou A Revisar não configurados/ativos.');
       const shipment = Object.assign(new ShipmentEntity(), {
         requestKey: dto.requestKey, originSector: sector, destinationSector: dto.destinationSector,
+        ...loading,
         createdById: user.id, originLocationId: sector === 'REVISAO' ? null : external.id,
         destinationLocationId: sector === 'REVISAO' ? external.id : source.id,
         observation: dto.observation?.trim() || null,
@@ -703,7 +706,8 @@ export class ShipmentsService {
   }
   private record(shipment: ShipmentEntity, userId: string, action: string, manager: EntityManager, metadata: AuditRequestMetadata, extra: Record<string, unknown>): ReturnType<AuditService['record']> {
     return this.audit.record({ ...metadata, manager, userId, action, entityType: 'SHIPMENT', entityId: shipment.id, result: 'SUCCESS',
-      newValues: { codigoMovimentacao: shipment.codigoMovimentacao, originSector: shipment.originSector, destinationSector: shipment.destinationSector, observation: shipment.observation, status: shipment.status,
+      newValues: { codigoMovimentacao: shipment.codigoMovimentacao, originSector: shipment.originSector, destinationSector: shipment.destinationSector,
+        loadingStatus: shipment.loadingStatus, vehiclePlate: shipment.vehiclePlate, observation: shipment.observation, status: shipment.status,
         decidedAt: shipment.decidedAt, refusalReason: shipment.refusalReason, ...extra } });
   }
 }

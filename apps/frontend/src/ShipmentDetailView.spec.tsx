@@ -50,4 +50,17 @@ describe('detalhe compartilhado do envio', () => {
     expect(html).toContain('Produto avariado');
     expect(html).not.toContain('PCP: Pendente');
   });
+
+  it('mostra carregamento e placa no envio da Expedição sem inventar dados nos demais', () => {
+    const loaded = renderToStaticMarkup(<ShipmentDetailView shipment={{ ...shipment, originSector: 'EXPEDICAO', loadingStatus: 'CARREGADO', vehiclePlate: 'ABC1D23' }}
+      titleId="shipment-title" onClose={() => undefined} />);
+    expect(loaded).toContain('Carregamento');
+    expect(loaded).toContain('Placa do veículo');
+    expect(loaded).toContain('ABC1D23');
+    const unloaded = renderToStaticMarkup(<ShipmentDetailView shipment={{ ...shipment, originSector: 'EXPEDICAO', loadingStatus: 'NAO_CARREGADO', vehiclePlate: null }}
+      titleId="shipment-title" onClose={() => undefined} />);
+    expect(unloaded).toContain('Não carregado');
+    expect(unloaded).not.toContain('Placa do veículo');
+    expect(renderToStaticMarkup(<ShipmentDetailView shipment={shipment} titleId="shipment-title" onClose={() => undefined} />)).not.toContain('Carregamento');
+  });
 });

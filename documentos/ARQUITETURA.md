@@ -118,6 +118,7 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 ## Autenticação e autorização
 
 - Senhas são armazenadas somente como hash Argon2id com salt e custos configuráveis.
+- Revisão de segurança pendente: não há limitação de tentativas em `/auth/login` ou `/auth/refresh`. Antes de usar IP como chave de proteção, a origem do cliente deve vir de proxy confiável; `getAuditRequestMetadata` atualmente lê `X-Forwarded-For` diretamente. Endurecer também os cabeçalhos HTTP e exigir `AUTH_COOKIE_SECURE=true` no ambiente de produção. Essas medidas ainda não estão implementadas.
 - Access token JWT possui curta duração e fica somente em memória no frontend.
 - O JWT continua curto (15 minutos por padrão); a API renova uma vez após `401` nas chamadas autenticadas, inclusive fotos, e compartilha uma única renovação entre requisições simultâneas na mesma aba. A sessão completa expira 14 horas após o login (`REFRESH_TOKEN_TTL_HOURS`), sem prorrogação na rotação do refresh; cookie e autorização respeitam o tempo restante. Refresh recusado/expirado ou troca de conta invalida o estado local e exige novo login; falha transitória permite nova tentativa. Não há armazenamento de tokens no navegador.
 - Refresh token é aleatório, rotativo, enviado por cookie `HttpOnly`, `SameSite=Strict` e `Secure` configurável.

@@ -47,6 +47,7 @@ import { StockLocationDisplayMode1790812800000 } from './migrations/179081280000
 import { ShipmentAssembly1790899200000 } from './migrations/1790899200000-shipment-assembly';
 import { UserUiPreferences1790985600000 } from './migrations/1790985600000-user-ui-preferences';
 import { SessionPresence1791072000000 } from './migrations/1791072000000-session-presence';
+import { ShipmentLoading1791158400000 } from './migrations/1791158400000-shipment-loading';
 import { ReviewDestinationEntity } from '../modules/settings/review-destination.entity';
 
 export const databaseEntities = [
@@ -101,6 +102,7 @@ export const databaseMigrations = [
   ShipmentAssembly1790899200000,
   UserUiPreferences1790985600000,
   SessionPresence1791072000000,
+  ShipmentLoading1791158400000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {

@@ -121,6 +121,19 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     expect(await dataSource.getRepository(AuditLogEntity).countBy({ entityId: movement.id })).toBe(1);
   });
 
+  it.each(['PRODUCAO', 'EXPEDICAO'] as const)('registra entrada manual auditável de %s sem criar envio', async (sector) => {
+    const origin = await dataSource.getRepository(StockLocationEntity).findOneByOrFail({ sector });
+    const movement = await service.createExternalEntry({ requestKey: randomUUID(), originLocationId: origin.id,
+      destinationLocationId: destinationId, items: [{ productId: productAId, batchId: batchAId, quantity: 7 }] },
+    userId, { requestId: randomUUID(), ipAddress: null, userAgent: 'jest' });
+    expect(movement).toMatchObject({ type: MovementType.ExternalEntry, originLocationId: origin.id,
+      destinationLocationId: destinationId, responsibleUserId: userId, status: MovementStatus.Effective });
+    expect(await stockService.getBalance({ productId: productAId, batchId: batchAId, stockLocationId: destinationId })).toBe(7);
+    expect(await dataSource.getRepository(AuditLogEntity).countBy({ entityId: movement.id, action: 'EXTERNAL_ENTRY_CREATE' })).toBe(1);
+    const rows = await dataSource.query<Array<{ count: string }>>('SELECT count(*)::text AS count FROM shipments');
+    expect(rows[0].count).toBe('0');
+  });
+
   it('acumula em posicao existente e nao cria saldo na origem externa', async () => {
     await create(); await create();
     expect(await stockService.getBalance({ productId: productAId, batchId: batchAId, stockLocationId: destinationId })).toBe(20);
