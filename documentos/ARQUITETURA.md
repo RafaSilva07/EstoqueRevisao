@@ -161,7 +161,7 @@ pcp.movements.read / pcp.movements.execute
 - A aplicação usa pool PostgreSQL pequeno e novas tentativas limitadas na inicialização para tolerar reinícios e resets transitórios do Session pooler, sem repetir operações de negócio já iniciadas.
 - `migration:show` e `migration:run` repetem somente falhas reconhecidas de conexão, no máximo cinco vezes; erros de schema ou da própria migration não são repetidos.
 - `DATABASE_HOST_OVERRIDE` permite contornar temporariamente um endereço IPv4 defeituoso retornado pelo DNS do pooler. A conexão continua usando as credenciais e o hostname TLS de `DATABASE_URL`; o override deve ser removido quando o provedor normalizar o nó.
-- API e frontend rodam diretamente pelo Node.js no desenvolvimento e podem ser containerizados futuramente sem alteração de domínio.
+- API e frontend rodam diretamente pelo Node.js no desenvolvimento. O backend também possui imagem de produção multi-stage em `apps/backend/Dockerfile`, construída com a raiz do monorepo como contexto (`docker build -f apps/backend/Dockerfile .`). O runtime usa Node 22, dependências npm de produção e usuário não privilegiado; PostgreSQL e Storage continuam externos no Supabase. Configurações e segredos são fornecidos somente na execução do container, nunca na imagem. O `docker-compose.yml` permanece restrito ao PostgreSQL local opcional de testes.
 
 ## Módulo PCP
 
