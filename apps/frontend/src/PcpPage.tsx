@@ -1,10 +1,9 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { api, Paginated, PcpMovementDetail, PcpMovementSummary, StockLocation } from './api';
 import { EmptyState, FilterPanel, LoadingState, Modal, Notice, PageHeader } from './components';
-import { formatDate, formatDateTime } from './format';
-import { ShipmentPhoto } from './ShipmentItems';
+import { formatDateTime } from './format';
 import { canExecutePcp } from './pcp';
-import { MovementEvidence } from './MovementEvidence';
+import { MovementDetailModal } from './MovementDetailModal';
 import { auditActionLabel } from './audit-action-labels';
 import { MovementRecordRow, ReviewDistributionMatrix } from './MovementRecordRow';
 
@@ -120,20 +119,13 @@ export function PcpPage({ initialStatus = 'PENDENTE', initialId }: { initialStat
       </tr>)}</tbody></table></div></section>
       <div className="shipment-pagination"><button className="secondary" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Anterior</button><span>Página {page} de {totalPages} · {result.meta.total} {filters.view === 'RECORD' ? 'registros' : 'grupos'}</span><button className="secondary" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>Próxima</button></div>
     </>}
-    {selected && <Modal labelledBy="pcp-detail-title" className="pcp-detail-dialog" onClose={() => setSelected(null)}>
-      <h2 id="pcp-detail-title">{typeLabel[selected.type]} <small>{selected.codigoRegistro ?? selected.codigoMovimentacao ?? 'Sem código público'}</small></h2>
-      {selected.recordId && <p>Grupo: {selected.codigoGrupo ?? 'sem código público'} · {selected.groupItemCount} registros neste grupo <button className="text-button" onClick={() => void open(selected.id)}>Ver grupo</button></p>}
-      <dl><dt>Data</dt><dd>{formatDateTime(selected.occurredAt)}</dd><dt>Responsável</dt><dd>{selected.responsibleUser.username}</dd>{selected.shipment && <><dt>Solicitado por</dt><dd>{selected.shipment.createdBy.username} em {formatDateTime(selected.shipment.createdAt)}</dd><dt>Aceito por</dt><dd>{selected.shipment.decidedBy?.username ?? '—'}{selected.shipment.decidedAt ? ` em ${formatDateTime(selected.shipment.decidedAt)}` : ''}</dd></>}<dt>Origem</dt><dd>{selected.originLocation.name}</dd><dt>Destino</dt><dd>{selected.destinationLocation?.name ?? 'Múltiplos destinos'}</dd><dt>Status operacional</dt><dd>{selected.operationalStatus === 'CONCLUIDA' ? 'Concluída' : 'Cancelada'}</dd><dt>Status PCP</dt><dd>{selected.requiresPcpExecution === false ? 'Não necessária' : selected.pcpExecutionStatus === 'EXECUTADA' ? 'Executada' : 'Pendente'}</dd><dt>Observação original</dt><dd>{selected.observation || '—'}</dd>{selected.pcpExecutionStatus === 'EXECUTADA' && <><dt>Executada por</dt><dd>{selected.pcpExecutedByUser?.username ?? '—'}</dd><dt>Executada em</dt><dd>{selected.pcpExecutedAt ? formatDateTime(selected.pcpExecutedAt) : '—'}</dd><dt>Observação PCP</dt><dd>{selected.pcpExecutionObservation || '—'}</dd></>}</dl>
-      <h3>{selected.recordId ? 'Registro' : 'Registros do grupo'}</h3><ul className="movement-detail-items">{selected.items.map((item) => { const evidence = selected.shipmentEvidence.filter((photo) => photo.itemId === item.shipmentItemId && (photo.photoMimeType || photo.additionalPhotos?.length)); return <li key={item.id}>
-        {item.codigoRegistro && (selected.recordId ? <small>{item.codigoRegistro}</small> : <button className="text-button" onClick={() => void open(item.id, true)}>{item.codigoRegistro} · Ver registro</button>)}
-        <strong>{(item.assembly?.packageProductSnapshot ?? item.productSnapshot ?? item.product).code} — {(item.assembly?.packageProductSnapshot ?? item.productSnapshot ?? item.product).name}</strong>
-        <span>{item.assembly?.mixedDates ? 'Lote 0 · datas misturadas' : `Lote ${item.assembly?.outputLot ?? item.batch.code} · fabricação ${formatDate(item.assembly?.outputManufacturingDate ?? item.batch.manufacturingDate)} · validade ${formatDate(item.assembly?.outputExpirationDate ?? item.batch.expirationDate)}`}</span>
-        <b>{item.assembly?.packageQuantity ?? item.quantity} {(item.assembly?.packageProductSnapshot ?? item.productSnapshot ?? item.product).defaultUnit}</b>
-        {item.assembly && <span>Montagem: {item.quantity} UN de {(item.productSnapshot ?? item.product).code}. {item.assembly.sources.map((source) => `${source.locationName} / ${source.lot}: ${source.quantity} UN`).join('; ')}</span>}
-        <small>PCP: {selected.requiresPcpExecution === false ? 'Não necessária' : item.pcpExecutionStatus === 'EXECUTADA' ? 'Executada' : 'Pendente'}</small>{item.distributions?.length > 0 && <ul>{item.distributions.map((distribution) => <li key={distribution.id}>{distribution.destinationLocation.name}: {distribution.quantity}</li>)}</ul>}{evidence.length > 0 && <MovementEvidence key={`${item.pcpExecutionStatus ?? selected.pcpExecutionStatus}:${item.id}`} initiallyCollapsed={canExecutePcp(selected) && item.pcpExecutionStatus !== 'EXECUTADA'}><div className="pcp-evidence-grid">{evidence.map((photo) => <ShipmentPhoto key={photo.itemId} shipmentId={photo.shipmentId} itemId={photo.itemId} productName={(item.assembly?.packageProductSnapshot ?? item.productSnapshot ?? item.product).name} available={Boolean(photo.photoMimeType)} additionalPhotos={photo.additionalPhotos} />)}</div></MovementEvidence>}</li>; })}</ul>
-      <h3>Histórico de eventos</h3>{selected.auditHistory.length ? <ul className="pcp-audit-list">{selected.auditHistory.map((event) => <li key={event.id}><strong title={event.action}>{auditActionLabel(event.action)}</strong><span>{event.user?.username ?? 'Sistema'} · {formatDateTime(event.createdAt)}</span></li>)}</ul> : <p className="muted">Nenhum evento de auditoria encontrado.</p>}
-      {selected.recordId && canExecutePcp(selected) && <button className="button-wide" onClick={() => setConfirming(true)}>Marcar registro como executado</button>}
-    </Modal>}
+    {selected && <MovementDetailModal movementId={selected.id} initialMovement={selected} recordId={selected.recordId} pcp
+      onClose={() => setSelected(null)} onViewGroup={() => void open(selected.id)} onSelectRecord={(id) => void open(id, true)}
+      audit={<section className="movement-detail-section" aria-labelledby="pcp-audit-title">
+        <h3 id="pcp-audit-title">Histórico de eventos</h3>
+        {selected.auditHistory.length ? <ul className="pcp-audit-list">{selected.auditHistory.map((event) => <li key={event.id}><strong title={event.action}>{auditActionLabel(event.action)}</strong><span>{event.user?.username ?? 'Sistema'} · {formatDateTime(event.createdAt)}</span></li>)}</ul> : <p className="muted">Nenhum evento de auditoria encontrado.</p>}
+      </section>}
+    >{selected.recordId && canExecutePcp(selected) ? () => <button type="button" className="button-wide" onClick={() => setConfirming(true)}>Marcar registro como executado</button> : undefined}</MovementDetailModal>}
     {selected && confirming && <Modal labelledBy="pcp-execute-title" busy={executing} onClose={() => setConfirming(false)}><h2 id="pcp-execute-title">Marcar movimentação como executada</h2><p>Confirme somente após lançar ou atualizar esta movimentação no sistema corporativo.</p><form onSubmit={(event) => void execute(event)}><label>Observação da execução (opcional)<textarea name="observation" rows={4} maxLength={1000} disabled={executing} /></label><div className="dialog-actions"><button type="button" className="secondary" disabled={executing} onClick={() => setConfirming(false)}>Cancelar</button><button disabled={executing}>{executing ? 'Confirmando…' : 'Confirmar execução'}</button></div></form></Modal>}
   </>;
 }
