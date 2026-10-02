@@ -235,6 +235,8 @@ h3 { color: #24495a; font-size: 1rem; }
 .list-panel { margin-bottom: 1rem; }
 .toolbar { margin-bottom: .9rem; }
 .search-field { max-width: 28rem; }
+.products-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; align-items: start; }
+@media (min-width: 640px) { .products-toolbar { grid-template-columns: minmax(0, 1fr) minmax(8rem, 10rem); } }
 .content-grid { display: grid; gap: 1rem; min-width: 0; }
 .detail-panel { align-self: start; }
 .detail-panel dl { display: grid; grid-template-columns: minmax(6rem, auto) 1fr; gap: .65rem 1rem; }

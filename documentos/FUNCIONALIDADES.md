@@ -53,6 +53,8 @@ O cadastro mantém código, descrição, unidade, prazo de validade e, para fard
 
 Todos os perfis podem cadastrar, editar, excluir por inativação e reativar produtos. O administrador pode abrir o **Log de produtos** para consultar autor, data e valores anteriores/novos das alterações.
 
+A listagem de produtos usa a paginação existente de `GET /api/v1/products`: navegação **Anterior/Próxima**, página atual, total de produtos encontrados e seleção de 20, 50 ou 100 produtos por página. A busca por código/nome é aplicada no backend e volta à primeira página ao mudar, assim como a quantidade por página. Cadastro, edição e inativação mantêm os filtros e atualizam a consulta; se a página deixar de existir, a tela retorna à última página disponível. Carregamento, lista vazia e erro com nova tentativa seguem os componentes existentes.
+
 ## Envios entre setores
 
 A Revisão acessa **Envios e recebimentos** pela Home ou menu; Produção/Expedição recebem uma interface restrita ao próprio setor. A tela operacional separa **Para receber** de **Meus envios em aberto**; concluídos, recusados e cancelados são encontrados no **Histórico** unificado. O início destaca pendências e decisões recentes dos próprios envios; a indicação é atualizada a cada 30 segundos, sem interromper formulários/decisões abertos.

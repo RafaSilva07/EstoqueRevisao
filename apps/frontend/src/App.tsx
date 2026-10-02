@@ -42,30 +42,85 @@ function revealDetails() {
   });
 }
 
-function ProductsPage({ canWrite, canManageStatus, canReadConversions }: { canWrite: boolean; canManageStatus: boolean; canReadConversions: boolean }) {
+export function ProductsPage({ canWrite, canManageStatus, canReadConversions }: { canWrite: boolean; canManageStatus: boolean; canReadConversions: boolean }) {
   const [products, setProducts] = useState<Product[]>([]); const [selected, setSelected] = useState<Product | null>(null); const [conversions, setConversions] = useState<UnitConversion[]>([]);
   const [search, setSearch] = useState(''); const [error, setError] = useState(''); const [success, setSuccess] = useState(''); const [editing, setEditing] = useState<Product | null>(null);
   const [showForm, setShowForm] = useState(false); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [confirming, setConfirming] = useState<Product | null>(null);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [meta, setMeta] = useState<Paginated<Product>['meta'] | null>(null);
+  const [listError, setListError] = useState('');
   const requestVersion = useRef(0);
   const load = useCallback(async () => {
     const version = ++requestVersion.current;
     setLoading(true);
+    setListError('');
     try {
-      const result = await api.get<Paginated<Product>>(`/products?limit=100&search=${encodeURIComponent(search)}`);
-      if (version === requestVersion.current) { setProducts(result.items); setError(''); }
+      const params = new URLSearchParams({ page: String(page), limit: String(limit), search });
+      const result = await api.get<Paginated<Product>>(`/products?${params}`);
+      if (version !== requestVersion.current) return;
+      const lastPage = Math.max(1, result.meta.totalPages);
+      if (page > lastPage) {
+        requestVersion.current += 1;
+        setPage(lastPage);
+        return;
+      }
+      setProducts(result.items);
+      setMeta(result.meta);
+      setError('');
     } catch (caught) {
-      if (version === requestVersion.current) setError(messageFrom(caught));
+      if (version === requestVersion.current) setListError(messageFrom(caught));
     } finally {
       if (version === requestVersion.current) setLoading(false);
     }
-  }, [search]);
+  }, [page, limit, search]);
   useEffect(() => { const timeout = window.setTimeout(() => void load(), 250); return () => { requestVersion.current += 1; window.clearTimeout(timeout); }; }, [load]);
   function openForm(product: Product | null) { setEditing(product); setShowForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }
   async function save(payload: Record<string, unknown>) { if (busy) return; setBusy(true); try { const saved = editing ? await api.patch<Product>(`/products/${editing.id}`, payload) : await api.post<Product>('/products', payload); setSelected(saved); setSuccess(editing ? 'Produto atualizado com sucesso.' : 'Produto cadastrado com sucesso.'); setShowForm(false); setEditing(null); await load(); } catch (caught) { setError(messageFrom(caught)); } finally { setBusy(false); } }
   async function select(product: Product) { setSelected(product); revealDetails(); if (!canReadConversions) return; try { setConversions(await api.get(`/products/${product.id}/conversions`)); } catch (caught) { setError(messageFrom(caught)); } }
   async function addConversion(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!selected) return; setBusy(true); const form = new FormData(event.currentTarget); try { await api.post(`/products/${selected.id}/conversions`, { fromUnit: form.get('fromUnit'), toUnit: form.get('toUnit'), factor: Number(form.get('factor')) }); setConversions(await api.get(`/products/${selected.id}/conversions`)); event.currentTarget.reset(); setSuccess('Conversao adicionada com sucesso.'); } catch (caught) { setError(messageFrom(caught)); } finally { setBusy(false); } }
   async function toggle(product: Product) { setBusy(true); try { await api.patch(`/products/${product.id}/status`, { active: !product.active }); setSuccess(product.active ? 'Produto inativado com sucesso.' : 'Produto ativado com sucesso.'); setConfirming(null); await load(); } catch (caught) { setError(messageFrom(caught)); } finally { setBusy(false); } }
-  return <><PageHeader eyebrow="Cadastro base" title="Produtos" description="Cadastre, edite ou exclua produtos. A exclusão inativa o cadastro sem apagar o histórico." action={canWrite && <button onClick={() => openForm(null)}>+ Novo produto</button>} />{success && <Notice kind="success" onClose={() => setSuccess('')}>{success}</Notice>}{error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}{showForm && <Modal labelledBy="product-form-title" busy={busy} onClose={() => setShowForm(false)}><h2 id="product-form-title">{editing ? 'Editar produto' : 'Cadastrar produto'}</h2>{error && <Notice kind="error">{error}</Notice>}<ProductForm key={editing?.id ?? 'new'} product={editing} busy={busy} onSave={save} onCancel={() => setShowForm(false)} /></Modal>}<div className="content-grid"><section className="surface list-panel"><div className="toolbar"><label className="search-field">Buscar produto<input type="search" placeholder="Codigo ou nome" value={search} onChange={(event) => setSearch(event.target.value)} /></label></div>{loading ? <LoadingState label="Carregando produtos" /> : products.length === 0 ? <EmptyState title={search ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'} description={search ? 'Revise o termo de busca.' : 'Cadastre o primeiro produto para comecar.'} action={canWrite && !search ? <button onClick={() => openForm(null)}>Cadastrar produto</button> : undefined} /> : <div className="responsive-table"><table><thead><tr><th>Codigo</th><th>Produto</th><th>Unidade</th><th>Status</th><th>Acoes</th></tr></thead><tbody>{products.map((product) => <tr key={product.id} className={selected?.id === product.id ? 'selected' : ''}><td data-label="Codigo"><button className="text-button" onClick={() => void select(product)}>{product.code}</button></td><td data-label="Produto">{product.name}</td><td data-label="Unidade">{product.defaultUnit}</td><td data-label="Status"><Status active={product.active} /></td><td data-label="Acoes"><div className="row-actions">{canWrite && <><button className="secondary" onClick={() => openForm(product)}>Editar</button>{<button className="secondary" onClick={() => product.active ? setConfirming(product) : void toggle(product)}>{product.active ? 'Excluir' : 'Reativar'}</button>}</>}</div></td></tr>)}</tbody></table></div>}</section><aside className="surface detail-panel" tabIndex={-1}><p className="eyebrow">Detalhes</p><h2>{selected?.name ?? 'Selecione um produto'}</h2>{selected ? <><dl><dt>Codigo</dt><dd>{selected.code}</dd><dt>Unidade</dt><dd>{selected.defaultUnit}</dd>{['FD', 'CX'].includes(selected.defaultUnit) && <><dt>Unidades por embalagem</dt><dd>{selected.unitsPerPackage ?? 'Configuração pendente'}</dd><dt>Códigos unitários possíveis</dt><dd>{selected.unitProducts?.map((product) => `${product.code} — ${product.name}`).join('; ') || 'Configuração pendente'}</dd></>}<dt>Prazo padrão</dt><dd>{selected.shelfLifeYears ? `${selected.shelfLifeYears} ano(s)` : 'Ainda não informado'}</dd><dt>Status</dt><dd>{selected.active ? 'Ativo' : 'Inativo'}</dd></dl>{canReadConversions && <><div className="divider" /><h3>Conversoes de unidade</h3>{conversions.length === 0 ? <p className="muted">Nenhuma conversao cadastrada.</p> : <ul className="conversion-list">{conversions.map((item) => <li key={item.id}><strong>{item.fromUnit}</strong><span>1 × {item.factor} = {item.factor} {item.toUnit}</span></li>)}</ul>}{canManageStatus && <form className="compact-form" onSubmit={(event) => void addConversion(event)}><label>Origem<input name="fromUnit" required /></label><label>Destino<input name="toUnit" required /></label><label>Fator<input name="factor" type="number" min="0.000001" step="0.000001" required /></label><button disabled={busy}>{busy ? 'Adicionando...' : 'Adicionar conversao'}</button></form>}</>}</> : <p className="muted">Toque no codigo de um produto para ver os detalhes.</p>}</aside></div>{canManageStatus && <ProductAuditPanel />}<ConfirmDialog open={Boolean(confirming)} title="Excluir produto?" description={`O produto ${confirming?.name ?? ''} será inativado, sem apagar o histórico. Pode ser reativado depois.`} confirmLabel="Excluir produto" busy={busy} onCancel={() => setConfirming(null)} onConfirm={() => { if (confirming) void toggle(confirming); }} /></>;
+  return <>
+    <PageHeader eyebrow="Cadastro base" title="Produtos" description="Cadastre, edite ou exclua produtos. A exclusão inativa o cadastro sem apagar o histórico." action={canWrite && <button onClick={() => openForm(null)}>+ Novo produto</button>} />
+    {success && <Notice kind="success" onClose={() => setSuccess('')}>{success}</Notice>}
+    {error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
+    {showForm && <Modal labelledBy="product-form-title" busy={busy} onClose={() => setShowForm(false)}>
+      <h2 id="product-form-title">{editing ? 'Editar produto' : 'Cadastrar produto'}</h2>
+      {error && <Notice kind="error">{error}</Notice>}
+      <ProductForm key={editing?.id ?? 'new'} product={editing} busy={busy} onSave={save} onCancel={() => setShowForm(false)} />
+    </Modal>}
+    <div className="content-grid">
+      <section className="surface list-panel">
+        <div className="toolbar products-toolbar">
+          <label className="search-field">Buscar produto<input type="search" placeholder="Código ou nome" maxLength={100} disabled={busy} value={search} onChange={(event) => { setLoading(true); setSearch(event.target.value); setPage(1); }} /></label>
+          <label>Produtos por página<select value={limit} disabled={busy} onChange={(event) => { setLoading(true); setLimit(Number(event.target.value)); setPage(1); }}>
+            <option value={20}>20</option><option value={50}>50</option><option value={100}>100</option>
+          </select></label>
+        </div>
+        {loading ? <LoadingState label="Carregando produtos" /> : listError ? <>
+          <Notice kind="error">{listError}</Notice>
+          <button className="secondary" onClick={() => void load()}>Tentar novamente</button>
+        </> : products.length === 0 ? <EmptyState title={search ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'} description={search ? 'Revise o termo de busca.' : 'Cadastre o primeiro produto para começar.'} action={canWrite && !search ? <button onClick={() => openForm(null)}>Cadastrar produto</button> : undefined} /> : <>
+          <div className="responsive-table"><table>
+            <thead><tr><th>Código</th><th>Produto</th><th>Unidade</th><th>Status</th><th>Ações</th></tr></thead>
+            <tbody>{products.map((product) => <tr key={product.id} className={selected?.id === product.id ? 'selected' : ''}>
+              <td data-label="Código"><button className="text-button" onClick={() => void select(product)}>{product.code}</button></td>
+              <td data-label="Produto">{product.name}</td><td data-label="Unidade">{product.defaultUnit}</td>
+              <td data-label="Status"><Status active={product.active} /></td>
+              <td data-label="Ações"><div className="row-actions">{canWrite && <>
+                <button className="secondary" onClick={() => openForm(product)}>Editar</button>
+                <button className="secondary" onClick={() => product.active ? setConfirming(product) : void toggle(product)}>{product.active ? 'Excluir' : 'Reativar'}</button>
+              </>}</div></td>
+            </tr>)}</tbody>
+          </table></div>
+          {meta && <nav className="report-pagination" aria-label="Paginação de produtos">
+            <button className="secondary" disabled={busy || page <= 1} onClick={() => { setLoading(true); setPage(page - 1); }}>Anterior</button>
+            <span aria-live="polite">Página {meta.page} de {Math.max(1, meta.totalPages)} · {meta.total} produtos</span>
+            <button className="secondary" disabled={busy || page >= meta.totalPages} onClick={() => { setLoading(true); setPage(page + 1); }}>Próxima</button>
+          </nav>}
+        </>}
+      </section>
+      <aside className="surface detail-panel" tabIndex={-1}><p className="eyebrow">Detalhes</p><h2>{selected?.name ?? 'Selecione um produto'}</h2>{selected ? <><dl><dt>Codigo</dt><dd>{selected.code}</dd><dt>Unidade</dt><dd>{selected.defaultUnit}</dd>{['FD', 'CX'].includes(selected.defaultUnit) && <><dt>Unidades por embalagem</dt><dd>{selected.unitsPerPackage ?? 'Configuração pendente'}</dd><dt>Códigos unitários possíveis</dt><dd>{selected.unitProducts?.map((product) => `${product.code} — ${product.name}`).join('; ') || 'Configuração pendente'}</dd></>}<dt>Prazo padrão</dt><dd>{selected.shelfLifeYears ? `${selected.shelfLifeYears} ano(s)` : 'Ainda não informado'}</dd><dt>Status</dt><dd>{selected.active ? 'Ativo' : 'Inativo'}</dd></dl>{canReadConversions && <><div className="divider" /><h3>Conversoes de unidade</h3>{conversions.length === 0 ? <p className="muted">Nenhuma conversao cadastrada.</p> : <ul className="conversion-list">{conversions.map((item) => <li key={item.id}><strong>{item.fromUnit}</strong><span>1 × {item.factor} = {item.factor} {item.toUnit}</span></li>)}</ul>}{canManageStatus && <form className="compact-form" onSubmit={(event) => void addConversion(event)}><label>Origem<input name="fromUnit" required /></label><label>Destino<input name="toUnit" required /></label><label>Fator<input name="factor" type="number" min="0.000001" step="0.000001" required /></label><button disabled={busy}>{busy ? 'Adicionando...' : 'Adicionar conversao'}</button></form>}</>}</> : <p className="muted">Toque no codigo de um produto para ver os detalhes.</p>}</aside></div>{canManageStatus && <ProductAuditPanel />}<ConfirmDialog open={Boolean(confirming)} title="Excluir produto?" description={`O produto ${confirming?.name ?? ''} será inativado, sem apagar o histórico. Pode ser reativado depois.`} confirmLabel="Excluir produto" busy={busy} onCancel={() => setConfirming(null)} onConfirm={() => { if (confirming) void toggle(confirming); }} /></>;
 }
 
 export function InventoryPage({ onTransfer, onReview }: { onTransfer?: (prefill: TransferPrefill) => void; onReview?: (prefill: ReviewPrefill) => void }) {
