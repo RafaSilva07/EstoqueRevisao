@@ -12,6 +12,7 @@ import { LoginDto } from './dto/login.dto';
 import { AuthSessionEntity } from './entities/auth-session.entity';
 import { PasswordHasherService } from './password-hasher.service';
 import { AccessTokenResult, TokenService } from './token.service';
+import { effectivePermissionCodes } from '../users/user-permissions';
 
 export interface AuthenticationResult extends AccessTokenResult {
   refreshToken: string;
@@ -180,10 +181,7 @@ export class AuthService {
       sessionId,
       sector: user.sector,
       roles: (user.roles ?? []).map((role) => role.code),
-      permissions: [
-        ...new Set((user.roles ?? []).flatMap((role) =>
-          (role.permissions ?? []).map((permission) => permission.code))),
-      ],
+      permissions: effectivePermissionCodes(user),
     };
   }
 

@@ -14,7 +14,7 @@ const typeLabel: Record<PcpMovementSummary['type'], string> = {
 const initialFilters = { view: 'RECORD', dateFrom: '', dateTo: '', operationalStatus: 'CONCLUIDA', pcpStatus: 'PENDENTE', type: '', originLocationId: '', destinationLocationId: '', search: '', sort: 'ASC' };
 const messageFrom = (error: unknown) => error instanceof Error ? error.message : 'Não foi possível concluir a operação.';
 
-export function PcpPage({ initialStatus = 'PENDENTE', initialId }: { initialStatus?: '' | 'PENDENTE' | 'EXECUTADA'; initialId?: string }) {
+export function PcpPage({ initialStatus = 'PENDENTE', initialId, canExecute = false }: { initialStatus?: '' | 'PENDENTE' | 'EXECUTADA'; initialId?: string; canExecute?: boolean }) {
   const [filters, setFilters] = useState<typeof initialFilters>({ ...initialFilters, pcpStatus: initialStatus, operationalStatus: initialStatus === '' ? '' : initialFilters.operationalStatus });
   const [page, setPage] = useState(1);
   const [result, setResult] = useState<Paginated<PcpMovementSummary> | null>(null);
@@ -61,7 +61,7 @@ export function PcpPage({ initialStatus = 'PENDENTE', initialId }: { initialStat
   }
 
   async function execute(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (!selected || executing) return;
+    event.preventDefault(); if (!selected || executing || !canExecute) return;
     setExecuting(true); setError('');
     const form = new FormData(event.currentTarget);
     const observationValue = form.get('observation');
@@ -106,7 +106,7 @@ export function PcpPage({ initialStatus = 'PENDENTE', initialId }: { initialStat
         receiptRequired={Boolean(movement.shipmentId)} pcpRequired={movement.requiresPcpExecution}
         reviewDistributions={movement.type === 'REVISAO' ? movement.reviewDistributions : undefined}
         reviewDistributionUnit={movement.reviewDistributionUnit}
-        onOpen={openRecord} action={pending && <button type="button" className="secondary" disabled={detailLoading} onClick={openRecord}>Executar no PCP</button>}
+        onOpen={openRecord} action={canExecute && pending && <button type="button" className="secondary" disabled={detailLoading} onClick={openRecord}>Executar no PCP</button>}
       />; })}</div>}
       <section className={`surface pcp-list ${filters.view === 'RECORD' ? 'pcp-table-mobile' : ''}`}><div className="responsive-table"><table><thead><tr><th>Data</th><th>Código</th><th>Produto / lote</th><th>Tipo</th><th>Origem</th><th>Destino</th><th>Operacional</th><th>PCP</th><th>Ação</th></tr></thead><tbody>{result.items.map((movement) => <tr key={movement.recordId ?? movement.id} className="clickable-row" tabIndex={0} role="button" onClick={() => void open(movement.recordId ?? movement.id, Boolean(movement.recordId))} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void open(movement.recordId ?? movement.id, Boolean(movement.recordId)); } }}>
         <td data-label="Data">{formatDateTime(movement.occurredAt)}</td>
@@ -125,7 +125,7 @@ export function PcpPage({ initialStatus = 'PENDENTE', initialId }: { initialStat
         <h3 id="pcp-audit-title">Histórico de eventos</h3>
         {selected.auditHistory.length ? <ul className="pcp-audit-list">{selected.auditHistory.map((event) => <li key={event.id}><strong title={event.action}>{auditActionLabel(event.action)}</strong><span>{event.user?.username ?? 'Sistema'} · {formatDateTime(event.createdAt)}</span></li>)}</ul> : <p className="muted">Nenhum evento de auditoria encontrado.</p>}
       </section>}
-    >{selected.recordId && canExecutePcp(selected) ? () => <button type="button" className="button-wide" onClick={() => setConfirming(true)}>Marcar registro como executado</button> : undefined}</MovementDetailModal>}
+    >{canExecute && selected.recordId && canExecutePcp(selected) ? () => <button type="button" className="button-wide" onClick={() => setConfirming(true)}>Marcar registro como executado</button> : undefined}</MovementDetailModal>}
     {selected && confirming && <Modal labelledBy="pcp-execute-title" busy={executing} onClose={() => setConfirming(false)}><h2 id="pcp-execute-title">Marcar movimentação como executada</h2><p>Confirme somente após lançar ou atualizar esta movimentação no sistema corporativo.</p><form onSubmit={(event) => void execute(event)}><label>Observação da execução (opcional)<textarea name="observation" rows={4} maxLength={1000} disabled={executing} /></label><div className="dialog-actions"><button type="button" className="secondary" disabled={executing} onClick={() => setConfirming(false)}>Cancelar</button><button disabled={executing}>{executing ? 'Confirmando…' : 'Confirmar execução'}</button></div></form></Modal>}
   </>;
 }

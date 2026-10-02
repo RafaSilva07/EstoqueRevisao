@@ -3,6 +3,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { AdminGuard } from './admin.guard';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
+import { UpdatePermissionPresetDto } from './dto/permission-preset.dto';
 
 describe('Administração de usuários', () => {
   it.each([undefined, [], ['PRODUCAO'], ['EXPEDICAO'], ['ADMIN_REVISAO_EXPEDICAO'], ['ADMIN_PRODUCAO_PCP']])('nega acesso sem ADMIN: %s', (roles) => {
@@ -35,9 +36,17 @@ describe('Administração de usuários', () => {
     for (const patch of [{ username: ' ' }, { password: 'curta' }, { sector: 'INVALIDO' }, { roleCodes: [] }, { roleCodes: ['ADMIN', 'ADMIN'] }]) {
       expect((await validate(plainToInstance(CreateUserDto, { ...valid, ...patch }))).length).toBeGreaterThan(0);
     }
-    for (const key of ['username', 'password', 'sector', 'roleCodes', 'status']) {
+    for (const key of ['username', 'password', 'sector', 'roleCodes', 'status', 'permissionCodes', 'applyPreset']) {
       expect((await validate(plainToInstance(UpdateUserDto, { [key]: null }))).length).toBeGreaterThan(0);
     }
     expect(await validate(plainToInstance(UpdateUserDto, { username: 'Novo' }))).toHaveLength(0);
+  });
+  it('exige confirmação explícita de propagação e versão válida ao salvar preset', async () => {
+    const valid = { permissionCodes: [], applyToUsers: false, version: 1 };
+    expect(await validate(plainToInstance(UpdatePermissionPresetDto, valid))).toHaveLength(0);
+    for (const patch of [{ applyToUsers: undefined }, { applyToUsers: 'false' }, { version: 0 }, { permissionCodes: null }, { permissionCodes: ['products.read', 'products.read'] }]) {
+      expect((await validate(plainToInstance(UpdatePermissionPresetDto, { ...valid, ...patch }))).length).toBeGreaterThan(0);
+    }
+    expect(await validate(plainToInstance(UpdateUserDto, { permissionCodes: [], applyPreset: false }))).toHaveLength(0);
   });
 });

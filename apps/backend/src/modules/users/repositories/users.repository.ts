@@ -13,11 +13,13 @@ export class UsersRepository {
   ) {}
 
   findById(id: string, manager?: EntityManager): Promise<UserEntity | null> {
-    return (manager?.getRepository(UserEntity) ?? this.repository).findOne({ where: { id }, relations: { roles: true } });
+    return (manager?.getRepository(UserEntity) ?? this.repository).findOne({ where: { id }, relations: { roles: { permissions: true }, permissionAssignments: { permission: true } } });
   }
 
   findAndCount(query: UserQueryDto): Promise<[UserEntity[], number]> {
-    const builder = this.repository.createQueryBuilder('user').leftJoinAndSelect('user.roles', 'role');
+    const builder = this.repository.createQueryBuilder('user').leftJoinAndSelect('user.roles', 'role')
+      .leftJoinAndSelect('role.permissions', 'rolePermission')
+      .leftJoinAndSelect('user.permissionAssignments', 'assignment').leftJoinAndSelect('assignment.permission', 'userPermission');
     if (query.search?.trim()) builder.where('user.username ILIKE :search', { search: `%${query.search.trim().replace(/[\\%_]/g, '\\$&')}%` });
     const field = query.sort === 'NAME' ? 'user.username' : 'user.createdAt';
     const direction = query.sort === 'RECENT' ? 'DESC' : 'ASC';
@@ -31,6 +33,8 @@ export class UsersRepository {
       .addSelect('user.passwordHash')
       .leftJoinAndSelect('user.roles', 'role')
       .leftJoinAndSelect('role.permissions', 'permission')
+      .leftJoinAndSelect('user.permissionAssignments', 'assignment')
+      .leftJoinAndSelect('assignment.permission', 'userPermission')
       .where('LOWER(user.username) = LOWER(:username)', { username })
       .getOne();
   }
@@ -38,7 +42,7 @@ export class UsersRepository {
   findActiveById(id: string): Promise<UserEntity | null> {
     return this.repository.findOne({
       where: { id, status: UserStatus.Active },
-      relations: { roles: { permissions: true } },
+      relations: { roles: { permissions: true }, permissionAssignments: { permission: true } },
     });
   }
 

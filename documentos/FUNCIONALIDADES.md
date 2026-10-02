@@ -6,7 +6,7 @@ Este documento descreve o comportamento disponível hoje. As regras completas e 
 
 Na branch `feat/navegacao-simplificada`, a Home e o menu lateral mostram destinos diretos conforme o perfil: **Movimentar produtos**, **Envios e recebimentos**, **Estoque e validades**, **Histórico**, **Produtos** e, no PCP, **Fila do PCP**. Ações administrativas e relatórios de totais ficam em **Menu e conta**. Os menus intermediários de estoque, histórico, solicitações e PCP não aparecem mais.
 
-O cadastro de usuários oferece `Revisão operacional` (`REVISAO`), no setor Revisão: solicitações, revisão, transferência, consultas e gestão de produtos, sem ADMIN. Entrada/saída direta, cancelamento de movimentações/revisões e alteração dos demais cadastros continuam exclusivos do ADMIN e bloqueados pela API. Usuários existentes não são reclassificados automaticamente. Para atribuir acesso operacional, selecione esse perfil sem marcar Administrador.
+O preset inicial `Revisão operacional` (`REVISAO`) oferece solicitações, revisão, transferência, consultas e gestão de produtos, sem ADMIN. O admin geral pode ajustar as funcionalidades do preset ou de cada usuário, incluindo entrada/saída direta e estorno no setor Revisão. Usuários existentes mantêm sua base até atualização explícita.
 
 Todas as entradas, saídas, transferências e distribuições de revisão aceitam somente quantidades inteiras positivas. O frontend orienta o preenchimento e o backend aplica a validação definitiva antes de alterar saldos.
 
@@ -29,7 +29,7 @@ Enquanto a aba está visível, a presença é atualizada a cada 20 segundos e ta
 
 A interface usa transições curtas em botões, cartões, campos, filtros e diálogos, com rolagem suave. Quando o dispositivo solicita redução de movimento, as animações e a rolagem suave são desativadas.
 
-Usuários `ADMIN` possuem no cabeçalho da aplicação o seletor **Modo operacional**, com as opções Admin, Revisão, Produção, Expedição e PCP. O login administrativo inicia em **Admin**, modo completo que usa a Revisão como contexto físico e reúne as ações exclusivas de administração. Ao selecionar um modo operacional, a interface e a API aplicam o escopo desse perfil: gestão de produtos continua disponível, enquanto gestão de usuários, entrada/saída direta, estorno e alteração dos demais cadastros ficam restritos ao modo Admin. A identidade real do administrador continua registrada no histórico e na auditoria.
+Usuários `ADMIN` possuem no cabeçalho o seletor **Modo operacional**: Admin, Revisão, Produção, Expedição e PCP. O login inicia em **Admin**, com acesso completo e contexto físico da Revisão. Nos demais modos, interface e API limitam as permissões ao setor escolhido. Gestão de usuários, presets e configurações gerais continua exclusiva do modo Admin. A identidade real do administrador permanece no histórico e na auditoria.
 
 Administradores de área usam o mesmo seletor limitado a **Revisão + Expedição** ou **Produção + PCP**, conforme o perfil atribuído pelo admin geral. Iniciam no setor cadastrado, podem operar nos dois modos com as permissões já existentes e não acessam o modo Admin nem a gestão de usuários.
 
@@ -39,9 +39,13 @@ No modo **Admin**, o menu **Menu > Gerenciar usuários** permite buscar/listar c
 
 O formulário reutiliza login, senha, setor e perfis existentes. Edição permite trocar a senha e reativar contas. Exclusão exige confirmação, bloqueia o acesso e preserva o histórico. Alterações encerram as sessões da conta; editar a própria conta retorna ao login. A API protege o acesso administrativo, a própria conta e o último administrador ativo. Regras em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#administração-de-usuários).
 
+Os perfis aparecem como **Presets de acesso**. Selecioná-los carrega as permissões para marcar/desmarcar por funcionalidade; **Reaplicar presets atuais** recarrega a base na edição. Leituras necessárias são selecionadas junto com as ações. Em **Presets de permissões**, o admin edita os conjuntos existentes e confirma **Salvar só o preset** ou **Salvar e atualizar usuários**. A segunda opção preserva ajustes individuais e encerra as sessões afetadas. Setores e modos operacionais continuam independentes dessas escolhas; o acesso completo do admin geral é protegido.
+
 ```text
 GET/POST        /api/v1/users
 GET             /api/v1/users/roles
+GET             /api/v1/users/permissions
+PATCH           /api/v1/users/roles/:code/permissions
 GET/PATCH/DELETE /api/v1/users/:id
 ```
 
@@ -125,7 +129,7 @@ GET             /api/v1/batches
 GET             /api/v1/batches/:id
 ```
 
-`resolve-lot` exige `movements.create` e apenas valida/calcula, sem gravar. As consultas de lotes são somente leitura das variantes existentes, com `batches.read`. O cadastro operacional acontece na transação de criação da operação (incluindo envios externos pendentes, ainda sem saldo).
+`resolve-lot` exige ao menos uma das permissões específicas de entrada, saída, transferência ou revisão e apenas valida/calcula, sem gravar. As consultas de lotes exigem `batches.read`. O cadastro operacional acontece na transação da operação, incluindo envios pendentes ainda sem saldo.
 
 Quando o produto/lote já possui outra validade, a confirmação mostra as datas e a ação **Confirmar com validades separadas**. Sem essa confirmação, nada é gravado. Validades diferentes ficam em posições distintas, mesmo no mesmo local. A confirmação e a proteção contra duplo envio são compartilhadas pelas duas telas.
 
@@ -149,7 +153,7 @@ Abaixo dos filtros há dois níveis de seleção rápida: **Todos** ou um estoqu
 
 `POST /api/v1/movements/external-entries`
 
-O administrador geral pode registrar entrada direta a partir de qualquer origem externa ativa, inclusive Produção e Expedição, sem criar Envio nem exigir aceite do setor. O fluxo seleciona origem externa, destino controlado e um ou mais itens. Recebe `items[].lot` com código e/ou fabricação e validade, sem cadastro prévio, mostra produto/lote/datas/quantidade no resumo antes da confirmação e protege reenvio por chave idempotente. Ao confirmar, incrementa o destino imediatamente e abre a movimentação no histórico, com responsável e auditoria. A tela alerta para não registrar a mesma entrega também por Envio.
+Uma conta com **Entrada direta na Revisão** pode registrar recebimento de qualquer origem externa ativa, inclusive Produção e Expedição, sem Envio nem aceite do remetente. O fluxo seleciona origem, destino controlado e itens, resolve lote/datas na operação e exige conferência antes de creditar o saldo. Histórico, responsável, auditoria e idempotência permanecem; a tela alerta para não duplicar a mesma entrega por Envio.
 
 A seleção da origem consulta especificamente todos os locais externos ativos. Se nenhum estiver cadastrado, a tela oferece acesso ao cadastro de uma origem externa antes de continuar.
 

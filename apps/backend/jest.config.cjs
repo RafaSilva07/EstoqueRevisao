@@ -8,4 +8,5 @@ module.exports = {
   collectCoverageFrom: ['**/*.(t|j)s', '!**/*.module.ts', '!main.ts'],
   coverageDirectory: '../coverage',
   testEnvironment: 'node',
+  setupFilesAfterEnv: ['<rootDir>/../test/reset-test-database.cjs'],
 };

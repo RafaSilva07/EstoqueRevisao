@@ -451,9 +451,9 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     try { await expect(new ShipmentObservations1789430400000().down(runner)).rejects.toThrow('rollback destrutivo'); }
     finally { await runner.rollbackTransaction(); await runner.release(); }
   });
-  it('lista envios paginados e bloqueia rotas diretas dos setores', async () => {
+  it('lista envios paginados e preserva a entrada manual permitida de Produção', async () => {
     const external = await db.getRepository(StockLocationEntity).findOneByOrFail({sector:'PRODUCAO'});
-    await expect(movements.createExternalEntry({requestKey:randomUUID(),originLocationId:external.id,destinationLocationId:sourceId,items:[{productId,batchId,quantity:1}]},users.REVISAO.id,metadata())).rejects.toBeInstanceOf(BadRequestException);
+    await expect(movements.createExternalEntry({requestKey:randomUUID(),originLocationId:external.id,destinationLocationId:sourceId,items:[{productId,batchId,quantity:1}]},users.REVISAO.id,metadata())).resolves.toMatchObject({type:'ENTRADA_EXTERNA',originLocationId:external.id,destinationLocationId:sourceId});
     for (let i = 0; i < 3; i++) await createShipment({requestKey:randomUUID(),destinationSector:'REVISAO',items:[{productId,lot:{manufacturingDate:'2026-09-14',expirationDate:'2028-09-14'},quantity:1}]},users.PRODUCAO,metadata());
     const first = await service.list({view:'pending',page:1,limit:2},users.REVISAO);
     const second = await service.list({view:'pending',page:2,limit:2},users.REVISAO);

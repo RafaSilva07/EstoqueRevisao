@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { ArrayNotEmpty, ArrayUnique, IsArray, IsEnum, IsIn, IsOptional, IsString, Length, MaxLength, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, ArrayNotEmpty, ArrayUnique, IsArray, IsBoolean, IsEnum, IsIn, IsOptional, IsString, Length, MaxLength, ValidateIf } from 'class-validator';
 import { PartialType } from '@nestjs/mapped-types';
 import { PaginationQueryDto } from '../../../shared/pagination/pagination-query.dto';
 import { UserStatus } from '../domain/user-status.enum';
@@ -23,6 +23,14 @@ export class CreateUserDto {
   @IsString({ each: true })
   @MaxLength(60, { each: true })
   roleCodes!: string[];
+
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsArray() @ArrayMaxSize(100) @ArrayUnique() @IsString({ each: true }) @MaxLength(120, { each: true })
+  permissionCodes?: string[];
+
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsBoolean()
+  applyPreset?: boolean;
 }
 
 export class UpdateUserDto extends PartialType(CreateUserDto, { skipNullProperties: false }) {

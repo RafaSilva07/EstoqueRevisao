@@ -1,5 +1,9 @@
 # Histórico de desenvolvimento
 
+## Etapa 65 — Permissões individuais e presets
+
+Os perfis existentes passaram a presets editáveis, com concessões/negações individuais e confirmação para atualizar seus usuários. Setores e modos permanecem os mesmos; gestão de usuários, presets e configurações gerais permanece exclusiva do admin geral. A migration `PermissionPresets1791244800000` copia os acessos atuais para `user_permissions`, acrescenta permissões por ação e protege rollback após personalização. Resumo no [relatório da etapa 65](./relatorios/RELATORIO_ETAPA_65_PERMISSOES_USUARIOS_PRESETS.md).
+
 ## Origem externa da entrada manual e revisão de segurança
 
 A entrada direta passou a consultar origens externas separadamente e a orientar o cadastro quando não houver opções. Por decisão posterior, o administrador geral também pode usar Produção/Expedição como origem de uma entrada manual, efetivada e auditada sem Envio; saídas para esses setores continuam por Envios. A revisão de segurança registrou pendências de rate limiting, IP atrás de proxy e cabeçalhos HTTP; ver [relatório da etapa 57](./relatorios/RELATORIO_ETAPA_57_ORIGEM_ENTRADA_REVISAO_SEGURANCA.md).

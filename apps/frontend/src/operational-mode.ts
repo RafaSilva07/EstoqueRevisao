@@ -13,13 +13,15 @@ export const operationalModeLabel: Record<OperationalMode, string> = {
 
 const permissionsByMode: Record<Sector, readonly string[]> = {
   REVISAO: [
-    'products.read', 'products.create', 'products.update', 'product-conversions.read', 'batches.read',
-    'stocks.read', 'stock-positions.read', 'movements.read', 'movements.create',
+    'products.read', 'products.create', 'products.update', 'products.manage-status',
+    'product-conversions.read', 'product-conversions.create', 'product-conversions.update', 'product-conversions.manage-status', 'batches.read',
+    'stocks.read', 'stocks.create', 'stocks.update', 'stocks.manage-status', 'stock-positions.read', 'movements.read', 'movements.create',
+    'movements.external-entry', 'movements.external-exit', 'movements.transfer', 'movements.review', 'movements.cancel',
     'shipments.read', 'shipments.create', 'shipments.decide',
   ],
-  PRODUCAO: ['products.read', 'products.create', 'products.update', 'shipments.read', 'shipments.create', 'shipments.decide'],
-  EXPEDICAO: ['products.read', 'products.create', 'products.update', 'shipments.read', 'shipments.create', 'shipments.decide'],
-  PCP: ['pcp.movements.read', 'pcp.movements.execute', 'products.read', 'products.create', 'products.update', 'batches.read', 'stocks.read', 'stock-positions.read', 'shipments.read'],
+  PRODUCAO: ['products.read', 'products.create', 'products.update', 'products.manage-status', 'shipments.read', 'shipments.create', 'shipments.decide'],
+  EXPEDICAO: ['products.read', 'products.create', 'products.update', 'products.manage-status', 'shipments.read', 'shipments.create', 'shipments.decide'],
+  PCP: ['pcp.movements.read', 'pcp.movements.execute', 'products.read', 'products.create', 'products.update', 'products.manage-status', 'batches.read', 'stocks.read', 'stock-positions.read', 'shipments.read'],
 };
 
 export function allowedOperationalModes(user: UserSession): OperationalMode[] {

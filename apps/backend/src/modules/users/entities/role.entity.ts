@@ -21,6 +21,9 @@ export class RoleEntity {
   @Column({ type: 'varchar', length: 120 })
   name!: string;
 
+  @Column({ name: 'permission_version', type: 'integer', default: 1 })
+  permissionVersion = 1;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 

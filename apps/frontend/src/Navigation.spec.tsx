@@ -6,7 +6,7 @@ import { homeActions, menuActions, parentPage } from './navigation-model';
 import { ShipmentsPage } from './ShipmentsPage';
 import { PcpPage } from './PcpPage';
 
-const user: UserSession = { id: 'u', username: 'Operador', sector: 'REVISAO', roles: [], permissions: ['movements.create', 'movements.read', 'stock-positions.read', 'products.read', 'stocks.read', 'shipments.read', 'shipments.create', 'shipments.decide', 'pcp.movements.read'] };
+const user: UserSession = { id: 'u', username: 'Operador', sector: 'REVISAO', roles: [], permissions: ['movements.transfer', 'movements.review', 'movements.read', 'stock-positions.read', 'products.read', 'stocks.read', 'shipments.read', 'shipments.create', 'shipments.decide', 'pcp.movements.read'] };
 const noop = () => undefined;
 
 describe('Navegação simplificada', () => {
@@ -24,9 +24,11 @@ describe('Navegação simplificada', () => {
     expect(parentPage('pcp-executed', pcp)).toBe('pcp');
     expect(homeActions({ ...user, permissions: ['shipments.read'] }).map((a) => a.page)).toEqual(['shipments', 'history']);
   });
-  it('limita entrada e saída direta ao administrador mesmo com movements.create', () => {
+  it('mostra operações conforme permissões individuais sem exigir ADMIN', () => {
     expect(menuActions('operations', { ...user, roles: ['REVISAO'] }).map((a) => a.page)).toEqual(['new-transfer', 'new-review']);
-    expect(menuActions('operations', { ...user, roles: ['ADMIN'] }).map((a) => a.page)).toEqual(['new-entry', 'new-exit', 'new-transfer', 'new-review']);
+    expect(menuActions('operations', { ...user, permissions: [...user.permissions, 'movements.external-entry'] }).map((a) => a.page)).toEqual(['new-entry', 'new-transfer', 'new-review']);
+    expect(menuActions('operations', { ...user, permissions: ['movements.external-entry'] }).map((a) => a.page)).toEqual(['new-entry']);
+    expect(menuActions('operations', { ...user, permissions: ['movements.create'] })).toEqual([]);
     expect(menuActions('more', { ...user, roles: ['REVISAO'] }).some((a) => a.page === 'users')).toBe(false);
     expect(menuActions('more', { ...user, roles: ['REVISAO'] }).some((a) => a.page === 'preferences')).toBe(true);
     expect(parentPage('preferences')).toBe('more');

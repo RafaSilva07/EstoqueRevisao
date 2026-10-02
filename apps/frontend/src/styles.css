@@ -80,6 +80,14 @@ input[type="date"]::-webkit-date-and-time-value { min-width: 0; text-align: left
 .user-roles { margin: 0; border: 1px solid var(--line); border-radius: .65rem; }
 .user-roles label { display: flex; align-items: center; gap: .65rem; }
 .user-roles input { width: 1.2rem; min-height: 1.2rem; flex: 0 0 1.2rem; }
+.permission-checklist { display: grid; gap: .75rem; margin-top: 1rem; }
+.permission-checklist > p { margin: 0; font-size: .85rem; }
+.permission-checklist fieldset { display: grid; gap: .65rem; min-width: 0; margin: 0; border: 1px solid var(--line); border-radius: .65rem; padding: .85rem; }
+.permission-checklist legend { padding: 0 .3rem; font-weight: 700; }
+.permission-checklist label { display: flex; align-items: center; gap: .65rem; min-height: 2rem; }
+.permission-checklist input { width: 1.2rem; min-height: 1.2rem; flex: 0 0 1.2rem; }
+.preset-confirm-actions { flex-wrap: wrap; }
+@media (min-width: 760px) { .permission-checklist { grid-template-columns: repeat(2, minmax(0, 1fr)); } .permission-checklist > p { grid-column: 1 / -1; } }
 .admin-users-link { margin-bottom: 1rem; }
 .product-packaging > .secondary { margin-top: .75rem; }
 .dialog .product-packaging .packaging-options-title { margin: 1rem 0 .35rem; font-weight: 700; color: var(--ink); }

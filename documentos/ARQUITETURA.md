@@ -2,7 +2,7 @@
 
 ## Acesso operacional da Revisão
 
-A migration `ReviewOperatorRole1789948800000` adiciona o perfil `REVISAO` reutilizando permissões existentes. O `AdminGuard`, além dos guards globais de sessão/permissões/setor, protege os endpoints de entrada/saída direta, cancelamento e alteração de status dos cadastros. Gerenciamento de usuários continua protegido pelo mesmo guard. Regras transacionais e contratos de operações não mudam. O frontend reflete essas restrições e mostra ações diretamente na Home quando o conjunto disponível tem até seis opções.
+A migration `ReviewOperatorRole1789948800000` adicionou o perfil `REVISAO`. A evolução `PermissionPresets1791244800000` transforma os perfis em presets editáveis e separa entrada, saída, transferência, revisão e inativação em permissões próprias. Guards globais verificam sessão, permissão efetiva e setor. `AdminGuard` permanece na gestão de usuários/presets, configurações gerais e auditoria administrativa. O frontend mostra somente as ações concedidas no modo ativo.
 
 ## Stack
 
@@ -61,7 +61,7 @@ Evite abstrações prematuras. Uma regra compartilhada deve ser extraída quando
 
 ## Modelo de dados principal
 
-- `users`, `roles`, `permissions`, `user_roles`, `role_permissions`: identidade e autorização.
+- `users`, `roles`, `permissions`, `user_roles`, `role_permissions`: identidade e presets de autorização. `user_permissions` guarda, por usuário/permissão, a base atribuída (`preset_allowed`) e ajuste individual opcional (`override`).
 - `users.ui_theme` e `users.ui_background_color`: preferências visuais individuais, sem influência nas permissões ou operações de estoque. Tema e cor são validados na API e por constraints.
 - `auth_sessions`: refresh tokens, revogação de sessão e atividade recente para presença online.
 - `audit_logs`: trilha técnica/administrativa persistente.
@@ -126,20 +126,21 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 - Sessões são consultadas e podem ser revogadas; logout invalida a sessão.
 - A migration `SessionPresence1791072000000` acrescenta `auth_sessions.operational_mode`; um heartbeat autenticado registra atividade e modo operacional validado, sem senha, token, IP ou dados de estoque na resposta. Apenas sessões não revogadas, não expiradas, de contas ativas e com atividade nos últimos 60 segundos aparecem online. A consulta PCP mostra outros usuários no modo PCP; administradores gerais e de área podem consultar todos. O frontend renova o acesso uma vez após 401 e ressincroniza a conta se o cookie apontar para outro usuário. É um aviso eventual, não uma trava de concorrência nem uma garantia de que o usuário esteja trabalhando em determinado registro.
 - Guards globais exigem autenticação e permissões; rotas públicas usam declaração explícita.
-- A administração em `/users` exige adicionalmente `AdminGuard`, que verifica o perfil autenticado e o modo `ADMIN`. Não há novas permissões ou tabelas. `UsersService` reutiliza o hash Argon2id, repositório, sessões e auditoria. Alterações são serializadas por advisory lock transacional; o autor é revalidado dentro da transação, e sessões da conta editada/inativada são revogadas atomicamente. Respostas usam projeção explícita sem credenciais.
+- A administração em `/users`, incluindo permissões individuais e presets, exige `AdminGuard`, que verifica perfil e modo `ADMIN`. `UsersService` reutiliza Argon2id, repositório, sessões e auditoria. Alterações são serializadas pelo advisory lock `users-administration`; o autor é revalidado na transação e as sessões afetadas são revogadas atomicamente. Respostas usam projeção explícita sem credenciais.
+- Permissões efetivas operacionais são `override ?? preset_allowed`, carregadas do banco no login, refresh e validação da sessão. `ADMIN` mantém o conjunto completo protegido. A migration copia a união das permissões dos perfis atuais para a base de cada usuário. Salvar um preset sem propagação não altera essas bases; propagar recompõe a união dos presets atuais e preserva os ajustes individuais. `roles.permission_version` rejeita gravações obsoletas. Auditoria registra `PERMISSION_PRESET_UPDATE` e `USER_PERMISSIONS_PRESET_APPLY`, além dos eventos existentes de edição de usuário.
 - `users.sector` é consultado junto da sessão: REVISAO, PRODUCAO, EXPEDICAO ou PCP. `ADMIN` permanece cadastrado na Revisão; os perfis `ADMIN_REVISAO_EXPEDICAO` e `ADMIN_PRODUCAO_PCP` têm setor inicial em um dos seus dois modos. A migration desses perfis copia a união das permissões operacionais já existentes; o guard aplica novamente a lista permitida do modo ativo, impedindo que essa união amplie uma operação fora do setor. Todos mantêm `products.read/create/update` conforme os perfis operacionais; o PCP preserva sua leitura transversal e execução administrativa. O endpoint paginado de auditoria dos produtos usa `AdminGuard` e expõe apenas os dados necessários do evento, sem IP ou request ID.
 - O frontend envia `X-Operational-Sector` para alternância administrativa. O guard valida o modo contra os perfis da sessão: `ADMIN` geral pode acessar todos; cada admin de área apenas seu par. `ADMIN` mantém o contexto físico da Revisão com permissões completas; os demais modos projetam as permissões operacionais e não satisfazem `AdminGuard`. A identidade autenticada e o setor persistido do usuário não são substituídos.
 - Locais externos dos setores possuem `stock_locations.sector` único. A migration associa os registros iniciais uma única vez pelo código; os serviços usam o vínculo persistido, não nomes exibidos.
 
-Permissões usadas pelas rotas atuais (as antigas `batches.create`/`batches.update` permanecem apenas nos registros de perfis existentes, sem endpoints associados):
+Permissões usadas pelas rotas atuais (as antigas `batches.create`, `batches.update` e `movements.create` são preservadas para compatibilidade, sem autorizar as novas ações específicas):
 
 ```text
-products.read / products.create / products.update
-product-conversions.read / product-conversions.create / product-conversions.update
+products.read / products.create / products.update / products.manage-status
+product-conversions.read / product-conversions.create / product-conversions.update / product-conversions.manage-status
 batches.read
-stocks.read / stocks.create / stocks.update
+stocks.read / stocks.create / stocks.update / stocks.manage-status
 stock-positions.read
-movements.read / movements.create / movements.cancel
+movements.read / movements.external-entry / movements.external-exit / movements.transfer / movements.review / movements.cancel
 shipments.read / shipments.create / shipments.decide
 pcp.movements.read / pcp.movements.execute
 ```
@@ -182,7 +183,7 @@ Endpoints:
 - `POST /api/v1/pcp/movements/records/:id/execution`: execução individual auditada;
 - `POST /api/v1/pcp/movements/:id/execution`: transição irreversível com observação opcional.
 
-As permissões são `pcp.movements.read` e `pcp.movements.execute`. O papel exclusivo `PCP` recebe ainda somente leituras necessárias de produtos, lotes, locais, saldos e evidências. Autorizações operacionais continuam protegidas pelos guards existentes.
+As permissões são `pcp.movements.read` e `pcp.movements.execute`, ajustáveis separadamente. A fila continua limitada ao modo PCP; gestão de produtos segue suas permissões próprias. Leituras de lotes, locais, saldos e evidências permanecem sujeitas ao escopo e às permissões existentes.
 - `DATABASE_URL` é o banco local; `TEST_DATABASE_URL` deve apontar para banco isolado e descartável.
 
 ## Configurações e separação imediata

@@ -11,7 +11,7 @@ import { SettingsService } from './settings.service';
 export class SettingsController {
   constructor(private readonly settings: SettingsService) {}
 
-  @Get('operational') @RequirePermissions('movements.create')
+  @Get('operational') @RequirePermissions('movements.review')
   operational(): ReturnType<SettingsService['getOperational']> { return this.settings.getOperational(); }
 
   @Get('shipment-photos') @RequirePermissions('shipments.read')

@@ -56,8 +56,8 @@ describe('detalhe aberto pela fila PCP', () => {
   async function interact(action: () => void) {
     await act(() => { action(); return Promise.resolve(); });
   }
-  async function openRecord() {
-    await interact(() => root.render(<PcpPage />));
+  async function openRecord(canExecute = true) {
+    await interact(() => root.render(<PcpPage canExecute={canExecute} />));
     await act(async () => vi.advanceTimersByTimeAsync(200));
     await interact(() => host.querySelector<HTMLButtonElement>('.movement-record-line-main')!.click());
   }
@@ -86,6 +86,13 @@ describe('detalhe aberto pela fila PCP', () => {
     await interact(() => Array.from(dialog.querySelectorAll<HTMLButtonElement>('button')).find((node) => node.textContent === 'Fechar')!.click());
     expect(host.querySelector('[role="dialog"]')).toBeNull();
     expect(getSpy).toHaveBeenCalledWith('/pcp/movements/records/item-a');
+  });
+
+  it('consulta um registro sem oferecer execução quando o usuário tem somente leitura', async () => {
+    await openRecord(false);
+    expect(host.querySelector('[role="dialog"]')).toBeTruthy();
+    expect(host.textContent).not.toContain('Marcar registro como executado');
+    expect(host.textContent).not.toContain('Executar no PCP');
   });
 
   it('navega entre grupo e registro e executa somente o filho escolhido', async () => {

@@ -33,6 +33,8 @@ export class AuthSessionsRepository {
       .leftJoinAndSelect('session.user', 'user')
       .leftJoinAndSelect('user.roles', 'role')
       .leftJoinAndSelect('role.permissions', 'permission')
+      .leftJoinAndSelect('user.permissionAssignments', 'assignment')
+      .leftJoinAndSelect('assignment.permission', 'userPermission')
       .where('session.refreshTokenHash = :hash', { hash })
       .setLock('pessimistic_write', undefined, ['session'])
       .getOne();

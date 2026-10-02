@@ -5,11 +5,13 @@ import {
   Entity,
   JoinTable,
   ManyToMany,
+  OneToMany,
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { UserStatus } from '../domain/user-status.enum';
 import { RoleEntity } from './role.entity';
+import { UserPermissionEntity } from './user-permission.entity';
 
 @Entity({ name: 'users' })
 export class UserEntity {
@@ -47,4 +49,7 @@ export class UserEntity {
     inverseJoinColumn: { name: 'role_id', referencedColumnName: 'id' },
   })
   roles!: RoleEntity[];
+
+  @OneToMany(() => UserPermissionEntity, (assignment) => assignment.user)
+  permissionAssignments!: UserPermissionEntity[];
 }

@@ -1,4 +1,9 @@
 const labels: Record<string, string> = {
+  USER_CREATE: 'Usuário cadastrado',
+  USER_UPDATE: 'Dados e acessos do usuário atualizados',
+  USER_DEACTIVATE: 'Usuário inativado',
+  USER_PERMISSIONS_PRESET_APPLY: 'Permissões do preset aplicadas ao usuário',
+  PERMISSION_PRESET_UPDATE: 'Preset de permissões atualizado',
   SHIPMENT_CREATE: 'Envio criado',
   SHIPMENT_CONFIRM: 'Recebimento confirmado',
   SHIPMENT_REFUSE: 'Envio recusado',

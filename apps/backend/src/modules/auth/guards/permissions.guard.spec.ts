@@ -1,10 +1,11 @@
 import { BadRequestException, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PermissionsGuard } from './permissions.guard';
+import { REQUIRED_PERMISSIONS_KEY } from '../auth.constants';
 
 describe('Permissões por setor', () => {
-  const check = (sector: string, required: string[], permissions: string[], roles: string[] = [], requestedSector?: string): boolean => {
-    const reflector = { getAllAndOverride: (): string[] => required } as unknown as Reflector;
+  const check = (sector: string, required: string[], permissions: string[], roles: string[] = [], requestedSector?: string, any: string[] = []): boolean => {
+    const reflector = { getAllAndOverride: (key: string): string[] => key === REQUIRED_PERMISSIONS_KEY ? required : any } as unknown as Reflector;
     const context = { getHandler: () => null, getClass: () => null,
       switchToHttp: () => ({ getRequest: (): { headers: Record<string, string>; user: { sector: string; permissions: string[]; roles: string[] } } => ({
         headers: requestedSector ? { 'x-operational-sector': requestedSector } : {}, user: { sector, permissions, roles },
@@ -30,7 +31,7 @@ describe('Permissões por setor', () => {
     expect(check('REVISAO', ['shipments.create'], ['shipments.create'], ['ADMIN'], 'PRODUCAO')).toBe(true);
     expect(check('REVISAO', ['movements.create'], ['movements.create'], ['ADMIN'], 'PRODUCAO')).toBe(false);
     expect(check('REVISAO', ['movements.create'], ['movements.create'], ['ADMIN'], 'REVISAO')).toBe(true);
-    expect(check('REVISAO', ['movements.cancel'], ['movements.cancel'], ['ADMIN'], 'REVISAO')).toBe(false);
+    expect(check('REVISAO', ['movements.cancel'], ['movements.cancel'], ['ADMIN'], 'REVISAO')).toBe(true);
     expect(check('REVISAO', ['products.update'], ['products.update'], ['ADMIN'], 'REVISAO')).toBe(true);
     expect(check('REVISAO', ['pcp.movements.execute'], ['pcp.movements.execute'], ['ADMIN'], 'PCP')).toBe(true);
     expect(check('REVISAO', ['movements.create'], ['movements.create'], ['ADMIN'], 'PCP')).toBe(false);
@@ -38,6 +39,15 @@ describe('Permissões por setor', () => {
     expect(check('REVISAO', ['products.update'], ['products.update'], ['ADMIN'], 'ADMIN')).toBe(true);
     expect(check('REVISAO', ['products.create'], ['products.create'], ['ADMIN'], 'PCP')).toBe(true);
     expect(check('REVISAO', ['product-conversions.create'], ['product-conversions.create'], ['ADMIN'], 'PCP')).toBe(false);
+  });
+  it('autoriza somente a funcionalidade concedida, com alternativa para validar lote', () => {
+    expect(check('REVISAO', ['movements.external-entry'], ['movements.external-entry'])).toBe(true);
+    expect(check('REVISAO', ['movements.external-exit'], ['movements.external-entry'])).toBe(false);
+    expect(check('REVISAO', ['movements.review'], ['movements.create'])).toBe(false);
+    expect(check('REVISAO', [], ['movements.external-entry'], [], undefined, ['movements.review', 'movements.external-entry'])).toBe(true);
+    expect(check('REVISAO', [], [], [], undefined, ['movements.review', 'movements.external-entry'])).toBe(false);
+    expect(check('PRODUCAO', ['movements.external-entry'], ['movements.external-entry'])).toBe(false);
+    expect(check('PCP', ['movements.external-entry'], ['movements.external-entry'])).toBe(false);
   });
   it('rejeita troca por não administrador ou para setor inválido', () => {
     expect(() => check('PRODUCAO', ['shipments.read'], ['shipments.read'], ['PRODUCAO'], 'REVISAO')).toThrow(ForbiddenException);

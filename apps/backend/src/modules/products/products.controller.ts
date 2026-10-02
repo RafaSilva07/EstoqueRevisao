@@ -60,7 +60,7 @@ export class ProductsController {
   }
 
   @Patch('products/:id/status')
-  @RequirePermissions('products.update')
+  @RequirePermissions('products.manage-status')
   setStatus(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: StatusDto,
@@ -103,8 +103,7 @@ export class ProductsController {
   }
 
   @Patch('product-conversions/:id/status')
-  @RequirePermissions('product-conversions.update')
-  @UseGuards(AdminGuard)
+  @RequirePermissions('product-conversions.manage-status')
   setConversionStatus(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: StatusDto,

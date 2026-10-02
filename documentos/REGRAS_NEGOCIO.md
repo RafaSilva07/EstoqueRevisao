@@ -15,14 +15,15 @@ Este documento consolida o comportamento funcional vigente. Regras históricas s
 
 ## Administração de usuários
 
-- O perfil `REVISAO` (Revisão operacional) pertence ao setor Revisão e permite solicitações, revisão, transferência interna, consultas e gestão de produtos. Não concede administração de usuários nem escrita nos demais cadastros mestres.
-- `ADMIN_REVISAO_EXPEDICAO` opera nos modos Revisão e Expedição; `ADMIN_PRODUCAO_PCP` opera nos modos Produção e PCP. Cada modo mantém exatamente as permissões e o escopo operacional existentes, inclusive a leitura transversal da fila no PCP. Esses perfis não acumulam ações exclusivas do `ADMIN` geral e devem ser atribuídos isoladamente, com setor inicial pertencente ao respectivo par.
-- Todos os perfis podem cadastrar, editar, inativar e reativar produtos. Excluir um produto significa inativá-lo, preservando saldos, vínculos, histórico e auditoria. O log de alterações dos produtos é consultável somente por `ADMIN` no modo `ADMIN`.
-- Entrada e saída externas diretas, cancelamento/estorno de qualquer movimentação (inclusive revisão) e ativação/inativação de conversões e locais exigem `ADMIN`, além das permissões e restrições de setor existentes. Solicitações de envio/recebimento continuam disponíveis aos operadores autorizados.
-- Não há exclusão física de movimentações ou revisões. Administradores utilizam cancelamento com estorno, sujeito às validações já existentes; cadastros utilizam inativação. Vincular `ADMIN` a uma conta concede acesso administrativo mesmo se ela também possuir `REVISAO`.
+- Os perfis existentes são presets de permissões editáveis pelo admin geral. O preset inicial `REVISAO` permite solicitações, revisão, transferência, consultas e gestão de produtos. Entrada/saída direta e estorno são permissões separadas que podem ser concedidas individualmente ou no preset, dentro do setor Revisão.
+- `ADMIN_REVISAO_EXPEDICAO` opera nos modos Revisão e Expedição; `ADMIN_PRODUCAO_PCP` opera nos modos Produção e PCP. Esses perfis devem ser atribuídos isoladamente, com setor inicial pertencente ao respectivo par. Editar permissões não muda setores nem habilita novos modos; a leitura transversal da fila continua pertencendo ao PCP.
+- Os presets iniciais permitem cadastrar, editar, inativar e reativar produtos. Cada ação pode ser ajustada separadamente. Excluir significa inativar, preservando saldos, vínculos, histórico e auditoria. O log dos produtos continua exclusivo de `ADMIN` no modo `ADMIN`.
+- A conta guarda a base de permissões recebida dos presets e os ajustes individuais de concessão/negação. Os ajustes prevalecem sobre a base. O admin geral mantém acesso completo protegido e é o único gestor de usuários, presets e configurações gerais.
+- Ao salvar um preset, o administrador escolhe explicitamente se deseja atualizar os usuários vinculados. Sem atualização, acessos existentes permanecem e novas atribuições usam o preset atualizado. Com atualização, a base é recomposta pelos presets atuais atribuídos, preservando ajustes individuais e encerrando as sessões afetadas. Reaplicar presets na edição individual substitui a base e permite redefinir os ajustes daquela conta.
+- Não há exclusão física de movimentações ou revisões. Usuários com permissão de cancelamento utilizam estorno integral, sujeito às validações já existentes; cadastros utilizam inativação. Vincular `ADMIN` concede acesso administrativo mesmo se a conta também possuir `REVISAO`.
 
 - Somente contas com perfil `ADMIN` no modo `ADMIN` podem consultar, criar, editar e excluir usuários.
-- Login é único sem diferenciar maiúsculas/minúsculas. O cadastro usa setor e perfis já existentes; esta tela não cria perfis ou permissões.
+- Login é único sem diferenciar maiúsculas/minúsculas. O cadastro usa setores e presets existentes; as funcionalidades são selecionadas no catálogo de permissões implementadas, sem criação de novos setores ou códigos de permissão.
 - Senhas têm entre 8 e 128 caracteres e são persistidas exclusivamente como Argon2id. Na edição, omitir a senha mantém a atual.
 - Excluir significa inativar a conta, encerrar suas sessões e preservar os vínculos com histórico/auditoria. Contas inativas permanecem consultáveis e podem ser reativadas.
 - Alterar uma conta encerra suas sessões anteriores. Ao editar a própria conta, o administrador precisa entrar novamente.
@@ -151,7 +152,7 @@ Os registros iniciais são Estoque Revisão, Revisar, Lata Boa, Varejo, TUF, Exp
 
 ## Entrada externa
 
-- A entrada direta permite qualquer origem externa ativa, inclusive Produção e Expedição, quando o administrador geral registra manualmente o recebimento na Revisão. Ela é uma movimentação independente e efetivada imediatamente, sem confirmação do setor remetente; não deve duplicar um Envio da mesma entrega.
+- A entrada direta permite qualquer origem externa ativa, inclusive Produção e Expedição, quando uma conta com `movements.external-entry` registra manualmente o recebimento na Revisão. Ela é uma movimentação independente e efetivada imediatamente, sem confirmação do setor remetente; não deve duplicar um Envio da mesma entrega.
 - A origem, o usuário responsável, a data/hora, os itens e a operação ficam preservados no histórico e na auditoria. Correções seguem o estorno existente, sem editar ou excluir fisicamente a entrada.
 - Destino deve ser local ativo `STOCK` ou `SUBSTOCK`.
 - A origem externa não possui saldo controlado a reduzir.
@@ -254,5 +255,5 @@ Reversões:
 - transformação ou criação de produto/lote específica do Varejo;
 - mapa físico detalhado de armazenagem;
 - reversão automática de uma cadeia de operações dependentes;
-- criação/edição de perfis e permissões personalizados;
+- criação de novos setores, modos operacionais ou códigos de permissão arbitrários;
 - dashboard e relatórios analíticos avançados além das consultas operacionais implementadas.

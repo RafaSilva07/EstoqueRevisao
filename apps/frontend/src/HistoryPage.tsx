@@ -72,7 +72,7 @@ export function HistoryPage({ user, initialMovementId, initialRecordId, success,
   const [cancelTarget, setCancelTarget] = useState<Movement | null>(null);
   const [cancelSuccess, setCancelSuccess] = useState('');
   const pcp = user.sector === 'PCP';
-  const canCancel = user.roles.includes('ADMIN') && user.permissions.includes('movements.cancel');
+  const canCancel = user.permissions.includes('movements.cancel');
 
   useEffect(() => {
     if (searchInput === filters.search) return;
@@ -141,7 +141,7 @@ export function HistoryPage({ user, initialMovementId, initialRecordId, success,
     {selectedMovementId && <MovementDetailModal movementId={selectedMovementId} recordId={selectedRecordId} onSelectRecord={setSelectedRecordId} onViewGroup={() => setSelectedRecordId(null)} pcp={pcp} onClose={() => { setSelectedMovementId(null); setSelectedRecordId(null); }}>{(movement) => <>
       {movement.shipmentId && !pcp && <button className="secondary button-wide" onClick={() => { setSelectedMovementId(null); setSelectedShipmentId(movement.shipmentId!); }}>Ver envio original</button>}
       {canCancel && !movement.shipmentId && movement.status === 'EFETIVADA' && <button className="danger button-wide" onClick={() => setCancelTarget(movement)}>Cancelar movimentação</button>}
-      {pcp && movement.status === 'EFETIVADA' && movement.requiresPcpExecution && (selectedRecordId ? movement.items.find((item) => item.id === selectedRecordId)?.pcpExecutionStatus === 'PENDENTE' : movement.pcpExecutionStatus === 'PENDENTE') && <button className="button-wide" onClick={() => { setSelectedMovementId(null); onOpenPcp(selectedRecordId ?? movement.id); }}>Executar no PCP</button>}
+      {pcp && user.permissions.includes('pcp.movements.execute') && movement.status === 'EFETIVADA' && movement.requiresPcpExecution && (selectedRecordId ? movement.items.find((item) => item.id === selectedRecordId)?.pcpExecutionStatus === 'PENDENTE' : movement.pcpExecutionStatus === 'PENDENTE') && <button className="button-wide" onClick={() => { setSelectedMovementId(null); onOpenPcp(selectedRecordId ?? movement.id); }}>Executar no PCP</button>}
     </>}</MovementDetailModal>}
     {cancelTarget && <MovementCancellationDialog movement={cancelTarget} onClose={() => setCancelTarget(null)} onCanceled={() => { setCancelTarget(null); setSelectedMovementId(null); setCancelSuccess('Movimentação cancelada e estoque estornado.'); }} />}
   </>;

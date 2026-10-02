@@ -1,9 +1,9 @@
-import { AdminGuard } from '../users/admin.guard';
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { getAuditRequestMetadata } from '../audit/audit-request-metadata';
 import { AuthenticatedUser } from '../auth/authenticated-user.interface';
-import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
+import { RequireAnyPermissions, RequirePermissions } from '../auth/decorators/require-permissions.decorator';
+import { movementWritePermissions } from '../auth/permission-scopes';
 import { CancelMovementDto } from './dto/cancel-movement.dto';
 import { OperationalLotsService } from '../batches/operational-lots.service';
 import { ResolveOperationalLotDto } from '../batches/dto/operational-lot.dto';
@@ -20,20 +20,18 @@ export class MovementsController {
   constructor(private readonly service: MovementsService, private readonly lots: OperationalLotsService) {}
 
   @Post('resolve-lot')
-  @RequirePermissions('movements.create')
+  @RequireAnyPermissions(...movementWritePermissions)
   resolveLot(@Body() dto: ResolveOperationalLotDto): ReturnType<OperationalLotsService['preview']> { return this.lots.preview(dto); }
 
   @Post('external-entries')
-  @RequirePermissions('movements.create')
-  @UseGuards(AdminGuard)
+  @RequirePermissions('movements.external-entry')
   createExternalEntry(@Body() dto: CreateExternalEntryDto, @Req() request: Request): Promise<MovementEntity> {
     const user = request.user as AuthenticatedUser;
     return this.service.createExternalEntry(dto, user.id, getAuditRequestMetadata(request));
   }
 
   @Post('external-exits')
-  @RequirePermissions('movements.create')
-  @UseGuards(AdminGuard)
+  @RequirePermissions('movements.external-exit')
   createExternalExit(
     @Body() dto: CreateEffectiveMovementDto,
     @Req() request: Request,
@@ -43,7 +41,7 @@ export class MovementsController {
   }
 
   @Post('internal-transfers')
-  @RequirePermissions('movements.create')
+  @RequirePermissions('movements.transfer')
   createInternalTransfer(
     @Body() dto: CreateInternalTransferDto,
     @Req() request: Request,
@@ -53,7 +51,7 @@ export class MovementsController {
   }
 
   @Post('reviews')
-  @RequirePermissions('movements.create')
+  @RequirePermissions('movements.review')
   createReview(@Body() dto: CreateReviewDto, @Req() request: Request): Promise<MovementEntity> {
     const user = request.user as AuthenticatedUser;
     return this.service.createReview(dto, user.id, getAuditRequestMetadata(request));
@@ -61,7 +59,6 @@ export class MovementsController {
 
   @Post(':id/cancellation')
   @RequirePermissions('movements.cancel')
-  @UseGuards(AdminGuard)
   cancel(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: CancelMovementDto,

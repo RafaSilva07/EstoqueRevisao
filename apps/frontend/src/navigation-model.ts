@@ -40,7 +40,7 @@ export function menuActions(page: Page, user: UserSession): MenuAction[] {
     if (allowed) actions.push({ page: destination, title, description });
   };
   if (page === 'home') {
-    add(review && can('movements.create'), 'operations', admin ? 'Entrada, saída, transferência e revisão.' : 'Transferir ou revisar produtos.');
+    add(review && ['movements.external-entry', 'movements.external-exit', 'movements.transfer', 'movements.review'].some(can), 'operations', 'Operações de estoque disponíveis para sua conta.');
     add(sector !== 'PCP' && can('shipments.read'), 'shipments', 'Enviar, receber e acompanhar entre setores.', 'Envios e recebimentos');
     add((review || sector === 'PCP') && can('stock-positions.read'), 'inventory', 'Ver saldos, lotes e validades.');
     add(can('movements.read') || can('pcp.movements.read') || (sector !== 'PCP' && can('shipments.read')), 'history', 'Encontrar envios e operações pelo status.', 'Histórico');
@@ -54,10 +54,10 @@ export function menuActions(page: Page, user: UserSession): MenuAction[] {
     add(admin, 'users', 'Administrar contas e perfis.');
     add(admin, 'settings', 'Definir prazo e destinos da revisão.');
   } else if (page === 'operations') {
-    add(review && admin && can('movements.create'), 'new-entry', 'Receber de uma origem externa.');
-    add(review && admin && can('movements.create'), 'new-exit', 'Enviar para um destino externo.');
-    add(review && can('movements.create'), 'new-transfer', 'Mover produtos entre locais.');
-    add(review && can('movements.create'), 'new-review', 'Classificar produtos em revisão.');
+    add(review && can('movements.external-entry'), 'new-entry', 'Receber de uma origem externa.');
+    add(review && can('movements.external-exit'), 'new-exit', 'Enviar para um destino externo.');
+    add(review && can('movements.transfer'), 'new-transfer', 'Mover produtos entre locais.');
+    add(review && can('movements.review'), 'new-review', 'Classificar produtos em revisão.');
   }
   return actions;
 }

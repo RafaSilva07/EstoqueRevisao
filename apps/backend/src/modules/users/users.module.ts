@@ -9,9 +9,10 @@ import { UsersService } from './users.service';
 import { AdminGuard } from './admin.guard';
 import { PasswordHasherService } from '../auth/password-hasher.service';
 import { UserPreferencesService } from './user-preferences.service';
+import { UserPermissionEntity } from './entities/user-permission.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([UserEntity, RoleEntity, PermissionEntity])],
+  imports: [TypeOrmModule.forFeature([UserEntity, RoleEntity, PermissionEntity, UserPermissionEntity])],
   controllers: [UsersController],
   providers: [UsersRepository, UsersService, UserPreferencesService, AdminGuard, PasswordHasherService],
   exports: [UsersRepository, UserPreferencesService],

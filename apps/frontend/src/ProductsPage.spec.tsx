@@ -38,8 +38,8 @@ async function settle() {
   await act(async () => { await vi.advanceTimersByTimeAsync(300); });
 }
 
-async function render(canWrite = false) {
-  act(() => { root.render(<ProductsPage canWrite={canWrite} canManageStatus={false} canReadConversions={false} />); });
+async function render(canWrite = false, canManageStatus = false) {
+  act(() => { root.render(<ProductsPage canWrite={canWrite} canManageStatus={canManageStatus} canReadConversions={false} />); });
   await settle();
 }
 
@@ -190,7 +190,7 @@ describe('Paginação de produtos', () => {
     let resolveUpdate!: (product: Product) => void;
     const pendingUpdate = new Promise<Product>((resolve) => { resolveUpdate = resolve; });
     vi.spyOn(api, 'patch').mockImplementation(() => pendingUpdate);
-    await render(true);
+    await render(true, true);
     act(() => { button('Reativar').click(); });
     expect(host.querySelector<HTMLInputElement>('input[type="search"]')?.disabled).toBe(true);
     expect(host.querySelector('select')?.disabled).toBe(true);

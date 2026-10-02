@@ -6,6 +6,9 @@ import { PasswordHasherService } from '../../modules/auth/password-hasher.servic
 import { UserStatus } from '../../modules/users/domain/user-status.enum';
 import { UserEntity } from '../../modules/users/entities/user.entity';
 import { RoleEntity } from '../../modules/users/entities/role.entity';
+import { PermissionEntity } from '../../modules/users/entities/permission.entity';
+import { UserPermissionEntity } from '../../modules/users/entities/user-permission.entity';
+import { buildPermissionAssignments, presetPermissionCodes } from '../../modules/users/user-permissions';
 import dataSource from '../data-source';
 
 function requiredEnvironment(name: string): string {
@@ -64,6 +67,7 @@ async function createUser(): Promise<void> {
       const role = await manager
         .getRepository(RoleEntity)
         .createQueryBuilder('role')
+        .leftJoinAndSelect('role.permissions', 'permission')
         .where('UPPER(role.code) = UPPER(:roleCode)', { roleCode })
         .getOne();
       if (!role) {
@@ -77,6 +81,10 @@ async function createUser(): Promise<void> {
         .into('user_roles')
         .values({ user_id: user.id, role_id: role.id })
         .execute();
+
+      user.roles = [role];
+      const permissions = await manager.getRepository(PermissionEntity).find();
+      await manager.getRepository(UserPermissionEntity).save(buildPermissionAssignments(user.id, permissions, presetPermissionCodes(user)));
 
       const audit = new AuditLogEntity();
       audit.userId = null;

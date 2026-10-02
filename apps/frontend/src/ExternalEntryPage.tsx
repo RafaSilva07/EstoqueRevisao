@@ -9,7 +9,7 @@ import { ProductAutocomplete } from './ProductAutocomplete';
 
 interface EntryItem { key: string; product: Product; lot: OperationalLot; quantity: number }
 
-export function ExternalEntryPage({ onCreated, onManageLocations }: { onCreated: (id: string) => void; onManageLocations: () => void }) {
+export function ExternalEntryPage({ onCreated, onManageLocations }: { onCreated: (id: string) => void; onManageLocations?: () => void }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [locations, setLocations] = useState<StockLocation[]>([]);
   const [originLocations, setOriginLocations] = useState<StockLocation[]>([]);
@@ -63,7 +63,7 @@ export function ExternalEntryPage({ onCreated, onManageLocations }: { onCreated:
       <label>Origem externa *<select value={originId} onChange={(event) => setOriginId(event.target.value)} required><option value="">Selecione</option>{originLocations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       <label>Destino controlado *<select value={destinationId} onChange={(event) => setDestinationId(event.target.value)} required><option value="">Selecione</option>{locations.filter((item) => item.kind !== 'EXTERNAL').map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       <label className="wide">Observação (opcional)<textarea value={observation} onChange={(event) => setObservation(event.target.value)} maxLength={1000} rows={2} /></label>
-    </div>{originLocations.length === 0 && <Notice kind="info">Não há origem externa ativa cadastrada. Cadastre um local do tipo “Origem/destino externo” para continuar. <button type="button" className="secondary" onClick={onManageLocations}>Cadastrar origem externa</button></Notice>}</section>
+    </div>{originLocations.length === 0 && <Notice kind="info">Não há origem externa ativa cadastrada. Solicite o cadastro de um local do tipo “Origem/destino externo” para continuar. {onManageLocations && <button type="button" className="secondary" onClick={onManageLocations}>Cadastrar origem externa</button>}</Notice>}</section>
     {adding && <Modal labelledBy="add-product-title" onClose={closeItem}><div className="panel-heading item-list-heading"><h2 id="add-product-title">Adicionar produto</h2><button type="button" className="secondary" onClick={closeItem}>Cancelar</button></div>
       {error && <Notice kind="error">{error}</Notice>}<form className="form-grid" onSubmit={addItem}>
       <ProductAutocomplete availableProducts={products} initialProduct={product} onChange={(selected) => { setProductId(selected?.id ?? ''); resetLot(); }} />
