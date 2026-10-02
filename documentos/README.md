@@ -12,7 +12,8 @@ Este diretório é a fonte principal de contexto para desenvolvimento. Antes de 
 | Evolução do projeto, migrations, decisões substituídas e dívidas | [HISTORICO.md](./HISTORICO.md) |
 | Instalação e execução local | [COMO_RODAR.md](./COMO_RODAR.md) |
 | Decisão sobre separação imediata e configurações capturadas | [ADR_SEPARACAO_CONFIGURACOES.md](./ADR_SEPARACAO_CONFIGURACOES.md) |
-| Plano SQL de limpeza para futura produção (não executado) | [scripts/limpeza_teste_para_producao.sql](./scripts/limpeza_teste_para_producao.sql) |
+| Limpeza para produção: plano e execução | [scripts/limpeza_teste_para_producao.sql](./scripts/limpeza_teste_para_producao.sql) · [Registro de execução](./relatorios/RELATORIO_ETAPA_60_LIMPEZA_BANCO_PRODUCAO.md) |
+| Carga do catálogo Oderich e pendências da planilha | [Registro da importação](./relatorios/RELATORIO_ETAPA_61_IMPORTACAO_PRODUTOS.md) |
 
 Os quatro documentos acima são canônicos e devem ser atualizados quando uma etapa mudar o comportamento do sistema. Relatórios e ADRs anteriores permanecem em [`arquivo/`](./arquivo/README.md) apenas como evidência histórica; não devem ser usados isoladamente para determinar o comportamento atual.
 

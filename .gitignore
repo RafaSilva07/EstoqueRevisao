@@ -7,5 +7,6 @@ coverage/
 *.log
 *.tsbuildinfo
 tmp/
+/outputs/
 /storage/
 .DS_Store

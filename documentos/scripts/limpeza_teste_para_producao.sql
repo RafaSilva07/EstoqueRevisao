@@ -1,4 +1,6 @@
--- PREPARADO, NAO EXECUTADO. NAO E UMA MIGRATION.
+-- MODELO DE MANUTENCAO COM PARAMETROS E ROLLBACK POR PADRAO. NAO E UMA MIGRATION.
+-- Executado com parametros preenchidos e COMMIT em 02/10/2026; registro em
+-- documentos/relatorios/RELATORIO_ETAPA_60_LIMPEZA_BANCO_PRODUCAO.md.
 -- Escopo: somente tabelas da aplicacao no schema public. Nao altera auth.*,
 -- storage.*, bucket shipment-evidence, roles, permissions, role_permissions,
 -- stock_locations, review_process_destinations ou schema_migrations.
