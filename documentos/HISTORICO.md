@@ -201,3 +201,7 @@ Tema claro/escuro e cor do fundo geral passaram a ser escolhas do próprio usuá
 ## Presença online no PCP e para administradores
 
 Presença recente passou a ser registrada na sessão autenticada e no modo operacional validado. O PCP recebe um aviso quando outro colega está online; administradores gerais e de área consultam todos em uma página do menu. A indicação é informativa e não substitui controle de concorrência ou bloqueia registros. Resumo no [relatório da etapa 52](./relatorios/RELATORIO_ETAPA_52_PRESENCA_ONLINE.md).
+
+## Etapa 66 — Exportação de registros finalizados do Histórico
+
+O Histórico passou a exportar CSV filtrado por registro, sem incluir etapas pendentes nem agregar por grupo. A consulta e a exportação compartilham filtros e autorização. Resumo no [relatório da etapa 66](./relatorios/RELATORIO_ETAPA_66_EXPORTACAO_HISTORICO.md).

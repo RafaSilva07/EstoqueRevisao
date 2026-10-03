@@ -108,6 +108,7 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 - Entrada é validada por DTOs com `whitelist`, rejeição de campos desconhecidos e transformação controlada.
 - Listagens usam paginação e filtros definidos por DTO.
 - Relatórios aplicam os mesmos filtros nas linhas e totais; a exportação CSV remove apenas a paginação.
+- `HistoryService` compartilha a construção SQL entre consulta e `history/export.csv`; a exportação força registros finalizados e remove a paginação. Uma única consulta traz campos extras e distribuições, evitando consultas por item e mantendo uma visão consistente no instante da consulta. O serializador CSV usa UTF-8/BOM, ponto e vírgula, escape de campos e proteção contra fórmulas; não exporta evidências privadas. Não há nova dependência nem mudança de schema.
 - Erros seguem envelope padronizado com código, mensagem, request ID, timestamp e caminho.
 - Falhas reconhecidas de conexão com o PostgreSQL retornam `503/DATABASE_UNAVAILABLE`, mantendo detalhes técnicos apenas nos logs estruturados.
 - Erros internos não expõem stack trace, SQL ou detalhes de infraestrutura ao cliente.

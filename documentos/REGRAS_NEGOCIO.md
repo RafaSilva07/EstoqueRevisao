@@ -245,6 +245,7 @@ Reversões:
 - Totais de quantidade são separados por unidade de medida; unidades incompatíveis nunca são somadas entre si.
 - Consultas extensas são paginadas e os filtros podem ser combinados.
 - A exportação CSV usa os mesmos filtros da consulta e exporta todas as linhas correspondentes, sem a paginação da tela.
+- No Histórico, a exportação é sempre por registro e somente para o estado **Finalizada**: recebimento/separação concluídos e execução PCP concluída quando exigível. Um filho executado pode ser exportado mesmo com outros filhos do grupo pendentes. Canceladas e recusadas permanecem consultáveis, mas não entram nessa exportação. O escopo de permissões/setor da consulta é preservado.
 - Períodos históricos usam instantes ISO 8601. Validade usa data civil e é classificada em vencida, próxima do vencimento ou válida em relação à data de referência e à janela informada.
 - A distribuição da revisão considera apenas movimentações `REVISAO` efetivadas e totaliza cada classificação de destino.
 - Na desmontagem, o relatório de revisões mostra o produto e as unidades resultantes. O relatório de movimentações mantém a quantidade/unidade de origem e informa separadamente o produto e a quantidade produzidos. Filtros por produto encontram a origem ou o resultado; canceladas continuam excluídas dos totais válidos.

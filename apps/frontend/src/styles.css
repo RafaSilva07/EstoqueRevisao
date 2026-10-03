@@ -548,6 +548,11 @@ input:focus:user-invalid, select:focus:user-invalid, textarea:focus:user-invalid
 .shipment-tabs > button { flex: 1 1 10rem; }
 .shipment-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; }
 .history-list { display: grid; gap: .75rem; margin: 1rem 0; }
+.history-export { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin: 1rem 0; }
+.history-export > div { flex: 1 1 16rem; min-width: 0; }
+.history-export p { margin: .3rem 0 0; color: var(--muted); font-size: .875rem; }
+.history-export small { display: block; margin-top: .35rem; color: var(--muted); }
+.history-export > button { flex-shrink: 0; }
 .history-card { display: grid; width: 100%; min-width: 0; gap: .35rem; text-align: left; overflow-wrap: anywhere; color: var(--text); }
 .history-card .badge { justify-self: start; }
 .history-card strong { color: var(--primary-dark); }

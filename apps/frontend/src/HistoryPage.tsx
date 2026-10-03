@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, Movement, Paginated, ReviewDistributionSummary, UserSession } from './api';
 import { EmptyState, FilterPanel, LoadingState, Notice, PageHeader } from './components';
 import { formatDateTime } from './format';
@@ -7,6 +7,7 @@ import { MovementDetailModal } from './MovementDetailModal';
 import { ShipmentSummaryModal } from './ShipmentSummaryModal';
 import { HistoryRecordRow } from './HistoryRecordRow';
 import { ReviewDistributionMatrix } from './MovementRecordRow';
+import { buildHistoryQuery } from './history-query';
 
 export interface HistoryItem {
   id: string;
@@ -66,6 +67,9 @@ export function HistoryPage({ user, initialMovementId, initialRecordId, success,
   const [result, setResult] = useState<Paginated<HistoryItem> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [exportError, setExportError] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const exportInProgress = useRef(false);
   const [selectedMovementId, setSelectedMovementId] = useState<string | null>(initialMovementId ?? null);
   const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(initialRecordId && initialRecordId !== initialMovementId ? initialRecordId : null);
@@ -86,11 +90,7 @@ export function HistoryPage({ user, initialMovementId, initialRecordId, success,
 
   useEffect(() => {
     let active = true;
-    const params = new URLSearchParams({ ...filters, page: String(page), limit: '20' });
-    if (filters.dateFrom) params.set('dateFrom', new Date(`${filters.dateFrom}T00:00:00.000`).toISOString());
-    else params.delete('dateFrom');
-    if (filters.dateTo) params.set('dateTo', new Date(`${filters.dateTo}T23:59:59.999`).toISOString());
-    else params.delete('dateTo');
+    const params = buildHistoryQuery(filters, page);
     void api.get<Paginated<HistoryItem>>(`/history?${params}`).then((data) => {
       if (active) { setResult(data); setError(''); }
     }).catch((caught: unknown) => {
@@ -100,17 +100,35 @@ export function HistoryPage({ user, initialMovementId, initialRecordId, success,
   }, [filters, page, cancelSuccess]);
 
   const update = (key: keyof typeof filters, value: string) => {
-    setFilters((current) => ({ ...current, [key]: value })); setPage(1); setLoading(true);
+    setFilters((current) => ({ ...current, [key]: value })); setPage(1); setLoading(true); setExportError('');
   };
-  const clear = () => { setSearchInput(''); setFilters({ ...initialFilters }); setPage(1); setLoading(true); };
+  const clear = () => { setSearchInput(''); setFilters({ ...initialFilters }); setPage(1); setLoading(true); setExportError(''); };
   const activeFilters = Object.entries(filters).filter(([key, value]) => value && value !== 'ALL'
     && !(key === 'sort' && value === 'RECENT') && !(key === 'view' && value === 'RECORD')).length;
+  const exportScopeAllowed = filters.scope === 'ALL' || filters.scope === 'DONE';
+
+  async function exportHistory() {
+    if (exportInProgress.current || !exportScopeAllowed) return;
+    exportInProgress.current = true; setExporting(true); setExportError('');
+    try {
+      const params = buildHistoryQuery({ ...filters, view: 'RECORD', scope: 'DONE' });
+      const blob = await api.getBlob(`/history/export.csv?${params}`);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url; link.download = 'historico-finalizadas.csv';
+      document.body.append(link); link.click(); link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (caught: unknown) {
+      setExportError(caught instanceof Error ? caught.message : 'Não foi possível exportar o histórico.');
+    } finally { exportInProgress.current = false; setExporting(false); }
+  }
 
   return <>
     <PageHeader eyebrow="Consulta" title="Histórico de movimentações" description="Envios e operações de estoque em uma única lista. Use o status para encontrar o que ainda precisa de ação." />
     {success && <Notice kind="success">{success}</Notice>}
     {cancelSuccess && <Notice kind="success">{cancelSuccess}</Notice>}
     {error && <Notice kind="error">{error}</Notice>}
+    {exportError && <Notice kind="error">{exportError}</Notice>}
     <FilterPanel count={activeFilters}><div className="filter-grid">
       <label>Visualização<select value={filters.view} onChange={(event) => update('view', event.target.value)}><option value="RECORD">Por registro</option><option value="GROUP">Por grupo</option></select></label>
       <label>Status<select value={filters.scope} onChange={(event) => update('scope', event.target.value)}><option value="ALL">Todos</option><option value="OPEN">Em andamento</option><option value="PENDING_PCP">Aguardando PCP</option><option value="DONE">Finalizadas</option><option value="CLOSED">Encerradas sem conclusão</option></select></label>
@@ -122,6 +140,13 @@ export function HistoryPage({ user, initialMovementId, initialRecordId, success,
       <label>Buscar código ou produto<input type="search" maxLength={100} placeholder="ENT-000153, código ou nome" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></label>
       <label>Ordenar<select value={filters.sort} onChange={(event) => update('sort', event.target.value)}><option value="RECENT">Mais recentes</option><option value="OLDEST">Mais antigas</option></select></label>
     </div>{activeFilters > 0 && <button className="text-button" onClick={clear}>Limpar filtros</button>}</FilterPanel>
+    <div className="surface history-export">
+      <div><strong>Exportar finalizadas</strong><p>Uma linha por registro, em colunas. Usa os filtros acima e todas as páginas, sem pendências de recebimento, separação ou PCP.</p>
+        {!exportScopeAllowed && <small>Selecione o status Todos ou Finalizadas para exportar.</small>}</div>
+      <button type="button" className="secondary" disabled={exporting || loading || !exportScopeAllowed || searchInput !== filters.search || Boolean(error)} onClick={() => void exportHistory()}>
+        {exporting ? 'Preparando CSV…' : 'Exportar CSV'}
+      </button>
+    </div>
     {loading ? <LoadingState label="Carregando histórico" /> : !result?.items.length ? <EmptyState title="Nenhum registro encontrado" description="Ajuste ou limpe os filtros para ver outras movimentações." action={activeFilters ? <button className="secondary" onClick={clear}>Limpar filtros</button> : undefined} /> : <>
       <div className={`history-list ${filters.view === 'RECORD' ? 'record-list' : ''}`}>{result.items.map((item) => { const openItem = () => { setSelectedRecordId(item.recordId ?? null); if (item.kind === 'SHIPMENT') setSelectedShipmentId(item.groupId ?? item.id); else setSelectedMovementId(item.groupId ?? item.id); }; return <div className="record-list-entry" key={`${item.kind}:${item.id}`}>
       {item.recordId && <HistoryRecordRow item={item} onOpen={openItem} />}

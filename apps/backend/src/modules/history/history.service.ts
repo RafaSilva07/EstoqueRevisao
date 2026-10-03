@@ -1,8 +1,9 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { AuthenticatedUser } from '../auth/authenticated-user.interface';
 import { PaginatedResult, paginate } from '../../shared/pagination/paginated-result.interface';
 import { HistoryQueryDto } from './history-query.dto';
+import { historyCsv } from './history-csv';
 
 export interface HistoryItem {
   id: string;
@@ -43,6 +44,32 @@ export class HistoryService {
   constructor(private readonly dataSource: DataSource) {}
 
   async list(query: HistoryQueryDto, user: AuthenticatedUser): Promise<PaginatedResult<HistoryItem>> {
+    const { cte, parameters, order } = this.buildQuery(query, user);
+    const rows: Array<Record<string, unknown>> = await this.dataSource.query(`${cte}
+      SELECT *, count(*) OVER ()::int AS total FROM filtered
+      ${order} LIMIT $11 OFFSET $12`, [...parameters, query.limit, (query.page - 1) * query.limit]);
+    const totalRows: Array<{ total: number }> = rows.length ? [] : await this.dataSource.query(
+      `${cte} SELECT count(*)::int AS total FROM filtered`, parameters,
+    );
+    const total = rows.length ? Number(rows[0].total) : Number(totalRows[0]?.total ?? 0);
+    return paginate(rows.map((row) => this.toItem(row, query)), total, query.page, query.limit);
+  }
+
+  async exportCsv(query: HistoryQueryDto, user: AuthenticatedUser): Promise<string> {
+    if (query.scope !== 'ALL' && query.scope !== 'DONE') {
+      throw new BadRequestException('A exportação inclui somente finalizadas. Selecione o status Todos ou Finalizadas.');
+    }
+    // Always export individual completed records, never groups or the current page.
+    const { cte, parameters, order } = this.buildQuery({ ...query, view: 'RECORD', scope: 'DONE' }, user, true);
+    const rows: Array<Record<string, unknown>> = await this.dataSource.query(`${cte} SELECT * FROM filtered
+      WHERE NOT pcp_required OR pcp_execution_status = 'EXECUTADA' ${order}`, parameters);
+    return historyCsv(rows);
+  }
+
+  private buildQuery(query: HistoryQueryDto, user: AuthenticatedUser, exporting = false): { cte: string; parameters: unknown[]; order: string } {
+    if (query.dateFrom && query.dateTo && new Date(query.dateFrom) > new Date(query.dateTo)) {
+      throw new BadRequestException('O início do período não pode ser posterior ao fim.');
+    }
     const canReadMovements = user.sector === 'PCP'
       ? user.permissions.includes('pcp.movements.read')
       : user.sector === 'REVISAO' && user.permissions.includes('movements.read');
@@ -116,6 +143,21 @@ export class HistoryService {
           pcp_user.username AS pcp_executed_by,
           COALESCE(linked_movement.requires_pcp_execution, shipment.shipment_kind <> 'RETORNO_IMEDIATO') AS pcp_required,
           NULL::jsonb AS review_distributions, NULL::text AS review_distribution_unit
+          ${exporting ? `, jsonb_build_object(
+            'expirationDate', CASE WHEN item.assembly IS NOT NULL THEN item.assembly->>'outputExpirationDate' ELSE batch.expiration_date::text END,
+            'recordObservation', item.observation, 'observation', shipment.observation,
+            'sentAt', shipment.created_at, 'receivedAt', COALESCE(shipment.received_at, shipment.decided_at),
+            'pcpExecutedAt', linked_item.pcp_executed_at, 'pcpObservation', linked_item.pcp_execution_observation,
+            'shipmentKind', shipment.shipment_kind, 'loadingStatus', shipment.loading_status, 'vehiclePlate', shipment.vehicle_plate,
+            'originLocation', source_location.name, 'destinationLocation', target_location.name,
+            'outputProductCode', item.assembly->'packageProductSnapshot'->>'code',
+            'outputProductName', item.assembly->'packageProductSnapshot'->>'name',
+            'outputUnit', item.assembly->'packageProductSnapshot'->>'defaultUnit',
+            'outputQuantity', item.assembly->'packageQuantity', 'unitsPerPackage', item.assembly->'unitsPerPackage',
+            'sourceProductCode', item.product_snapshot->>'code', 'sourceProductName', item.product_snapshot->>'name',
+            'sourceUnit', item.product_snapshot->>'defaultUnit', 'sourceQuantity', item.quantity,
+            'assembly', item.assembly
+          ) AS export_data` : ''}
         FROM entries entry JOIN shipment_items item ON item.shipment_id = entry.id
           JOIN batches batch ON batch.id = item.batch_id
           JOIN shipments shipment ON shipment.id = item.shipment_id
@@ -124,6 +166,8 @@ export class HistoryService {
           LEFT JOIN movement_items linked_item ON linked_item.shipment_item_id = item.id
           LEFT JOIN movements linked_movement ON linked_movement.id = linked_item.movement_id
           LEFT JOIN users pcp_user ON pcp_user.id = linked_item.pcp_executed_by_user_id
+          ${exporting ? `LEFT JOIN stock_locations source_location ON source_location.id = COALESCE(item.stock_location_id, shipment.origin_location_id)
+            LEFT JOIN stock_locations target_location ON target_location.id = shipment.destination_location_id` : ''}
         WHERE entry.kind = 'SHIPMENT'
         UNION ALL
         SELECT item.id, entry.kind, item.codigo_registro AS code, entry.type,
@@ -154,6 +198,26 @@ export class HistoryService {
           CASE WHEN movement.type = 'REVISAO' THEN COALESCE(
             item.output_product_snapshot->>'defaultUnit', item.product_snapshot->>'defaultUnit', product.default_unit
           ) ELSE NULL::text END AS review_distribution_unit
+          ${exporting ? `, jsonb_build_object(
+            'expirationDate', CASE WHEN item.assembly IS NOT NULL THEN item.assembly->>'outputExpirationDate' ELSE batch.expiration_date::text END,
+            'recordObservation', shipment_item.observation, 'observation', movement.observation,
+            'sentAt', shipment.created_at, 'receivedAt', COALESCE(shipment.received_at, shipment.decided_at),
+            'pcpExecutedAt', item.pcp_executed_at, 'pcpObservation', item.pcp_execution_observation,
+            'shipmentKind', shipment.shipment_kind, 'loadingStatus', shipment.loading_status, 'vehiclePlate', shipment.vehicle_plate,
+            'originLocation', entry.origin, 'destinationLocation', entry.destination,
+            'outputProductCode', COALESCE(item.output_product_snapshot->>'code', output_product.code, item.assembly->'packageProductSnapshot'->>'code'),
+            'outputProductName', COALESCE(item.output_product_snapshot->>'name', output_product.name, item.assembly->'packageProductSnapshot'->>'name'),
+            'outputUnit', COALESCE(item.output_product_snapshot->>'defaultUnit', output_product.default_unit, item.assembly->'packageProductSnapshot'->>'defaultUnit'),
+            'outputQuantity', COALESCE(item.output_quantity, (item.assembly->>'packageQuantity')::numeric),
+            'unitsPerPackage', COALESCE(item.units_per_package, (item.assembly->>'unitsPerPackage')::integer),
+            'sourceProductCode', COALESCE(item.product_snapshot->>'code', product.code),
+            'sourceProductName', COALESCE(item.product_snapshot->>'name', product.name),
+            'sourceUnit', COALESCE(item.product_snapshot->>'defaultUnit', product.default_unit), 'sourceQuantity', item.quantity,
+            'destinationBatchCode', COALESCE(destination_batch.code, output_batch.code),
+            'destinationManufacturingDate', COALESCE(destination_batch.manufacturing_date, output_batch.manufacturing_date),
+            'destinationExpirationDate', COALESCE(destination_batch.expiration_date, output_batch.expiration_date),
+            'assembly', item.assembly
+          ) AS export_data` : ''}
         FROM entries entry JOIN movement_items item ON item.movement_id = entry.id
           JOIN movements movement ON movement.id = item.movement_id
           JOIN products product ON product.id = item.product_id
@@ -163,6 +227,10 @@ export class HistoryService {
           LEFT JOIN users receiver ON receiver.id = shipment.decided_by_id
           LEFT JOIN users early_receiver ON early_receiver.id = shipment.received_by_id
           LEFT JOIN users pcp_user ON pcp_user.id = item.pcp_executed_by_user_id
+          ${exporting ? `LEFT JOIN shipment_items shipment_item ON shipment_item.id = item.shipment_item_id
+            LEFT JOIN products output_product ON output_product.id = item.output_product_id
+            LEFT JOIN batches output_batch ON output_batch.id = item.output_batch_id
+            LEFT JOIN batches destination_batch ON destination_batch.id = item.destination_batch_id` : ''}
           LEFT JOIN LATERAL (
             SELECT string_agg(DISTINCT target.name, ' · ' ORDER BY target.name) AS destination_names,
               jsonb_agg(jsonb_build_object(
@@ -203,19 +271,15 @@ export class HistoryService {
                 OR source.product_code ILIKE '%' || $6 || '%'
                 OR source.product_name ILIKE '%' || $6 || '%'`})
       )`;
-    const sql = `${cte}
-      SELECT *, count(*) OVER ()::int AS total FROM filtered
-      ORDER BY occurred_at ${query.sort === 'OLDEST' ? 'ASC' : 'DESC'},
+    const order = `ORDER BY occurred_at ${query.sort === 'OLDEST' ? 'ASC' : 'DESC'},
         ${query.view === 'GROUP' ? `id ${query.sort === 'OLDEST' ? 'ASC' : 'DESC'}`
-          : `group_id ${query.sort === 'OLDEST' ? 'ASC' : 'DESC'}, record_ordinal ${query.sort === 'OLDEST' ? 'ASC' : 'DESC'}, id ${query.sort === 'OLDEST' ? 'ASC' : 'DESC'}`}
-      LIMIT $11 OFFSET $12`;
-    const parameters = [canReadShipments, user.sector, canReadMovements, query.scope, query.kind, query.search?.trim() ?? '', query.type ?? 'ALL', query.dateFrom ?? null, query.dateTo ?? null, query.direction ?? 'ALL', query.limit, (query.page - 1) * query.limit];
-    const rows: Array<Record<string, unknown>> = await this.dataSource.query(sql, parameters);
-    const totalRows: Array<{ total: number }> = rows.length ? [] : await this.dataSource.query(
-      `${cte} SELECT count(*)::int AS total FROM filtered`, parameters.slice(0, 10),
-    );
-    const total = rows.length ? Number(rows[0].total) : Number(totalRows[0]?.total ?? 0);
-    return paginate(rows.map((row) => ({
+          : `group_id ${query.sort === 'OLDEST' ? 'ASC' : 'DESC'}, record_ordinal ${query.sort === 'OLDEST' ? 'ASC' : 'DESC'}, id ${query.sort === 'OLDEST' ? 'ASC' : 'DESC'}`}`;
+    const parameters = [canReadShipments, user.sector, canReadMovements, query.scope, query.kind, query.search?.trim() ?? '', query.type ?? 'ALL', query.dateFrom ?? null, query.dateTo ?? null, query.direction ?? 'ALL'];
+    return { cte, parameters, order };
+  }
+
+  private toItem(row: Record<string, unknown>, query: HistoryQueryDto): HistoryItem {
+    return {
       id: String(row.id), kind: row.kind as HistoryItem['kind'], code: row.code as string | null,
       type: String(row.type), origin: String(row.origin), destination: String(row.destination),
       responsible: String(row.responsible), occurredAt: row.occurred_at as Date,
@@ -238,6 +302,6 @@ export class HistoryService {
           })) : [],
         reviewDistributionUnit: row.review_distribution_unit as string | null,
       } : {}),
-    })), total, query.page, query.limit);
+    };
   }
 }

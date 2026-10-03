@@ -14,6 +14,7 @@ const result = (items: unknown[]) => ({ items, meta: { total: items.length, page
 describe('Histórico unificado', () => {
   beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: vi.fn() });
     requestedPaths = [];
     host = document.createElement('div'); document.body.append(host); root = createRoot(host);
     vi.spyOn(api, 'get').mockImplementation((path) => {
@@ -22,7 +23,7 @@ describe('Histórico unificado', () => {
       return Promise.resolve({ ...item, codigoMovimentacao: item.code, originSector: 'PRODUCAO', destinationSector: 'REVISAO', createdBy: { id: 'operator', username: 'Operador' }, createdAt: item.occurredAt, items: [] });
     });
   });
-  afterEach(() => { act(() => { root.unmount(); }); host.remove(); vi.restoreAllMocks(); });
+  afterEach(() => { act(() => { root.unmount(); }); host.remove(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
   it('mostra um cartão, aplica status na API e abre o envio existente', async () => {
     await act(async () => { root.render(<HistoryPage user={user} onOpenShipment={vi.fn()} onOpenPcp={vi.fn()} />); await Promise.resolve(); });
@@ -99,5 +100,70 @@ describe('Histórico unificado', () => {
     const view = Array.from(host.querySelectorAll('select')).find((select) => select.closest('label')?.textContent?.includes('Visualização'))!;
     await act(async () => { view.value = 'GROUP'; view.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
     expect(requestedPaths.some((path) => path.includes('view=GROUP'))).toBe(true);
+  });
+
+  it('exporta os filtros em colunas por registro, todas as páginas e somente finalizadas', async () => {
+    vi.useFakeTimers();
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:history-export') });
+    const revoke = vi.fn();
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revoke });
+    let downloadedFile = '';
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { downloadedFile = this.download; });
+    const download = vi.spyOn(api, 'getBlob').mockResolvedValue(new Blob(['"Registro";"Produto"\r\n'], { type: 'text/csv' }));
+    await act(async () => { root.render(<HistoryPage user={user} onOpenShipment={vi.fn()} onOpenPcp={vi.fn()} />); await Promise.resolve(); });
+    const setFilter = async (label: string, value: string) => {
+      const select = Array.from(host.querySelectorAll('select')).find((field) => field.closest('label')?.textContent?.startsWith(label))!;
+      await act(async () => { select.value = value; select.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
+    };
+    await setFilter('Visualização', 'GROUP');
+    await setFilter('Tipo', 'REVISAO');
+    await setFilter('Sentido', 'INTERNAL');
+    await setFilter('Ordenar', 'OLDEST');
+    const button = Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find((field) => field.textContent === 'Exportar CSV')!;
+    await act(async () => { button.click(); await Promise.resolve(); });
+    const path = download.mock.calls[0][0];
+    const params = new URLSearchParams(path.split('?')[1]);
+    expect(path.startsWith('/history/export.csv?')).toBe(true);
+    expect(params.get('view')).toBe('RECORD');
+    expect(params.get('scope')).toBe('DONE');
+    expect(params.get('type')).toBe('REVISAO');
+    expect(params.get('direction')).toBe('INTERNAL');
+    expect(params.get('sort')).toBe('OLDEST');
+    expect(params.has('page')).toBe(false);
+    expect(params.has('limit')).toBe(false);
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(downloadedFile).toBe('historico-finalizadas.csv');
+    await act(async () => { vi.advanceTimersByTime(1000); await Promise.resolve(); });
+    expect(revoke).toHaveBeenCalledWith('blob:history-export');
+  });
+
+  it('não exporta pendências e exibe erro de exportação sem apagar a lista', async () => {
+    const download = vi.spyOn(api, 'getBlob').mockRejectedValue(new Error('Não foi possível exportar.'));
+    await act(async () => { root.render(<HistoryPage user={user} onOpenShipment={vi.fn()} onOpenPcp={vi.fn()} />); await Promise.resolve(); });
+    const button = Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find((field) => field.textContent === 'Exportar CSV')!;
+    const status = Array.from(host.querySelectorAll('select')).find((field) => field.closest('label')?.textContent?.startsWith('Status'))!;
+    await act(async () => { status.value = 'PENDING_PCP'; status.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
+    expect(button.disabled).toBe(true);
+    expect(host.textContent).toContain('Selecione o status Todos ou Finalizadas');
+    await act(async () => { button.click(); await Promise.resolve(); });
+    expect(download).not.toHaveBeenCalled();
+    await act(async () => { status.value = 'DONE'; status.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
+    await act(async () => { button.click(); await Promise.resolve(); });
+    expect(host.textContent).toContain('Não foi possível exportar.');
+    expect(host.querySelectorAll('.history-card')).toHaveLength(1);
+    expect(button.disabled).toBe(false);
+  });
+
+  it('impede downloads simultâneos enquanto a API prepara o arquivo', async () => {
+    let fail!: (error: Error) => void;
+    const download = vi.spyOn(api, 'getBlob').mockReturnValue(new Promise<Blob>((_resolve, reject) => { fail = reject; }));
+    await act(async () => { root.render(<HistoryPage user={user} onOpenShipment={vi.fn()} onOpenPcp={vi.fn()} />); await Promise.resolve(); });
+    const button = Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find((field) => field.textContent === 'Exportar CSV')!;
+    await act(async () => { button.click(); button.click(); await Promise.resolve(); });
+    expect(download).toHaveBeenCalledTimes(1);
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toBe('Preparando CSV…');
+    await act(async () => { fail(new Error('Cancelado')); await Promise.resolve(); });
+    expect(button.disabled).toBe(false);
   });
 });
