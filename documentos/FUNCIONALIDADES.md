@@ -63,6 +63,8 @@ A listagem de produtos usa a paginação existente de `GET /api/v1/products`: na
 
 A Revisão acessa **Envios e recebimentos** pela Home ou menu; Produção/Expedição recebem uma interface restrita ao próprio setor. A tela operacional separa **Para receber** de **Meus envios em aberto**; concluídos, recusados e cancelados são encontrados no **Histórico** unificado. O início destaca pendências e decisões recentes dos próprios envios; a indicação é atualizada a cada 30 segundos, sem interromper formulários/decisões abertos.
 
+Na separação imediata para retorno, cada card mostra lote e fabricação em `DD/MM/AAAA` junto ao campo de quantidade, usando os dados do item recebido.
+
 Novo envio aceita vários itens e exige conferência do resumo. A seleção de produto possui campos independentes de código e descrição com sugestões filtradas durante a digitação; escolher em qualquer campo identifica o produto único e preenche o outro automaticamente, sem uma terceira seleção. A lista também pode ser aberta pelos botões dos campos e refinada por teclado.
 
 No envio **Expedição → Revisão**, o formulário exige escolher **Carregado** ou **Não carregado**. Em **Carregado**, a placa do veículo é obrigatória. Situação e placa aparecem na conferência, no recebimento e no detalhe histórico do envio; envios antigos sem o campo continuam legíveis.

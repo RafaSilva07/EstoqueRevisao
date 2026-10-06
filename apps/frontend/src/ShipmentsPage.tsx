@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, Paginated, ShipmentPhotoLimits, UserSession } from './api';
 import { EmptyState, LoadingState, Modal, Notice, PageHeader } from './components';
-import { formatDateTime } from './format';
+import { formatDate, formatDateTime } from './format';
 import { MovementRecordRow } from './MovementRecordRow';
 import { NewShipment } from './NewShipment';
 import { useMovementSubmission } from './useMovementSubmission';
@@ -84,7 +84,7 @@ function SeparationDialog({ shipment, onClose, onDone }: { shipment: Shipment; o
   return <Modal labelledBy="separation-title" busy={busy} onClose={onClose}><h2 id="separation-title">Separação imediata</h2><p>Informe somente o que retornará à Expedição. O restante entrará diretamente no estoque da Revisão.</p>
     {shipment.separationExpiresAt && <Notice kind="info">Concluir até {formatDateTime(shipment.separationExpiresAt)}.</Notice>}{error && <Notice kind="error">{error}</Notice>}{saved && <Notice kind="success">Rascunho salvo. O prazo continua correndo.</Notice>}
     {!photoLimits && <p className="muted">Carregando os limites de fotos…</p>}
-    <div className="separation-items">{shipment.items.map((item) => { const amount = Number(quantities[item.id] || 0); return <article className="shipment-item-card" key={item.id}><div className="shipment-item-heading"><strong>{item.productSnapshot.code} — {item.productSnapshot.name}</strong><b>Recebido: {item.quantity}</b></div><p>Lote {item.batch.code}</p><label>Quantidade de retorno<input type="number" inputMode="numeric" min="0" max={item.quantity} step="1" value={quantities[item.id] ?? '0'} onChange={(event) => { setQuantities((current) => ({ ...current, [item.id]: event.target.value })); setSaved(false); }} /></label>{amount > 0 && photoLimits && <ShipmentPhotoInput photos={photos[item.id] ?? []} limits={photoLimits} productName={item.productSnapshot.name} remainingTotal={100 - photoTotal} onAdd={(files) => addPhotos(item.id, files)} onRemove={(index) => removePhoto(item.id, index)} />}</article>; })}</div>
+    <div className="separation-items">{shipment.items.map((item) => { const amount = Number(quantities[item.id] || 0); return <article className="shipment-item-card" key={item.id}><div className="shipment-item-heading"><strong>{item.productSnapshot.code} — {item.productSnapshot.name}</strong><b>Recebido: {item.quantity}</b></div><p>Lote {item.batch.code} · {formatDate(item.batch.manufacturingDate)}</p><label>Quantidade de retorno<input type="number" inputMode="numeric" min="0" max={item.quantity} step="1" value={quantities[item.id] ?? '0'} onChange={(event) => { setQuantities((current) => ({ ...current, [item.id]: event.target.value })); setSaved(false); }} /></label>{amount > 0 && photoLimits && <ShipmentPhotoInput photos={photos[item.id] ?? []} limits={photoLimits} productName={item.productSnapshot.name} remainingTotal={100 - photoTotal} onAdd={(files) => addPhotos(item.id, files)} onRemove={(index) => removePhoto(item.id, index)} />}</article>; })}</div>
     <div className="dialog-actions"><button type="button" className="secondary" onClick={() => void save()} disabled={busy || !valid}>Salvar e sair</button><button type="button" onClick={() => void complete()} disabled={busy || !valid || !photosReady}>Concluir separação</button></div>
   </Modal>;
 }

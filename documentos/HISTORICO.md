@@ -205,3 +205,7 @@ Presença recente passou a ser registrada na sessão autenticada e no modo opera
 ## Etapa 66 — Exportação de registros finalizados do Histórico
 
 O Histórico passou a exportar CSV filtrado por registro, sem incluir etapas pendentes nem agregar por grupo. A consulta e a exportação compartilham filtros e autorização. Resumo no [relatório da etapa 66](./relatorios/RELATORIO_ETAPA_66_EXPORTACAO_HISTORICO.md).
+
+## Etapa 67 — Data na separação para retorno
+
+A separação imediata passou a mostrar a fabricação junto ao lote em cada card de produto. Ajuste somente visual, descrito no [relatório da etapa 67](./relatorios/RELATORIO_ETAPA_67_DATA_SEPARACAO_RETORNO.md).
