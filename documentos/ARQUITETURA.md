@@ -198,6 +198,8 @@ O estado intermediário pertence a `shipments`, pois ainda não existe movimenta
 
 ## Frontend
 
+Rascunhos usam IndexedDB (`estoque-revisao-form-drafts`) com versão de payload e chave composta por usuário, modo e formulário/registro. `useFormDraft`, `FormDraftProvider` e `DraftActions` centralizam recuperação, gravação serializada/debounced, proteção de saída e limpeza após sucesso. Fotografias permanecem como `File`, sem base64; URLs de preview são recriadas e liberadas. A chave de idempotência operacional é preservada, mas confirmações de conflito não. Presets mantêm a versão original do rascunho para preservar a proteção contra edição obsoleta. Erros de armazenamento são visíveis e impedem “salvar e sair”. O backend e o schema não mudam; regras de rascunho em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#rascunhos-de-preenchimento).
+
 - Abordagem mobile-first a partir de 320 px.
 - A aparência usa variáveis CSS para superfícies/contraste e fundo geral. Preferências vêm da conta autenticada no login/refresh e são atualizadas em `GET/PATCH /auth/preferences`; o navegador não armazena tokens nem preferências em `localStorage`. A cor personalizada afeta o fundo, não o texto dos cartões; o texto sobre o fundo é escolhido pelo contraste da cor.
 - Navegação inferior no celular e sidebar no desktop.

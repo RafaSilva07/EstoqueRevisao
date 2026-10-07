@@ -11,14 +11,21 @@ import { ShipmentPhotoInput } from './ShipmentPhotoInput';
 import { auditActionLabel } from './audit-action-labels';
 import { ShipmentItems } from './ShipmentItems';
 import { ShipmentDetailView } from './ShipmentDetailView';
+import { DraftActions } from './FormDrafts';
+import { useFormDraft } from './useFormDraft';
 
 function ShipmentDecision({ shipment, refuse, onClose, onDone }: { shipment: Shipment; refuse: boolean; onClose: () => void; onDone: () => void }) {
   const [reason, setReason] = useState('');
   const [immediateSeparation, setImmediateSeparation] = useState(false);
   const canSeparate = !refuse && shipment.originSector === 'EXPEDICAO' && shipment.destinationSector === 'REVISAO' && shipment.shipmentKind === 'NORMAL';
-  const submission = useMovementSubmission(`/shipments/${shipment.id}/${refuse ? 'refusal' : 'confirmation'}`, onDone, false);
-  return <Modal labelledBy="shipment-decision-title" busy={submission.busy} onClose={onClose}>
+  const submission = useMovementSubmission(`/shipments/${shipment.id}/${refuse ? 'refusal' : 'confirmation'}`, done, false);
+  const draft = useFormDraft(`shipment-decision:${shipment.id}:${refuse}`, refuse ? 'Recusar envio' : 'Receber envio', { reason, immediateSeparation }, (saved) => { setReason(saved.reason); setImmediateSeparation(saved.immediateSeparation); }, { busy: submission.busy });
+  const close = () => draft.close(onClose);
+  async function done() { await draft.complete(); onDone(); }
+  if (!draft.ready) return <Modal labelledBy="shipment-decision-title" busy onClose={close}><h2 id="shipment-decision-title">Recuperando rascunho</h2><LoadingState label="Preparando preenchimento" /></Modal>;
+  return <Modal labelledBy="shipment-decision-title" busy={submission.busy || !draft.ready} onClose={close}>
     <h2 id="shipment-decision-title">{refuse ? 'Recusar envio' : 'Confirmar recebimento'}</h2>
+    <DraftActions draft={draft} />
     {shipment.loadingStatus && <p><strong>Carregamento:</strong> {shipment.loadingStatus === 'CARREGADO' ? `Carregado · placa ${shipment.vehiclePlate}` : 'Não carregado'}</p>}
     {shipment.observation && <p><strong>Observação geral:</strong> {shipment.observation}</p>}
     <ShipmentItems shipment={shipment} />
@@ -28,21 +35,26 @@ function ShipmentDecision({ shipment, refuse, onClose, onDone }: { shipment: Shi
       {canSeparate && <fieldset className="settings-options"><legend>A separação dos produtos bons será feita agora?</legend><label className="check-row"><input type="radio" name="separation" checked={!immediateSeparation} onChange={() => setImmediateSeparation(false)} />Não, receber todo o volume</label><label className="check-row"><input type="radio" name="separation" checked={immediateSeparation} onChange={() => setImmediateSeparation(true)} />Sim, separar agora</label></fieldset>}
       {submission.conflict && <Notice kind="info">{submission.conflict.message}</Notice>}
       {submission.error && <Notice kind="error">{submission.error}</Notice>}
-      <div className="dialog-actions"><button type="button" className="secondary" disabled={submission.busy} onClick={onClose}>Voltar</button><button disabled={submission.busy || (refuse && !reason.trim())}>{submission.busy ? 'Processando…' : refuse ? 'Confirmar recusa' : submission.conflict ? 'Aceitar validade diferente e receber' : 'Confirmar recebimento'}</button></div>
+      <div className="dialog-actions"><button type="button" className="secondary" disabled={submission.busy} onClick={close}>Voltar</button><button disabled={!draft.ready || submission.busy || (refuse && !reason.trim())}>{submission.busy ? 'Processando…' : refuse ? 'Confirmar recusa' : submission.conflict ? 'Aceitar validade diferente e receber' : 'Confirmar recebimento'}</button></div>
     </form>
   </Modal>;
 }
 
 function ShipmentCancellation({ shipment, onClose, onDone }: { shipment: Shipment; onClose: () => void; onDone: () => void }) {
   const [reason, setReason] = useState('');
-  const submission = useMovementSubmission(`/shipments/${shipment.id}/cancellation`, onDone, false);
-  return <Modal labelledBy="shipment-cancellation-title" busy={submission.busy} onClose={onClose}>
+  const submission = useMovementSubmission(`/shipments/${shipment.id}/cancellation`, done, false);
+  const draft = useFormDraft(`shipment-cancel:${shipment.id}`, 'Cancelar envio', { reason }, (saved) => setReason(saved.reason), { busy: submission.busy });
+  const close = () => draft.close(onClose);
+  async function done() { await draft.complete(); onDone(); }
+  if (!draft.ready) return <Modal labelledBy="shipment-cancellation-title" busy onClose={close}><h2 id="shipment-cancellation-title">Recuperando rascunho</h2><LoadingState label="Preparando preenchimento" /></Modal>;
+  return <Modal labelledBy="shipment-cancellation-title" busy={submission.busy || !draft.ready} onClose={close}>
     <h2 id="shipment-cancellation-title">Cancelar envio {shipment.codigoMovimentacao}?</h2>
+    <DraftActions draft={draft} />
     <Notice kind="info">O envio permanecerá no histórico. Se houver saldo reservado pela Revisão, ele será devolvido às posições originais.</Notice>
     <form onSubmit={(event) => { event.preventDefault(); void submission.submit({ reason }); }}>
       <label>Motivo do cancelamento *<textarea required maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} rows={4} disabled={submission.busy} /></label>
       {submission.error && <Notice kind="error">{submission.error}</Notice>}
-      <div className="dialog-actions"><button type="button" className="secondary" disabled={submission.busy} onClick={onClose}>Voltar</button><button className="danger" disabled={submission.busy || !reason.trim()}>{submission.busy ? 'Cancelando…' : 'Confirmar cancelamento'}</button></div>
+      <div className="dialog-actions"><button type="button" className="secondary" disabled={submission.busy} onClick={close}>Voltar</button><button className="danger" disabled={!draft.ready || submission.busy || !reason.trim()}>{submission.busy ? 'Cancelando…' : 'Confirmar cancelamento'}</button></div>
     </form>
   </Modal>;
 }
@@ -53,6 +65,8 @@ function SeparationDialog({ shipment, onClose, onDone }: { shipment: Shipment; o
   const [photoLimits, setPhotoLimits] = useState<ShipmentPhotoLimits | null>(null);
   const photoUrls = useRef(new Set<string>());
   const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [saved, setSaved] = useState(false);
+  const draft = useFormDraft(`separation:${shipment.id}`, 'Separação imediata', { quantities, photos }, (saved) => { setQuantities(saved.quantities); setPhotos(saved.photos); }, { busy });
+  const close = () => draft.close(onClose);
   useEffect(() => {
     let active = true;
     const urls = photoUrls.current;
@@ -79,9 +93,10 @@ function SeparationDialog({ shipment, onClose, onDone }: { shipment: Shipment; o
       return { ...current, [itemId]: existing.filter((_, photoIndex) => photoIndex !== index) };
     });
   }
-  async function save() { setBusy(true); setError(''); try { await api.patch(`/shipments/${shipment.id}/separation-draft`, payload()); setSaved(true); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Não foi possível salvar o rascunho.'); } finally { setBusy(false); } }
-  async function complete() { if (!valid || !photosReady) return; setBusy(true); setError(''); try { const orderedFiles = shipment.items.filter((item) => Number(quantities[item.id] || 0) > 0).flatMap((item) => (photos[item.id] ?? []).map((photo) => photo.file)); await api.postMultipart(`/shipments/${shipment.id}/separation-completion`, payload(true), orderedFiles); onDone(); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Não foi possível concluir a separação.'); } finally { setBusy(false); } }
-  return <Modal labelledBy="separation-title" busy={busy} onClose={onClose}><h2 id="separation-title">Separação imediata</h2><p>Informe somente o que retornará à Expedição. O restante entrará diretamente no estoque da Revisão.</p>
+  async function save() { setBusy(true); setError(''); try { await api.patch(`/shipments/${shipment.id}/separation-draft`, payload()); await draft.save(); setSaved(true); onClose(); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Não foi possível salvar o rascunho.'); } finally { setBusy(false); } }
+  async function complete() { if (!valid || !photosReady) return; setBusy(true); setError(''); try { const orderedFiles = shipment.items.filter((item) => Number(quantities[item.id] || 0) > 0).flatMap((item) => (photos[item.id] ?? []).map((photo) => photo.file)); await api.postMultipart(`/shipments/${shipment.id}/separation-completion`, payload(true), orderedFiles); await draft.complete(); onDone(); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Não foi possível concluir a separação.'); } finally { setBusy(false); } }
+  if (!draft.ready) return <Modal labelledBy="separation-title" busy onClose={close}><h2 id="separation-title">Recuperando rascunho</h2><LoadingState label="Preparando preenchimento" /></Modal>;
+  return <Modal labelledBy="separation-title" busy={busy || !draft.ready} onClose={close}><h2 id="separation-title">Separação imediata</h2><p>Informe somente o que retornará à Expedição. O restante entrará diretamente no estoque da Revisão.</p><DraftActions draft={draft} />
     {shipment.separationExpiresAt && <Notice kind="info">Concluir até {formatDateTime(shipment.separationExpiresAt)}.</Notice>}{error && <Notice kind="error">{error}</Notice>}{saved && <Notice kind="success">Rascunho salvo. O prazo continua correndo.</Notice>}
     {!photoLimits && <p className="muted">Carregando os limites de fotos…</p>}
     <div className="separation-items">{shipment.items.map((item) => { const amount = Number(quantities[item.id] || 0); return <article className="shipment-item-card" key={item.id}><div className="shipment-item-heading"><strong>{item.productSnapshot.code} — {item.productSnapshot.name}</strong><b>Recebido: {item.quantity}</b></div><p>Lote {item.batch.code} · {formatDate(item.batch.manufacturingDate)}</p><label>Quantidade de retorno<input type="number" inputMode="numeric" min="0" max={item.quantity} step="1" value={quantities[item.id] ?? '0'} onChange={(event) => { setQuantities((current) => ({ ...current, [item.id]: event.target.value })); setSaved(false); }} /></label>{amount > 0 && photoLimits && <ShipmentPhotoInput photos={photos[item.id] ?? []} limits={photoLimits} productName={item.productSnapshot.name} remainingTotal={100 - photoTotal} onAdd={(files) => addPhotos(item.id, files)} onRemove={(index) => removePhoto(item.id, index)} />}</article>; })}</div>

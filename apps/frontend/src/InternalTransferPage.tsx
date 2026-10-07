@@ -7,6 +7,8 @@ import { OperationalLotFields } from './OperationalLotFields';
 import { emptyLot, OperationalLot } from './operational-lot';
 import { useMovementSubmission } from './useMovementSubmission';
 import { ProductAutocomplete } from './ProductAutocomplete';
+import { DraftActions } from './FormDrafts';
+import { useFormDraft } from './useFormDraft';
 
 export interface TransferPrefill {
   originLocationId: string;
@@ -47,13 +49,18 @@ export function InternalTransferPage({
   const [quantity, setQuantity] = useState('');
   const [observation, setObservation] = useState('');
   const [items, setItems] = useState<TransferDraftItem[]>([]);
-  const submission = useMovementSubmission('/movements/internal-transfers', onCreated);
+  const submission = useMovementSubmission('/movements/internal-transfers', created);
   const busy = submission.busy;
   const [loading, setLoading] = useState(true);
   const [loadingStock, setLoadingStock] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
+  const [productQuery, setProductQuery] = useState({ code: '', name: '' });
+  const draft = useFormDraft('transfer', 'Transferência interna', { originId, destinationId, productId, batchId, destinationLot, lotReady, changeLot, quantity, observation, items, requestKey: submission.requestKey, productQuery }, (saved) => {
+    setProductQuery(saved.productQuery); setOriginId(saved.originId); setDestinationId(saved.destinationId); setProductId(saved.productId); setBatchId(saved.batchId); setDestinationLot(saved.destinationLot); setLotReady(saved.lotReady); setChangeLot(saved.changeLot); setQuantity(saved.quantity); setObservation(saved.observation); setItems(saved.items); submission.setRequestKey(saved.requestKey);
+  }, { enabled: !loading, busy });
+  async function created(id: string) { await draft.complete(); onCreated(id); }
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -86,7 +93,7 @@ export function InternalTransferPage({
     } finally {
       setLoadingStock(false);
     }
-  }, [originId]);
+  }, [originId, setLoadingStock, setError]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => void loadPositions(), 0);
@@ -108,6 +115,7 @@ export function InternalTransferPage({
   const locationFor = (id: string) => locations.find((location) => location.id === id);
 
   function changeOrigin(value: string) {
+    setProductQuery({ code: '', name: '' });
     setOriginId(value);
     setProductId('');
     setBatchId('');
@@ -119,7 +127,8 @@ export function InternalTransferPage({
     setChangeLot(false); setDestinationLot(emptyLot); setLotReady(false); setLotKey((key) => key + 1);
   }
 
-  function closeItem() { setAdding(false); setError(''); setProductId(''); changeSourceBatch(''); setQuantity(''); }
+  function resetItem() { setProductQuery({ code: '', name: '' }); setAdding(false); setError(''); setProductId(''); changeSourceBatch(''); setQuantity(''); }
+  function closeItem() { draft.close(() => { setAdding(false); setError(''); }); }
 
   function addItem(event: FormEvent) {
     event.preventDefault();
@@ -157,7 +166,7 @@ export function InternalTransferPage({
       destinationBatchId: changeLot ? undefined : selectedPosition.batchId,
       quantity: numericQuantity,
     }]);
-    closeItem();
+    resetItem();
   }
 
   async function submit() {
@@ -170,7 +179,7 @@ export function InternalTransferPage({
     });
   }
 
-  if (loading) return <LoadingState label="Preparando nova transferencia" />;
+  if (loading || !draft.ready) return <LoadingState label="Preparando nova transferencia" />;
 
   const routeLocked = items.length > 0;
   return <>
@@ -180,6 +189,7 @@ export function InternalTransferPage({
       description="Mova o produto para outro local, outro lote ou ambos sem alterar a quantidade total."
     />
     <OperationGuide />
+    <DraftActions draft={draft} />
     {error && !adding && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
     <section className="surface form-panel">
       <h2><span className="step-number">1</span> Origem e destino</h2>
@@ -205,9 +215,10 @@ export function InternalTransferPage({
     </section>
     {adding && <Modal labelledBy="add-product-title" onClose={closeItem}>
       <div className="panel-heading item-list-heading"><h2 id="add-product-title">Adicionar produto</h2><button type="button" className="secondary" onClick={closeItem}>Cancelar</button></div>
+      <DraftActions draft={draft} />
       {error && <Notice kind="error">{error}</Notice>}
       {!originId ? <p className="muted">Escolha a origem para consultar o saldo.</p> : loadingStock ? <LoadingState label="Consultando saldo da origem" /> : positions.length === 0 ? <EmptyState title="Origem sem saldo disponivel" description="Escolha outro local ou registre uma entrada antes da transferencia." /> : <form className="form-grid" onSubmit={addItem}>
-        <ProductAutocomplete availableProducts={products} initialProduct={selectedProduct} onChange={(selected) => { setProductId(selected?.id ?? ''); changeSourceBatch(''); }} />
+        <ProductAutocomplete draftQuery={productQuery} onQueryChange={setProductQuery} availableProducts={products} initialProduct={selectedProduct} onChange={(selected) => { setProductId(selected?.id ?? ''); changeSourceBatch(''); }} />
         <PositionSelect label="Lote de origem *" value={batchId} onChange={changeSourceBatch} disabled={!productId}
           options={sourcePositions.map((position) => ({ value: position.batchId, label: `Lote: ${position.batch.code} · val: ${formatDate(position.batch.expirationDate)} · saldo: ${position.quantity}` }))} />
         {selectedPosition && <div className="available-balance" role="status"><span>Disponivel em {locationFor(originId)?.name}</span><strong>{selectedPosition.quantity} {selectedPosition.product.defaultUnit}</strong><small>Validade {formatDate(selectedPosition.batch.expirationDate)}</small></div>}
@@ -222,7 +233,7 @@ export function InternalTransferPage({
           <small>Informe os dados do destino; se já existirem, o saldo será somado automaticamente.</small>
 
         </label>
-        {changeLot && selectedProduct && <OperationalLotFields key={productId + ':' + lotKey} product={selectedProduct} value={destinationLot} onChange={setDestinationLot} onReady={setLotReady} />}
+        {changeLot && selectedProduct && <OperationalLotFields initiallyResolved={lotReady} key={productId + ':' + lotKey} product={selectedProduct} value={destinationLot} onChange={setDestinationLot} onReady={setLotReady} />}
         <div className="form-actions"><button disabled={changeLot && !lotReady}>+ Adicionar</button></div>
       </form>}
     </Modal>}
@@ -231,6 +242,6 @@ export function InternalTransferPage({
       {items.length === 0 ? <EmptyState title="Nenhum item adicionado" description="Adicione ao menos uma posicao de origem e seu lote de destino." /> : <div className="entry-items">{items.map((item) => <article key={item.key} className="entry-item"><div><strong>{item.position.product.name}</strong><span>{locationFor(originId)?.name} / lote {item.position.batch.code} / validade {formatDate(item.position.batch.expirationDate)}</span><span>→ {locationFor(destinationId)?.name} / lote {item.destinationBatch.code} / validade {formatDate(item.destinationBatch.expirationDate)}</span><b>{item.quantity} {item.position.product.defaultUnit}</b></div><button className="secondary" onClick={() => setItems((current) => current.filter((candidate) => candidate.key !== item.key))}>Remover</button></article>)}</div>}
       {(!originId || !destinationId || items.length === 0) && <p className="action-hint">Selecione origem, destino e adicione ao menos um item para continuar.</p>}<button className="button-wide" disabled={!originId || !destinationId || items.length === 0 || busy} onClick={() => { submission.resetConfirmation(); setConfirming(true); }}>Revisar transferencia</button>
     </section>
-    {confirming && <Modal labelledBy="transfer-confirm-title" busy={busy} onClose={() => setConfirming(false)}><p className="eyebrow">Confirmacao</p><h2 id="transfer-confirm-title">{submission.conflict ? 'Mesmo lote com outra validade' : 'Confirmar transferência?'}</h2>{submission.conflict && <Notice kind="info">{submission.conflict.message}</Notice>}{submission.error && <Notice kind="error">{submission.error}</Notice>}<ul>{items.map((item) => <li key={item.key}><strong>{item.position.product.name}</strong><br />{locationFor(originId)?.name} / lote {item.position.batch.code} / validade {formatDate(item.position.batch.expirationDate)} → {locationFor(destinationId)?.name} / lote {item.destinationBatch.code} / validade {formatDate(item.destinationBatch.expirationDate)}<br /><strong>{item.quantity} {item.position.product.defaultUnit}</strong></li>)}</ul><p>Total: {items.length} item(ns). O produto e a quantidade total serao preservados.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={() => setConfirming(false)}>Voltar e corrigir</button><button disabled={busy} onClick={() => void submit()}>{busy ? 'Transferindo...' : submission.conflict ? 'Confirmar com validades separadas' : 'Confirmar transferência'}</button></div></Modal>}
+    {confirming && <Modal labelledBy="transfer-confirm-title" busy={busy} onClose={() => draft.close(() => setConfirming(false))}><p className="eyebrow">Confirmacao</p><h2 id="transfer-confirm-title">{submission.conflict ? 'Mesmo lote com outra validade' : 'Confirmar transferência?'}</h2>{submission.conflict && <Notice kind="info">{submission.conflict.message}</Notice>}{submission.error && <Notice kind="error">{submission.error}</Notice>}<ul>{items.map((item) => <li key={item.key}><strong>{item.position.product.name}</strong><br />{locationFor(originId)?.name} / lote {item.position.batch.code} / validade {formatDate(item.position.batch.expirationDate)} → {locationFor(destinationId)?.name} / lote {item.destinationBatch.code} / validade {formatDate(item.destinationBatch.expirationDate)}<br /><strong>{item.quantity} {item.position.product.defaultUnit}</strong></li>)}</ul><p>Total: {items.length} item(ns). O produto e a quantidade total serao preservados.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={() => setConfirming(false)}>Voltar e corrigir</button><button disabled={busy} onClick={() => void submit()}>{busy ? 'Transferindo...' : submission.conflict ? 'Confirmar com validades separadas' : 'Confirmar transferência'}</button></div></Modal>}
   </>;
 }

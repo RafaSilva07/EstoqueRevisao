@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { api, Product } from './api';
 import { OperationalLot } from './operational-lot';
 
-export function OperationalLotFields({ product, value, onChange, onReady, resolvePath = '/movements/resolve-lot' }: {
+export function OperationalLotFields({ product, value, onChange, onReady, initiallyResolved = true, resolvePath = '/movements/resolve-lot' }: {
   resolvePath?: string;
   product: Product;
   value: OperationalLot;
   onChange: (lot: OperationalLot) => void;
   onReady: (ready: boolean) => void;
+  initiallyResolved?: boolean;
 }) {
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -16,7 +17,7 @@ export function OperationalLotFields({ product, value, onChange, onReady, resolv
   const [suggested, setSuggested] = useState('');
   const version = useRef(0);
   const current = useRef(value);
-  const dirty = useRef<'code' | 'manufacturingDate' | null>(null);
+  const dirty = useRef<'code' | 'manufacturingDate' | null>(initiallyResolved ? null : value.code ? 'code' : value.manufacturingDate ? 'manufacturingDate' : null);
   useEffect(() => { current.current = value; }, [value]);
   useEffect(() => () => { version.current += 1; }, []);
 

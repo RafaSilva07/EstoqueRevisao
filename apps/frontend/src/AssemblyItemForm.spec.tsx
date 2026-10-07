@@ -29,7 +29,7 @@ let onAdd: ReturnType<typeof vi.fn>;
 let getCalls: string[];
 
 async function chooseUnitAndPackage() {
-  await act(async () => { host.querySelector('button')!.click(); await Promise.resolve(); });
+  await act(async () => { [...host.querySelectorAll('button')].find((button) => button.textContent === 'Selecionar UN')!.click(); await Promise.resolve(); });
   act(() => {
     const select = host.querySelector('select')!;
     select.value = 'package-id';
@@ -56,8 +56,8 @@ function setNumber(label: string, value: string) {
   });
 }
 
-function submit() {
-  act(() => { host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+async function submit() {
+  await act(async () => { host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); await Promise.resolve(); });
 }
 
 describe('Formulário de montagem no envio', () => {
@@ -95,7 +95,7 @@ describe('Formulário de montagem no envio', () => {
     setNumber('Quantidade de FD', '1');
     expect(host.textContent).toContain('10 UN desta posição');
     expect(host.querySelectorAll('.assembly-source-quantity input')).toHaveLength(0);
-    submit();
+    await submit();
     expect(onAdd).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ sources: [{ position: positions[0], quantity: 10 }] }), '');
   });
 
@@ -113,7 +113,7 @@ describe('Formulário de montagem no envio', () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(inputs[1], '1');
       inputs[1].dispatchEvent(new Event('input', { bubbles: true }));
     });
-    submit();
+    await submit();
     expect(onAdd).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ sources: [
       { position: positions[0], quantity: 9 }, { position: positions[2], quantity: 1 },
     ] }), '');
@@ -128,7 +128,7 @@ describe('Formulário de montagem no envio', () => {
     act(() => { host.querySelector<HTMLButtonElement>('.assembly-more')!.click(); });
     await selectPosition('LOTE-A', 'TUF');
     setNumber('Quantidade de FD', '1');
-    submit();
+    await submit();
     expect(onAdd).not.toHaveBeenCalled();
     expect(host.textContent).toContain('Distribua exatamente 10 UN');
   });
@@ -146,7 +146,7 @@ describe('Formulário de montagem no envio', () => {
         input.dispatchEvent(new Event('input', { bubbles: true }));
       }
     });
-    submit();
+    await submit();
     expect(onAdd).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ mixedDates: true, packageQuantity: 2, sources: [
       { position: positions[0], quantity: 10 }, { position: positions[1], quantity: 10 },
     ] }), '');

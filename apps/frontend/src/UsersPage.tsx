@@ -5,6 +5,8 @@ import { formatDateTime } from './format';
 import { sectorLabel, Sector } from './shipments';
 import { PermissionChecklist, PermissionOption, PermissionPreset } from './PermissionChecklist';
 import { PermissionPresetsModal } from './PermissionPresetsModal';
+import { DraftActions } from './FormDrafts';
+import { useFormDraft } from './useFormDraft';
 
 interface Role { code: string; name: string }
 export interface ManagedUser {
@@ -35,6 +37,13 @@ export function UsersPage({ currentUserId, onOwnUpdate }: { currentUserId: strin
   const [removing, setRemoving] = useState<ManagedUser>();
   const [busy, setBusy] = useState(false);
   const submitting = useRef(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [status, setStatus] = useState<ManagedUser['status']>('ACTIVE');
+  const draft = useFormDraft(`user:${editing?.id ?? 'new'}`, 'Cadastro de usuário', { username, status, selectedRoles, selectedPermissions, sector, applyPreset, passwordEntered: Boolean(password) }, (saved) => {
+    setUsername(saved.username); setStatus(saved.status); setSelectedRoles(saved.selectedRoles); setSelectedPermissions(saved.selectedPermissions); setSector(saved.sector); setApplyPreset(saved.applyPreset); setPassword('');
+  }, { enabled: editing !== undefined, busy });
+  const closeUser = () => draft.close(() => { setEditing(undefined); setPassword(''); });
 
   useEffect(() => {
     let active = true;
@@ -49,8 +58,11 @@ export function UsersPage({ currentUserId, onOwnUpdate }: { currentUserId: strin
   }, [page, search, sort, reload]);
 
   function openUser(user: ManagedUser | null) {
+    draft.close(() => {
+    setUsername(user?.username ?? ''); setPassword(''); setStatus(user?.status ?? 'ACTIVE');
     setError(''); setEditing(user); setSelectedRoles(user?.roles.map((role) => role.code) ?? []);
     setSelectedPermissions(user?.permissionCodes ?? []); setSector(user?.sector ?? 'REVISAO'); setApplyPreset(false);
+    });
   }
   function applyPresetSelection(roleCodes: string[]) {
     const assigned = roles.filter((role) => roleCodes.includes(role.code));
@@ -65,7 +77,6 @@ export function UsersPage({ currentUserId, onOwnUpdate }: { currentUserId: strin
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submitting.current) return;
-    const form = new FormData(event.currentTarget);
     const roleCodes = selectedRoles;
     if (!roleCodes.length) { setError('Selecione ao menos um perfil.'); return; }
     const areaRole = roleCodes.find((code) => code === 'ADMIN_REVISAO_EXPEDICAO' || code === 'ADMIN_PRODUCAO_PCP');
@@ -77,11 +88,11 @@ export function UsersPage({ currentUserId, onOwnUpdate }: { currentUserId: strin
     if ((roleCodes.includes('PCP') && sector !== 'PCP') || (sector === 'PCP' && !roleCodes.includes('PCP') && areaRole !== 'ADMIN_PRODUCAO_PCP')) { setError('O setor PCP exige o perfil PCP ou Admin Produção e PCP.'); return; }
     submitting.current = true; setBusy(true); setError('');
     try {
-      const password = form.get('password') as string;
-      const payload = { username: (form.get('username') as string).trim(), sector, roleCodes, permissionCodes: selectedPermissions, applyPreset,
-        ...(password ? { password } : {}), ...(editing ? { status: form.get('status') } : {}) };
+      const payload = { username: username.trim(), sector, roleCodes, permissionCodes: selectedPermissions, applyPreset,
+        ...(password ? { password } : {}), ...(editing ? { status } : {}) };
       if (editing) await api.patch(`/users/${editing.id}`, payload);
       else await api.post('/users', payload);
+      await draft.complete(); setPassword('');
       if (editing?.id === currentUserId) { onOwnUpdate(); return; }
       setEditing(undefined); setSuccess('Usuário salvo. Alterações encerram as sessões anteriores da conta.');
       setReload((value) => value + 1);
@@ -118,21 +129,23 @@ export function UsersPage({ currentUserId, onOwnUpdate }: { currentUserId: strin
         <div className="pagination"><button className="secondary" disabled={page <= 1} onClick={() => setPage(page - 1)}>Anterior</button><span>Página {page} de {Math.max(1, result.meta.totalPages)} · {result.meta.total} usuários</span><button className="secondary" disabled={page >= result.meta.totalPages} onClick={() => setPage(page + 1)}>Próxima</button></div>
       </>}
     </section>
-    {editing !== undefined && <Modal labelledBy="user-form-title" busy={busy} onClose={() => setEditing(undefined)}>
+    {editing !== undefined && !draft.ready && <Modal labelledBy="user-form-title" busy onClose={closeUser}><h2 id="user-form-title">Recuperando cadastro</h2><LoadingState label="Preparando usuário em rascunho" /></Modal>}
+    {editing !== undefined && draft.ready && <Modal labelledBy="user-form-title" busy={busy} onClose={closeUser}>
       <h2 id="user-form-title">{editing ? 'Editar usuário' : 'Novo usuário'}</h2>
+      <DraftActions draft={draft} /><small>Senhas não são salvas em rascunhos. Informe novamente ao retomar.</small>
       {error && <Notice kind="error">{error}</Notice>}
       {editing?.id === currentUserId && <p>Ao salvar sua conta, será necessário entrar novamente.</p>}
       <form className="form-grid" onSubmit={(event) => void save(event)}>
-        <label>Login<input name="username" required maxLength={100} defaultValue={editing?.username} autoComplete="off" disabled={busy} /></label>
-        <label>{editing ? 'Nova senha (opcional)' : 'Senha'}<input name="password" type="password" required={!editing} minLength={8} maxLength={128} autoComplete="new-password" disabled={busy} /><small>De 8 a 128 caracteres.{editing && ' Deixe em branco para manter a atual.'}</small></label>
+        <label>Login<input name="username" required maxLength={100} value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="off" disabled={busy || !draft.ready} /></label>
+        <label>{editing ? 'Nova senha (opcional)' : 'Senha'}<input name="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required={!editing} minLength={8} maxLength={128} autoComplete="new-password" disabled={busy || !draft.ready} /><small>De 8 a 128 caracteres.{editing && ' Deixe em branco para manter a atual.'}</small></label>
         <label>Setor inicial<select name="sector" value={sector} onChange={(event) => setSector(event.target.value as Sector)} disabled={busy}>{Object.entries(sectorLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><small>Admin geral inicia na Revisão; administradores de área escolhem um dos seus setores.</small></label>
         <fieldset className="user-roles" disabled={busy}><legend>Presets de acesso</legend>{roles.map((role) => <label key={role.code}><input type="checkbox" name="roleCodes" value={role.code} checked={selectedRoles.includes(role.code)} onChange={(event) => applyPresetSelection(event.target.checked ? [...selectedRoles, role.code] : selectedRoles.filter((code) => code !== role.code))} />{role.name}</label>)}<small>Selecionar um preset carrega suas permissões. Ajuste as funcionalidades abaixo antes de salvar. Administradores de área e PCP mantêm as combinações de setores existentes.</small></fieldset>
         <section className="wide"><div className="panel-heading"><h3>Permissões deste usuário</h3><button className="secondary" type="button" disabled={busy || !selectedRoles.length} onClick={() => applyPresetSelection(selectedRoles)}>Reaplicar presets atuais</button></div>
           {selectedRoles.includes('ADMIN') && <p>O admin geral mantém acesso completo e é o único que gerencia usuários, presets e configurações gerais.</p>}
           <PermissionChecklist options={permissionOptions} selected={selectedPermissions} modes={permissionModes.length ? permissionModes : [sector]} disabled={busy || selectedRoles.includes('ADMIN')} onChange={setSelectedPermissions} />
         </section>
-        {editing && <label>Status<select name="status" defaultValue={editing.status} disabled={busy}><option value="ACTIVE">Ativo</option><option value="INACTIVE">Inativo</option></select></label>}
-        <div className="dialog-actions"><button type="button" className="secondary" disabled={busy} onClick={() => setEditing(undefined)}>Voltar</button><button disabled={busy}>{busy ? 'Salvando...' : 'Salvar usuário'}</button></div>
+        {editing && <label>Status<select name="status" value={status} onChange={(event) => setStatus(event.target.value as ManagedUser['status'])} disabled={busy}><option value="ACTIVE">Ativo</option><option value="INACTIVE">Inativo</option></select></label>}
+        <div className="dialog-actions"><button type="button" className="secondary" disabled={busy} onClick={closeUser}>Voltar</button><button disabled={busy || !draft.ready}>{busy ? 'Salvando...' : 'Salvar usuário'}</button></div>
       </form>
     </Modal>}
     {showPresets && <PermissionPresetsModal presets={roles} options={permissionOptions} onClose={() => setShowPresets(false)} onSaved={(updatedUsers) => {

@@ -217,3 +217,7 @@ O projeto configurado localmente foi distinguido do Supabase da carga anterior e
 ## Etapa 69 — Renovação de sessão nos navegadores
 
 Corrigido o cookie para ambientes HTTPS externos e coordenadas as alterações de sessão entre abas, mantendo 14 horas desde o login. As rotas que alteram a sessão passam a validar a origem do frontend. Sem mudança de schema; [relatório da etapa 69](./relatorios/RELATORIO_ETAPA_69_RENOVACAO_SESSAO.md).
+
+## Etapa 70 — Rascunhos e proteção de saída
+
+Formulários passaram a preservar preenchimento e fotos localmente por usuário/modo, sem alterar estoque antes da confirmação. Saída protegida por confirmação compartilhada; CRUD de produtos excluído. Separação mantém seu rascunho servidor e prazo. Sem migration; publicação somente na `develop`. [Relatório da etapa 70](./relatorios/RELATORIO_ETAPA_70_RASCUNHOS_FORMULARIOS.md).

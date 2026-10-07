@@ -13,6 +13,15 @@ Este documento consolida o comportamento funcional vigente. Regras históricas s
 - Quantidades de estoque e movimentações devem ser números inteiros positivos; valores fracionários não são permitidos.
 - Datas e horários de eventos usam instante com fuso (`timestamptz`) e trafegam em ISO 8601. Fabricação e validade de lote usam somente data civil (`date`).
 
+## Rascunhos de preenchimento
+
+- Entradas, saídas, transferências, revisão, envios/montagem, recebimento/recusa, separação, cancelamento, execução PCP e formulários administrativos permitem rascunhos. CRUD de produtos, login e filtros de consulta não participam.
+- Rascunho não é movimentação, não recebe código operacional, não reserva saldo, não cria lote e não modifica histórico/auditoria. A confirmação definitiva continua passando pelas permissões e validações atuais da API.
+- Cada formulário tem um rascunho local, separado por usuário e modo operacional; ações/edições também incluem o identificador do registro. Ao voltar ao mesmo formulário, o conteúdo é recuperado, incluindo itens incompletos e fotos anexadas.
+- Ao sair por navegação, botão, clique externo ou Escape, um preenchimento alterado oferece salvar e sair, descartar o preenchimento ou continuar. Atualizar/fechar a aba utiliza a confirmação nativa do navegador e o salvamento automático.
+- Rascunhos existem apenas no mesmo navegador e endereço do frontend. Limpar os dados do site os remove; não há sincronização entre dispositivos nem garantia contra encerramento abrupto antes da gravação. Senhas, tokens e chaves não são armazenados.
+- Sucesso na API remove o rascunho correspondente; falha mantém o conteúdo. A separação mantém seu rascunho servidor e prazo existentes: guardar conteúdo local não interrompe o prazo, e “Salvar e sair” também atualiza as parcelas no servidor.
+
 ## Administração de usuários
 
 - Os perfis existentes são presets de permissões editáveis pelo admin geral. O preset inicial `REVISAO` permite solicitações, revisão, transferência, consultas e gestão de produtos. Entrada/saída direta e estorno são permissões separadas que podem ser concedidas individualmente ou no preset, dentro do setor Revisão.

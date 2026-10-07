@@ -36,6 +36,9 @@ export function Notice({ kind, children, onClose }: {
   </div>;
 }
 
+let desktopModalLocks = 0;
+let originalBodyOverflow = '';
+
 export function Modal({ children, labelledBy, busy = false, className = '', onClose }: {
   children: ReactNode;
   labelledBy: string;
@@ -48,9 +51,11 @@ export function Modal({ children, labelledBy, busy = false, className = '', onCl
   const returnFocus = useRef(typeof document === 'undefined' ? null : document.activeElement as HTMLElement | null);
   useEffect(() => {
     const previous = returnFocus.current;
-    const overflow = document.body.style.overflow;
     const mobile = window.matchMedia?.('(max-width: 759px), (pointer: coarse)').matches ?? window.innerWidth <= 759;
-    if (!mobile) document.body.style.overflow = 'hidden';
+    if (!mobile) {
+      if (desktopModalLocks === 0) originalBodyOverflow = document.body.style.overflow;
+      desktopModalLocks += 1; document.body.style.overflow = 'hidden';
+    }
     const dialog = ref.current;
     const backdrop = backdropRef.current;
     const viewport = window.visualViewport;
@@ -74,7 +79,10 @@ export function Modal({ children, labelledBy, busy = false, className = '', onCl
     return () => {
       viewport?.removeEventListener('resize', onViewportResize);
       viewport?.removeEventListener('scroll', updateViewport);
-      document.body.style.overflow = overflow;
+      if (!mobile) {
+        desktopModalLocks -= 1;
+        if (desktopModalLocks === 0) document.body.style.overflow = originalBodyOverflow;
+      }
       previous?.focus({ preventScroll: true });
     };
   }, []);

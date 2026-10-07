@@ -1,6 +1,8 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { api, OperationalSettings, Paginated, StockLocation } from './api';
 import { LoadingState, Notice, PageHeader } from './components';
+import { DraftActions } from './FormDrafts';
+import { useFormDraft } from './useFormDraft';
 
 export function SettingsPage() {
   const [settings, setSettings] = useState<OperationalSettings | null>(null);
@@ -9,6 +11,9 @@ export function SettingsPage() {
   const [photoMinimum, setPhotoMinimum] = useState('1'); const [photoMaximum, setPhotoMaximum] = useState('5');
   const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false);
   const [error, setError] = useState(''); const [success, setSuccess] = useState('');
+  const timeoutDraft = useFormDraft('settings:timeout', 'Prazo de separação', { minutes }, (saved) => setMinutes(saved.minutes), { enabled: !loading, busy, reusable: true });
+  const destinationsDraft = useFormDraft('settings:destinations', 'Destinos da revisão', { selected }, (saved) => setSelected(saved.selected), { enabled: !loading, busy, reusable: true });
+  const photosDraft = useFormDraft('settings:photos', 'Limites de fotos', { photoMinimum, photoMaximum }, (saved) => { setPhotoMinimum(saved.photoMinimum); setPhotoMaximum(saved.photoMaximum); }, { enabled: !loading, busy, reusable: true });
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -26,13 +31,13 @@ export function SettingsPage() {
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
   async function saveTimeout(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError('');
-    try { await api.patch('/settings/immediate-separation', { minutes: Number(minutes) }); setSuccess('Prazo atualizado para novas separacoes.'); await load(); }
+    try { await api.patch('/settings/immediate-separation', { minutes: Number(minutes) }); await timeoutDraft.complete(); setSuccess('Prazo atualizado para novas separacoes.'); }
     catch (caught) { setError(caught instanceof Error ? caught.message : 'Nao foi possivel salvar o prazo.'); }
     finally { setBusy(false); }
   }
   async function saveDestinations(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError('');
-    try { await api.patch('/settings/review-destinations', { stockLocationIds: selected }); setSuccess('Destinos da revisao atualizados.'); await load(); }
+    try { await api.patch('/settings/review-destinations', { stockLocationIds: selected }); await destinationsDraft.complete(); setSuccess('Destinos da revisao atualizados.'); }
     catch (caught) { setError(caught instanceof Error ? caught.message : 'Nao foi possivel salvar os destinos.'); }
     finally { setBusy(false); }
   }
@@ -43,23 +48,23 @@ export function SettingsPage() {
       setError('Informe entre 1 e 10 fotos por produto; o máximo deve ser igual ou maior que o mínimo.'); return;
     }
     setBusy(true); setError('');
-    try { await api.patch('/settings/shipment-photos', { minimum, maximum }); setSuccess('Limites de fotos atualizados para novos envios.'); await load(); }
+    try { await api.patch('/settings/shipment-photos', { minimum, maximum }); await photosDraft.complete(); setSuccess('Limites de fotos atualizados para novos envios.'); }
     catch (caught) { setError(caught instanceof Error ? caught.message : 'Não foi possível salvar os limites de fotos.'); }
     finally { setBusy(false); }
   }
-  if (loading && !settings) return <LoadingState label="Carregando configuracoes" />;
+  if ((loading && !settings) || !timeoutDraft.ready || !destinationsDraft.ready || !photosDraft.ready) return <LoadingState label="Carregando configuracoes" />;
   return <><PageHeader eyebrow="Administracao" title="Configuracoes" description="Parametros operacionais aplicados somente a novos processos." />
     {error && <Notice kind="error">{error}</Notice>}{success && <Notice kind="success" onClose={() => setSuccess('')}>{success}</Notice>}
     <div className="settings-grid">
       <form className="surface form-panel" onSubmit={(event) => void savePhotoLimits(event)}><h2>Fotos dos envios</h2><p className="muted">Quantidade permitida por produto em novos envios e retornos da separação. Até 100 fotos por envio.</p>
         <label>Quantidade mínima<input type="number" inputMode="numeric" min="1" max="10" step="1" value={photoMinimum} onChange={(event) => setPhotoMinimum(event.target.value)} required /></label>
         <label>Quantidade máxima<input type="number" inputMode="numeric" min="1" max="10" step="1" value={photoMaximum} onChange={(event) => setPhotoMaximum(event.target.value)} required /></label>
-        <button disabled={busy}>Salvar limites de fotos</button></form>
+        <DraftActions draft={photosDraft} /><button disabled={busy || !photosDraft.ready}>Salvar limites de fotos</button></form>
       <form className="surface form-panel" onSubmit={(event) => void saveTimeout(event)}><h2>Separacao imediata</h2><p className="muted">O prazo e capturado quando cada separacao comeca.</p>
         <label>Prazo para conclusao (minutos)<input type="number" min="5" max="1440" step="1" value={minutes} onChange={(event) => setMinutes(event.target.value)} required /></label>
-        <button disabled={busy}>Salvar prazo</button></form>
+        <DraftActions draft={timeoutDraft} /><button disabled={busy || !timeoutDraft.ready}>Salvar prazo</button></form>
       <form className="surface form-panel" onSubmit={(event) => void saveDestinations(event)}><h2>Processo de Revisao</h2><p className="muted">Selecione um ou mais depositos internos ja cadastrados.</p>
         <fieldset className="settings-options"><legend>Destinos oferecidos na revisao</legend>{locations.map((location) => <label key={location.id} className="check-row"><input type="checkbox" checked={selected.includes(location.id)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, location.id] : current.filter((id) => id !== location.id))} /><span>{location.code} — {location.name}</span></label>)}</fieldset>
-        <button disabled={busy || selected.length === 0}>Salvar destinos</button></form>
+        <DraftActions draft={destinationsDraft} /><button disabled={busy || !destinationsDraft.ready || selected.length === 0}>Salvar destinos</button></form>
     </div></>;
 }

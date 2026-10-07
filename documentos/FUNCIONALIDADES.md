@@ -10,6 +10,10 @@ O preset inicial `Revisão operacional` (`REVISAO`) oferece solicitações, revi
 
 Todas as entradas, saídas, transferências e distribuições de revisão aceitam somente quantidades inteiras positivas. O frontend orienta o preenchimento e o backend aplica a validação definitiva antes de alterar saldos.
 
+## Rascunhos de formulários
+
+Os formulários operacionais e administrativos possuem salvamento automático e botão **Salvar rascunho**, com recuperação ao reabrir o mesmo fluxo. Itens, campos ainda incompletos e fotos são mantidos no navegador, separados por conta/modo. Sair de um preenchimento oferece **Salvar rascunho e sair**, **Descartar e sair** ou **Continuar preenchendo**; navegar, trocar modo e sair da conta usam a mesma proteção. CRUD de produtos e consultas permanecem sem rascunhos. Senhas devem ser digitadas novamente. Limitações e efeito sobre a separação estão em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#rascunhos-de-preenchimento).
+
 ## Acesso e sessão
 
 | Método | Rota | Função |

@@ -4,6 +4,8 @@ import { api, Movement, Paginated, Product, StockLocation, StockPosition } from 
 import { EmptyState, LoadingState, Modal, Notice, OperationGuide, PageHeader } from './components';
 import { formatDate } from './format';
 import { ProductAutocomplete } from './ProductAutocomplete';
+import { DraftActions } from './FormDrafts';
+import { useFormDraft } from './useFormDraft';
 
 export interface ExitPrefill {
   originLocationId: string;
@@ -44,6 +46,10 @@ export function ExternalExitPage({
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
+  const [productQuery, setProductQuery] = useState({ code: '', name: '' });
+  const draft = useFormDraft('exit', 'Saída externa', { originId, destinationId, productId, batchId, quantity, observation, items, requestKey, productQuery }, (saved) => {
+    setProductQuery(saved.productQuery); setOriginId(saved.originId); setDestinationId(saved.destinationId); setProductId(saved.productId); setBatchId(saved.batchId); setQuantity(saved.quantity); setObservation(saved.observation); setItems(saved.items); setRequestKey(saved.requestKey);
+  }, { enabled: !loading, busy });
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -94,13 +100,15 @@ export function ExternalExitPage({
   const locationFor = (id: string) => locations.find((location) => location.id === id);
 
   function changeOrigin(value: string) {
+    setProductQuery({ code: '', name: '' });
     setOriginId(value);
     setProductId('');
     setBatchId('');
     setItems([]);
   }
 
-  function closeItem() { setAdding(false); setError(''); setProductId(''); setBatchId(''); setQuantity(''); }
+  function resetItem() { setProductQuery({ code: '', name: '' }); setAdding(false); setError(''); setProductId(''); setBatchId(''); setQuantity(''); }
+  function closeItem() { draft.close(() => { setAdding(false); setError(''); }); }
 
   function addItem(event: FormEvent) {
     event.preventDefault();
@@ -122,7 +130,7 @@ export function ExternalExitPage({
       position: selectedPosition,
       quantity: numericQuantity,
     }]);
-    closeItem();
+    resetItem();
   }
 
   async function submit() {
@@ -142,6 +150,7 @@ export function ExternalExitPage({
       });
       setRequestKey(crypto.randomUUID());
       setConfirming(false);
+      await draft.complete();
       onCreated(movement.id);
     } catch (caught) {
       setError(messageFrom(caught));
@@ -152,7 +161,7 @@ export function ExternalExitPage({
     }
   }
 
-  if (loading) return <LoadingState label="Preparando nova saida" />;
+  if (loading || !draft.ready) return <LoadingState label="Preparando nova saida" />;
 
   return <>
     <PageHeader
@@ -161,6 +170,7 @@ export function ExternalExitPage({
       description="Selecione uma origem controlada; produtos e lotes exibidos possuem saldo disponivel."
     />
     <OperationGuide />
+    <DraftActions draft={draft} />
     {error && !adding && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
     <section className="surface form-panel">
       <h2><span className="step-number">1</span> Origem e destino</h2>
@@ -184,9 +194,10 @@ export function ExternalExitPage({
     </section>
     {adding && <Modal labelledBy="add-product-title" onClose={closeItem}>
       <div className="panel-heading item-list-heading"><h2 id="add-product-title">Adicionar produto</h2><button type="button" className="secondary" onClick={closeItem}>Cancelar</button></div>
+      <DraftActions draft={draft} />
       {error && <Notice kind="error">{error}</Notice>}
       {!originId ? <p className="muted">Escolha a origem para consultar o saldo.</p> : loadingStock ? <LoadingState label="Consultando saldo da origem" /> : positions.length === 0 ? <EmptyState title="Origem sem saldo disponivel" description="Escolha outro local ou registre uma entrada antes da saida." /> : <form className="form-grid" onSubmit={addItem}>
-        <ProductAutocomplete availableProducts={products} initialProduct={selectedProduct} onChange={(selected) => { setProductId(selected?.id ?? ''); setBatchId(''); }} />
+        <ProductAutocomplete draftQuery={productQuery} onQueryChange={setProductQuery} availableProducts={products} initialProduct={selectedProduct} onChange={(selected) => { setProductId(selected?.id ?? ''); setBatchId(''); }} />
         <PositionSelect label="Lote *" value={batchId} onChange={setBatchId} disabled={!productId}
           options={productPositions.map((position) => ({ value: position.batchId, label: `Lote: ${position.batch.code} · val: ${formatDate(position.batch.expirationDate)} · saldo: ${position.quantity}` }))} />
         {selectedPosition && <div className="available-balance" role="status"><span>Saldo disponivel</span><strong>{selectedPosition.quantity} {selectedPosition.product.defaultUnit}</strong><small>Validade {formatDate(selectedPosition.batch.expirationDate)}</small></div>}
@@ -201,6 +212,6 @@ export function ExternalExitPage({
       {items.length === 0 ? <EmptyState title="Nenhum item adicionado" description="Adicione ao menos um produto e lote com saldo." /> : <div className="entry-items">{items.map((item) => <article key={item.key} className="entry-item"><div><strong>{item.position.product.name}</strong><span>Lote {item.position.batch.code} / validade {formatDate(item.position.batch.expirationDate)}</span><span>{item.quantity} de {item.position.quantity} {item.position.product.defaultUnit} disponiveis</span></div><button className="secondary" onClick={() => setItems((current) => current.filter((candidate) => candidate.key !== item.key))}>Remover</button></article>)}</div>}
       {(!originId || !destinationId || items.length === 0) && <p className="action-hint">Selecione origem, destino e adicione ao menos um item para continuar.</p>}<button className="button-wide" disabled={!originId || !destinationId || items.length === 0 || busy} onClick={() => setConfirming(true)}>Revisar saida</button>
     </section>
-    {confirming && <Modal labelledBy="exit-confirm-title" busy={busy} onClose={() => setConfirming(false)}><p className="eyebrow">Confirmacao</p><h2 id="exit-confirm-title">Confirmar saida para {locationFor(destinationId)?.name}?</h2><p>Origem: <strong>{locationFor(originId)?.name}</strong>. {items.length} item(ns).</p><ul>{items.map((item) => <li key={item.key}>{item.position.product.name} / lote {item.position.batch.code} / validade {formatDate(item.position.batch.expirationDate)}: <strong>{item.quantity} {item.position.product.defaultUnit}</strong></li>)}</ul><p>O saldo da origem sera reduzido e o registro ficara imutavel no historico.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={() => setConfirming(false)}>Voltar e corrigir</button><button disabled={busy} onClick={() => void submit()}>{busy ? 'Efetivando...' : 'Confirmar saida'}</button></div></Modal>}
+    {confirming && <Modal labelledBy="exit-confirm-title" busy={busy} onClose={() => draft.close(() => setConfirming(false))}><p className="eyebrow">Confirmacao</p><h2 id="exit-confirm-title">Confirmar saida para {locationFor(destinationId)?.name}?</h2><p>Origem: <strong>{locationFor(originId)?.name}</strong>. {items.length} item(ns).</p><ul>{items.map((item) => <li key={item.key}>{item.position.product.name} / lote {item.position.batch.code} / validade {formatDate(item.position.batch.expirationDate)}: <strong>{item.quantity} {item.position.product.defaultUnit}</strong></li>)}</ul><p>O saldo da origem sera reduzido e o registro ficara imutavel no historico.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={() => setConfirming(false)}>Voltar e corrigir</button><button disabled={busy} onClick={() => void submit()}>{busy ? 'Efetivando...' : 'Confirmar saida'}</button></div></Modal>}
   </>;
 }

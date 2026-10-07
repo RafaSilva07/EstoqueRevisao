@@ -5,6 +5,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Modal } from './components';
 
 describe('modal no celular', () => {
+  it('restaura a rolagem após fechar simultaneamente modais sobrepostos no desktop', () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false }));
+    const host = document.createElement('div'); document.body.append(host); const root = createRoot(host);
+    document.body.style.overflow = 'auto';
+    act(() => root.render(<><Modal labelledBy="original" onClose={() => undefined}><h2 id="original">Formulário</h2></Modal><Modal labelledBy="draft" onClose={() => undefined}><h2 id="draft">Salvar rascunho</h2></Modal></>));
+    expect(document.body.style.overflow).toBe('hidden');
+    act(() => root.unmount()); expect(document.body.style.overflow).toBe('auto'); host.remove();
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
     document.body.style.overflow = '';

@@ -121,6 +121,15 @@ h3 { color: #24495a; font-size: 1rem; }
 .required { color: var(--danger); }
 .eyebrow { margin-bottom: .35rem; color: #23758c; font-size: .7rem; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
 .surface { min-width: 0; border: 1px solid var(--line); border-radius: .75rem; background: var(--surface); color: var(--ink); padding: 1rem; box-shadow: var(--shadow); }
+.draft-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .65rem; margin: .75rem 0; padding: .7rem .85rem; border: 1px dashed var(--line); border-radius: .65rem; background: var(--surface); color: var(--ink); }
+.draft-content { display: contents; }
+.draft-toolbar > div { display: grid; gap: .15rem; min-width: 0; flex: 1 1 15rem; }
+.draft-toolbar strong { font-size: .8rem; }
+.draft-toolbar small { color: var(--muted); }
+.draft-toolbar button { padding: .5rem .75rem; min-height: 40px; font-size: .8rem; }
+.draft-global-notice { position: fixed; top: 5rem; left: 50%; transform: translateX(-50%); z-index: 100; width: min(92vw, 40rem); }
+.dialog-backdrop:has(.draft-exit-dialog) { z-index: 110; }
+.draft-exit-dialog .dialog-actions { flex-wrap: wrap; }
 
 .splash { display: grid; min-height: 100vh; place-content: center; justify-items: center; gap: .8rem; color: var(--muted); }
 .spinner { display: inline-block; width: 1.25rem; height: 1.25rem; border: 3px solid #b9d9e2; border-top-color: var(--primary); border-radius: 50%; animation: spin .75s linear infinite; }

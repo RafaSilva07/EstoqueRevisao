@@ -1,7 +1,9 @@
 import { FormEvent, useState } from 'react';
 import { api, UserPreferences } from './api';
-import { Notice, PageHeader } from './components';
+import { LoadingState, Notice, PageHeader } from './components';
 import { canvasColor, canvasTextColor } from './ui-preferences';
+import { DraftActions } from './FormDrafts';
+import { useFormDraft } from './useFormDraft';
 
 export function PreferencesPage({ value, onSaved }: { value: UserPreferences; onSaved: (value: UserPreferences) => void }) {
   const [draft, setDraft] = useState<UserPreferences>(value);
@@ -9,12 +11,14 @@ export function PreferencesPage({ value, onSaved }: { value: UserPreferences; on
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const background = canvasColor(draft);
+  const formDraft = useFormDraft('preferences', 'Preferências', draft, setDraft, { busy: saving, reusable: true });
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true); setError(''); setSuccess('');
     try {
       const saved = await api.patch<UserPreferences>('/auth/preferences', draft);
+      await formDraft.complete();
       setDraft(saved);
       onSaved(saved);
       setSuccess('Preferências salvas para sua conta.');
@@ -25,7 +29,9 @@ export function PreferencesPage({ value, onSaved }: { value: UserPreferences; on
     }
   }
 
+  if (!formDraft.ready) return <LoadingState label="Recuperando preferências em rascunho" />;
   return <><PageHeader eyebrow="Sua conta" title="Preferências" description="Personalize a aparência do sistema para a sua conta." />
+    <DraftActions draft={formDraft} />
     {error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
     {success && <Notice kind="success" onClose={() => setSuccess('')}>{success}</Notice>}
     <form className="surface form-panel preferences-panel" onSubmit={(event) => void save(event)}>

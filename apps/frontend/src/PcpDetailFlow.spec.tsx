@@ -113,7 +113,11 @@ describe('detalhe aberto pela fila PCP', () => {
     const postSpy = vi.spyOn(api, 'post').mockResolvedValue(executed);
     await interact(() => button('Marcar registro como executado').click());
     const form = host.querySelector<HTMLFormElement>('form')!;
-    form.querySelector<HTMLTextAreaElement>('textarea')!.value = ' Lançamento conferido. ';
+    await interact(() => {
+      const input = form.querySelector<HTMLTextAreaElement>('textarea')!;
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, ' Lançamento conferido. ');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
     // FormData do navegador acompanha os controles reais do formulário.
     vi.stubGlobal('FormData', window.FormData);
     try {

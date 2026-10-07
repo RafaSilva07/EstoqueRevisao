@@ -6,6 +6,8 @@ import { canExecutePcp } from './pcp';
 import { MovementDetailModal } from './MovementDetailModal';
 import { auditActionLabel } from './audit-action-labels';
 import { MovementRecordRow, ReviewDistributionMatrix } from './MovementRecordRow';
+import { DraftActions } from './FormDrafts';
+import { useFormDraft } from './useFormDraft';
 
 const typeLabel: Record<PcpMovementSummary['type'], string> = {
   ENTRADA_EXTERNA: 'Entrada externa', SAIDA_EXTERNA: 'Saída externa',
@@ -26,6 +28,9 @@ export function PcpPage({ initialStatus = 'PENDENTE', initialId, canExecute = fa
   const [executing, setExecuting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [success, setSuccess] = useState('');
+  const [executionObservation, setExecutionObservation] = useState('');
+  const draft = useFormDraft(`pcp-execute:${selected?.recordId ?? selected?.id ?? ''}`, 'Executar no PCP', { executionObservation }, (saved) => setExecutionObservation(saved.executionObservation), { enabled: confirming && Boolean(selected), busy: executing });
+  const closeExecution = () => draft.close(() => setConfirming(false));
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -63,10 +68,9 @@ export function PcpPage({ initialStatus = 'PENDENTE', initialId, canExecute = fa
   async function execute(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!selected || executing || !canExecute) return;
     setExecuting(true); setError('');
-    const form = new FormData(event.currentTarget);
-    const observationValue = form.get('observation');
     try {
-      const updated = await api.post<PcpMovementDetail>(`/pcp/movements/${selected.recordId ? `records/${selected.recordId}` : selected.id}/execution`, { observation: typeof observationValue === 'string' ? observationValue.trim() || undefined : undefined });
+      const updated = await api.post<PcpMovementDetail>(`/pcp/movements/${selected.recordId ? `records/${selected.recordId}` : selected.id}/execution`, { observation: executionObservation.trim() || undefined });
+      await draft.complete(); setExecutionObservation('');
       setSelected(updated); setConfirming(false); setSuccess('Movimentação marcada como executada pelo PCP.'); await load();
     } catch (caught) { setError(messageFrom(caught)); }
     finally { setExecuting(false); }
@@ -125,7 +129,7 @@ export function PcpPage({ initialStatus = 'PENDENTE', initialId, canExecute = fa
         <h3 id="pcp-audit-title">Histórico de eventos</h3>
         {selected.auditHistory.length ? <ul className="pcp-audit-list">{selected.auditHistory.map((event) => <li key={event.id}><strong title={event.action}>{auditActionLabel(event.action)}</strong><span>{event.user?.username ?? 'Sistema'} · {formatDateTime(event.createdAt)}</span></li>)}</ul> : <p className="muted">Nenhum evento de auditoria encontrado.</p>}
       </section>}
-    >{canExecute && selected.recordId && canExecutePcp(selected) ? () => <button type="button" className="button-wide" onClick={() => setConfirming(true)}>Marcar registro como executado</button> : undefined}</MovementDetailModal>}
-    {selected && confirming && <Modal labelledBy="pcp-execute-title" busy={executing} onClose={() => setConfirming(false)}><h2 id="pcp-execute-title">Marcar movimentação como executada</h2><p>Confirme somente após lançar ou atualizar esta movimentação no sistema corporativo.</p><form onSubmit={(event) => void execute(event)}><label>Observação da execução (opcional)<textarea name="observation" rows={4} maxLength={1000} disabled={executing} /></label><div className="dialog-actions"><button type="button" className="secondary" disabled={executing} onClick={() => setConfirming(false)}>Cancelar</button><button disabled={executing}>{executing ? 'Confirmando…' : 'Confirmar execução'}</button></div></form></Modal>}
+    >{canExecute && selected.recordId && canExecutePcp(selected) ? () => <button type="button" className="button-wide" onClick={() => { setExecutionObservation(''); setConfirming(true); }}>Marcar registro como executado</button> : undefined}</MovementDetailModal>}
+    {selected && confirming && <Modal labelledBy="pcp-execute-title" busy={executing || !draft.ready} onClose={closeExecution}><h2 id="pcp-execute-title">Marcar movimentação como executada</h2><p>Confirme somente após lançar ou atualizar esta movimentação no sistema corporativo.</p><DraftActions draft={draft} /><form onSubmit={(event) => void execute(event)}><label>Observação da execução (opcional)<textarea name="observation" value={executionObservation} onChange={(event) => setExecutionObservation(event.target.value)} rows={4} maxLength={1000} disabled={executing || !draft.ready} /></label><div className="dialog-actions"><button type="button" className="secondary" disabled={executing} onClick={closeExecution}>Cancelar</button><button disabled={executing || !draft.ready}>{executing ? 'Confirmando…' : 'Confirmar execução'}</button></div></form></Modal>}
   </>;
 }

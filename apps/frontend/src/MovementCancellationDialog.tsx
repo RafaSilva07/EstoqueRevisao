@@ -1,7 +1,9 @@
 import { FormEvent, useState } from 'react';
 import { api, Movement } from './api';
-import { Modal, Notice } from './components';
+import { LoadingState, Modal, Notice } from './components';
 import { movementCancellationImpact } from './movement-cancellation-impact';
+import { DraftActions } from './FormDrafts';
+import { useFormDraft } from './useFormDraft';
 
 export function MovementCancellationDialog({
   movement,
@@ -16,6 +18,8 @@ export function MovementCancellationDialog({
   const [showImpact, setShowImpact] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const draft = useFormDraft(`movement-cancel:${movement.id}`, 'Cancelar movimentação', { reason }, (saved) => setReason(saved.reason), { busy });
+  const close = () => draft.close(onClose);
 
   function review(event: FormEvent) {
     event.preventDefault();
@@ -35,7 +39,7 @@ export function MovementCancellationDialog({
       const canceled = await api.post<Movement>(`/movements/${movement.id}/cancellation`, {
         reason: reason.trim(),
       });
-      onCanceled(canceled);
+      await draft.complete(); onCanceled(canceled);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Nao foi possivel cancelar a movimentacao.');
       setShowImpact(false);
@@ -44,14 +48,16 @@ export function MovementCancellationDialog({
     }
   }
 
-  return <Modal labelledBy="cancel-title" busy={busy} onClose={onClose}>
+  if (!draft.ready) return <Modal labelledBy="cancel-title" busy onClose={close}><h2 id="cancel-title">Recuperando rascunho</h2><LoadingState label="Preparando preenchimento" /></Modal>;
+  return <Modal labelledBy="cancel-title" busy={busy || !draft.ready} onClose={close}>
       <p className="eyebrow">Cancelamento integral</p>
       <h2 id="cancel-title">{showImpact ? 'Confirme o impacto no estoque' : 'Cancelar movimentacao'}</h2>
+      <DraftActions draft={draft} />
       {error && <Notice kind="error">{error}</Notice>}
       {!showImpact ? <form onSubmit={review}>
         <label>Motivo <span className="required">*</span><textarea value={reason} onChange={(event) => setReason(event.target.value)} maxLength={1000} rows={4} autoFocus required /></label>
         <p>A movimentacao original permanecera no historico como cancelada.</p>
-        <div className="dialog-actions"><button type="button" className="secondary" onClick={onClose}>Voltar</button><button>Visualizar impacto</button></div>
+        <div className="dialog-actions"><button type="button" className="secondary" onClick={close}>Voltar</button><button disabled={!draft.ready}>Visualizar impacto</button></div>
       </form> : <>
         <ul className="cancellation-impact">{movementCancellationImpact(movement).map((impact, index) => <li key={index}>{impact}</li>)}</ul>
         <p><strong>Motivo:</strong> {reason.trim()}</p>

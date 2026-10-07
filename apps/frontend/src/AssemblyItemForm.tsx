@@ -1,8 +1,10 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { api, Paginated, Product, StockPosition } from './api';
-import { Notice } from './components';
+import { LoadingState, Notice } from './components';
 import { formatDate } from './format';
 import { ProductAutocomplete } from './ProductAutocomplete';
+import { DraftActions } from './FormDrafts';
+import { useFormDraft } from './useFormDraft';
 
 export interface AssemblyDraft {
   packageProduct: Product;
@@ -36,6 +38,12 @@ export function AssemblyItemForm({ onAdd, excludedPositions }: {
   const [observation, setObservation] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [productQuery, setProductQuery] = useState({ code: '', name: '' });
+  const [savingItem, setSavingItem] = useState(false);
+  const addingItem = useRef(false);
+  const draft = useFormDraft('shipment:REVISAO:assembly', 'Montagem de fardo/caixa', { unit, page, showOtherPositions, packageId, packageQuantity, mixedDates, selectedBatchId, selectedPositions, sourceInputs, observation, productQuery }, (saved) => {
+    setProductQuery(saved.productQuery); setUnit(saved.unit); setPage(saved.page); setShowOtherPositions(saved.showOtherPositions); setPackageId(saved.packageId); setPackageQuantity(saved.packageQuantity); setMixedDates(saved.mixedDates); setSelectedBatchId(saved.selectedBatchId); setSelectedPositions(saved.selectedPositions); setSourceInputs(saved.sourceInputs); setObservation(saved.observation);
+  }, { busy: savingItem });
 
   useEffect(() => {
     if (!unit || unit.defaultUnit !== 'UN') return;
@@ -118,8 +126,9 @@ export function AssemblyItemForm({ onAdd, excludedPositions }: {
     setSourceInputs((current) => { const next = { ...current }; delete next[position.id]; return next; });
   }
 
-  function add(event: FormEvent) {
+  async function add(event: FormEvent) {
     event.preventDefault();
+    if (addingItem.current) return;
     if (!unit || unit.defaultUnit !== 'UN' || !packaged || (!mixedDates && !selectedBatchId)
       || !Number.isSafeInteger(amount) || amount < 1 || amount > availablePackages) {
       setError('Selecione unidade, embalagem e quantidade inteira dentro do saldo disponível.'); return;
@@ -132,7 +141,9 @@ export function AssemblyItemForm({ onAdd, excludedPositions }: {
     if (mixedDates ? dates.size < 2 : batches.size !== 1 || !batches.has(selectedBatchId)) {
       setError(mixedDates ? 'Lote 0 exige pelo menos duas datas diferentes.' : 'Sem datas misturadas, escolha apenas um lote.'); return;
     }
-    onAdd(unit, { packageProduct: packaged, packageQuantity: amount, mixedDates, sources }, observation.trim());
+    addingItem.current = true; setSavingItem(true);
+    try { await draft.complete(); onAdd(unit, { packageProduct: packaged, packageQuantity: amount, mixedDates, sources }, observation.trim()); }
+    finally { addingItem.current = false; setSavingItem(false); }
   }
 
   function renderPosition(position: StockPosition) {
@@ -147,9 +158,11 @@ export function AssemblyItemForm({ onAdd, excludedPositions }: {
     </div>;
   }
 
-  return <form className="form-grid assembly-form" onSubmit={add}>
+  if (!draft.ready) return <LoadingState label="Recuperando montagem em rascunho" />;
+  return <form className="form-grid assembly-form" onSubmit={(event) => void add(event)}>
+    <div className="wide"><DraftActions draft={draft} /></div>
     {error && <div className="wide"><Notice kind="error" onClose={() => setError('')}>{error}</Notice></div>}
-    <div className="wide"><ProductAutocomplete onChange={(selected) => { setUnit(selected); setOptions(null); setLoading(Boolean(selected && selected.defaultUnit === 'UN')); setPage(1); setPackageId(''); setSelectedBatchId(''); setMixedDates(false); setSelectedPositions([]); setSourceInputs({}); setShowOtherPositions(false); }} /></div>
+    <div className="wide"><ProductAutocomplete draftQuery={productQuery} onQueryChange={setProductQuery} initialProduct={unit} onChange={(selected) => { setUnit(selected); setOptions(null); setLoading(Boolean(selected && selected.defaultUnit === 'UN')); setPage(1); setPackageId(''); setSelectedBatchId(''); setMixedDates(false); setSelectedPositions([]); setSourceInputs({}); setShowOtherPositions(false); }} /></div>
     {unit && unit.defaultUnit !== 'UN' && <p className="wide photo-required">Selecione o código unitário (UN) que será usado na montagem.</p>}
     {unit?.defaultUnit === 'UN' && <>
       <label className="wide">Embalagem vinculada *<select value={packageId} onChange={(event) => { setPackageId(event.target.value); setPackageQuantity(''); }} disabled={loading} required>
@@ -177,6 +190,6 @@ export function AssemblyItemForm({ onAdd, excludedPositions }: {
       </>}
     </>}
     <label className="wide">Observação deste produto (opcional)<textarea maxLength={1000} rows={2} value={observation} onChange={(event) => setObservation(event.target.value)} /></label>
-    <div className="form-actions"><button disabled={!packaged || loading}>Adicionar embalagem</button></div>
+    <div className="form-actions"><button disabled={!packaged || loading || savingItem}>Adicionar embalagem</button></div>
   </form>;
 }

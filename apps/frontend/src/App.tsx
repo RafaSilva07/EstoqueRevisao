@@ -1,4 +1,7 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { DraftActions, FormDraftProvider } from './FormDrafts';
+import { useDraftWorkspace } from './draft-context';
+import { useFormDraft } from './useFormDraft';
 import { api, Batch, Movement, Paginated, Product, StockDisplayMode, StockLocation, StockLocationKind, StockPosition, UnitConversion, UserPreferences, UserSession } from './api';
 import { ConfirmDialog, EmptyState, FilterPanel, LoadingState, Modal, Notice, PageHeader } from './components';
 import { formatDate, formatDateTime } from './format';
@@ -137,25 +140,30 @@ export function InventoryPage({ onTransfer, onReview }: { onTransfer?: (prefill:
 function StocksPage({ canCreate, canEdit, canManageStatus }: { canCreate: boolean; canEdit: boolean; canManageStatus: boolean }) {
   const [locations, setLocations] = useState<StockLocation[]>([]); const [editing, setEditing] = useState<StockLocation | null>(null); const [showForm, setShowForm] = useState(false); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [confirming, setConfirming] = useState<StockLocation | null>(null); const [error, setError] = useState(''); const [success, setSuccess] = useState('');
   const [formKind, setFormKind] = useState<StockLocationKind>('STOCK');
+  const [fields, setFields] = useState({ code: '', name: '', parentId: '', displayMode: 'LOTS' as StockDisplayMode, description: '' });
+  const draft = useFormDraft(`stock:${editing?.id ?? 'new'}`, 'Cadastro de local', { fields, formKind }, (saved) => { setFields(saved.fields); setFormKind(saved.formKind); }, { enabled: showForm, busy });
+  const closeForm = () => draft.close(() => setShowForm(false));
   const load = useCallback(async () => { setLoading(true); try { setLocations((await api.get<Paginated<StockLocation>>('/stocks?limit=100')).items); setError(''); } catch (caught) { setError(messageFrom(caught)); } finally { setLoading(false); } }, []); useEffect(() => { const timeout = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timeout); }, [load]);
-  function open(location: StockLocation | null) { setEditing(location); setFormKind(location?.kind ?? 'STOCK'); setShowForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }
-  async function save(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setBusy(true); const form = new FormData(event.currentTarget); const payload = { code: form.get('code'), name: form.get('name'), description: form.get('description') || null, kind: formKind, parentId: form.get('parentId') || null, displayMode: (formKind === 'EXTERNAL' ? 'LOTS' : form.get('displayMode')) as StockDisplayMode }; try { if (editing) await api.patch(`/stocks/${editing.id}`, payload); else await api.post('/stocks', payload); setSuccess(editing ? 'Local atualizado com sucesso.' : 'Local cadastrado com sucesso.'); setShowForm(false); setEditing(null); await load(); } catch (caught) { setError(messageFrom(caught)); } finally { setBusy(false); } }
+  function open(location: StockLocation | null) { draft.close(() => { setEditing(location); setFormKind(location?.kind ?? 'STOCK'); setFields({ code: location?.code ?? '', name: location?.name ?? '', parentId: location?.parentId ?? '', displayMode: location?.displayMode ?? 'LOTS', description: location?.description ?? '' }); setShowForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }); }
+  async function save(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setBusy(true); const payload = { ...fields, description: fields.description || null, kind: formKind, parentId: fields.parentId || null, displayMode: formKind === 'EXTERNAL' ? 'LOTS' : fields.displayMode }; try { if (editing) await api.patch(`/stocks/${editing.id}`, payload); else await api.post('/stocks', payload); await draft.complete(); setSuccess(editing ? 'Local atualizado com sucesso.' : 'Local cadastrado com sucesso.'); setShowForm(false); setEditing(null); await load(); } catch (caught) { setError(messageFrom(caught)); } finally { setBusy(false); } }
   async function toggle(location: StockLocation) { setBusy(true); try { await api.patch(`/stocks/${location.id}/status`, { active: !location.active }); setSuccess(location.active ? 'Local inativado com sucesso.' : 'Local ativado com sucesso.'); setConfirming(null); await load(); } catch (caught) { setError(messageFrom(caught)); } finally { setBusy(false); } }
   const parents = locations.filter((item) => item.kind === 'STOCK' && item.active); const kindLabel = (kind: StockLocationKind) => ({ STOCK: 'Estoque', SUBSTOCK: 'Subestoque', EXTERNAL: 'Origem/destino externo' })[kind];
   return <>
     <PageHeader eyebrow="Estrutura lógica" title="Estoques e locais" description="Locais usados como origem, destino e classificação do saldo." action={canCreate && <button onClick={() => open(null)}>+ Novo local</button>} />
     {success && <Notice kind="success" onClose={() => setSuccess('')}>{success}</Notice>}
     {error && <Notice kind="error">{error}</Notice>}
-    {showForm && <section className="surface form-panel">
-      <PanelHeading eyebrow={editing ? 'Edição' : 'Novo cadastro'} title={editing ? 'Editar local' : 'Cadastrar local'} onClose={() => setShowForm(false)} />
+    {showForm && !draft.ready && <LoadingState label="Recuperando local em rascunho" />}
+    {showForm && draft.ready && <section className="surface form-panel">
+      <PanelHeading eyebrow={editing ? 'Edição' : 'Novo cadastro'} title={editing ? 'Editar local' : 'Cadastrar local'} onClose={closeForm} />
+      <DraftActions draft={draft} />
       <form key={editing?.id ?? 'new'} className="form-grid" onSubmit={(event) => void save(event)}>
-        <RequiredField label="Código"><input name="code" defaultValue={editing?.code} required /></RequiredField>
-        <RequiredField label="Nome"><input name="name" defaultValue={editing?.name} required /></RequiredField>
+        <RequiredField label="Código"><input name="code" value={fields.code} onChange={(event) => setFields((current) => ({ ...current, code: event.target.value }))} required /></RequiredField>
+        <RequiredField label="Nome"><input name="name" value={fields.name} onChange={(event) => setFields((current) => ({ ...current, name: event.target.value }))} required /></RequiredField>
         <RequiredField label="Tipo"><select name="kind" value={formKind} onChange={(event) => setFormKind(event.target.value as StockLocationKind)}><option value="STOCK">Estoque</option><option value="SUBSTOCK">Subestoque</option><option value="EXTERNAL">Origem/destino externo</option></select></RequiredField>
-        <label>Estoque pai<select name="parentId" defaultValue={editing?.parentId ?? ''}><option value="">Nenhum</option>{parents.filter((item) => item.id !== editing?.id).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><small>Obrigatório somente para subestoques.</small></label>
-        {formKind !== 'EXTERNAL' && <label className="wide">Como exibir este estoque<select name="displayMode" defaultValue={editing?.displayMode ?? 'LOTS'}><option value="LOTS">Produtos separados por lote e validade</option><option value="PRODUCTS">Total por produto; lotes nos detalhes</option></select><small>Altera somente a apresentação da consulta. Os saldos continuam separados por lote e validade.</small></label>}
-        <label className="wide">Descrição<input name="description" defaultValue={editing?.description ?? ''} /></label>
-        <FormActions busy={busy} saveLabel="Salvar local" onCancel={() => setShowForm(false)} />
+        <label>Estoque pai<select name="parentId" value={fields.parentId} onChange={(event) => setFields((current) => ({ ...current, parentId: event.target.value }))}><option value="">Nenhum</option>{parents.filter((item) => item.id !== editing?.id).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><small>Obrigatório somente para subestoques.</small></label>
+        {formKind !== 'EXTERNAL' && <label className="wide">Como exibir este estoque<select name="displayMode" value={fields.displayMode} onChange={(event) => setFields((current) => ({ ...current, displayMode: event.target.value as StockDisplayMode }))}><option value="LOTS">Produtos separados por lote e validade</option><option value="PRODUCTS">Total por produto; lotes nos detalhes</option></select><small>Altera somente a apresentação da consulta. Os saldos continuam separados por lote e validade.</small></label>}
+        <label className="wide">Descrição<input name="description" value={fields.description} onChange={(event) => setFields((current) => ({ ...current, description: event.target.value }))} /></label>
+        <FormActions busy={busy || !draft.ready} saveLabel="Salvar local" onCancel={closeForm} />
       </form>
     </section>}
     <section className="surface list-panel">{loading ? <LoadingState label="Carregando locais" /> : locations.length === 0 ? <EmptyState title="Nenhum local cadastrado" description="Cadastre um local para organizar a operação." action={canCreate ? <button onClick={() => open(null)}>Cadastrar local</button> : undefined} /> : <div className="responsive-table"><table><thead><tr><th>Código</th><th>Nome</th><th>Tipo</th><th>Exibição</th><th>Estoque pai</th><th>Status</th><th>Ações</th></tr></thead><tbody>{locations.map((location) => <tr key={location.id}><td data-label="Código"><strong>{location.code}</strong></td><td data-label="Nome">{location.name}</td><td data-label="Tipo">{kindLabel(location.kind)}</td><td data-label="Exibição">{location.kind === 'EXTERNAL' ? '—' : location.displayMode === 'PRODUCTS' ? 'Total por produto' : 'Por lote'}</td><td data-label="Estoque pai">{locations.find((item) => item.id === location.parentId)?.name ?? '—'}</td><td data-label="Status"><Status active={location.active} /></td><td data-label="Ações"><div className="row-actions">{canEdit && <button className="secondary" onClick={() => open(location)}>Editar</button>}{canManageStatus && <button className="secondary" onClick={() => location.active ? setConfirming(location) : void toggle(location)}>{location.active ? 'Inativar' : 'Ativar'}</button>}</div></td></tr>)}</tbody></table></div>}</section>
@@ -236,7 +244,10 @@ export function OperationalSectorSwitcher({ value, modes, onChange }: { value: O
   </select></label>;
 }
 
-export function App() {
+export function App() { return <FormDraftProvider><AppSession /></FormDraftProvider>; }
+
+function AppSession() {
+  const drafts = useDraftWorkspace();
   const [user, setUser] = useState<UserSession | null>(null);
   const [preferences, setPreferences] = useState<UserPreferences>(defaultPreferences);
   const [operationalMode, setOperationalMode] = useState<OperationalMode>('REVISAO');
@@ -257,18 +268,23 @@ export function App() {
     api.setOperationalSector(authenticated && allowedOperationalModes(authenticated).length > 1 ? mode : null);
   }).finally(() => setChecking(false)); }, []);
   useLayoutEffect(() => { applyUiPreferences(user ? preferences : defaultPreferences); }, [user, preferences]);
+  const flushDrafts = drafts?.flush;
   const onSessionInvalid = useCallback(() => {
+    flushDrafts?.();
     api.setOperationalSector(null);
     setUser(null);
     setPreferences(defaultPreferences);
     setPage('home');
-  }, []);
+  }, [flushDrafts]);
   useEffect(() => {
     api.setSessionInvalidHandler(onSessionInvalid);
     return () => api.setSessionInvalidHandler(null);
   }, [onSessionInvalid]);
   const modes = user ? allowedOperationalModes(user) : [];
   const activeMode: OperationalMode = user ? (modes.length > 1 ? operationalMode : modes[0]) : 'REVISAO';
+  const draftScope = user ? `${user.id}:${activeMode}` : null;
+  const setDraftScope = drafts?.setScope;
+  useLayoutEffect(() => { setDraftScope?.(draftScope); }, [setDraftScope, draftScope]);
   const presenceAdmin = isPresenceAdmin(user);
   const presence = useOnlinePresence(user?.id, activeMode, presenceAdmin && page === 'online-users');
   if (checking) return <main className="splash"><span className="spinner" /><p>Preparando seu ambiente...</p></main>;
@@ -283,7 +299,7 @@ export function App() {
   const activeSector: Sector = activeUser.sector ?? 'REVISAO';
   const adminMode = generalAdmin && activeMode === 'ADMIN';
   const can = (permission: string) => activeUser.permissions.includes(permission);
-  const navigate: Navigate = (destination) => {
+  const navigate: Navigate = (destination) => drafts?.leave(() => {
     setSelectedRecordId(undefined);
     if (destination !== 'new-transfer') setTransferPrefill(undefined);
     if (destination !== 'new-review') setReviewPrefill(undefined);
@@ -291,7 +307,7 @@ export function App() {
     setPage(destination);
     window.scrollTo({ top: 0, behavior: 'instant' });
     requestAnimationFrame(() => document.getElementById('main-content')?.focus({ preventScroll: true }));
-  };
+  });
   const openTransfer = (prefill?: TransferPrefill) => {
     setTransferPrefill(prefill);
     navigate('new-transfer');
@@ -310,16 +326,16 @@ export function App() {
     setMovementSuccess(message);
     navigate('history');
   };
-  const logout = () => {
+  const logout = () => drafts?.leave(() => {
     setLoggingOut(true);
     void api.logout().finally(() => { setUser(null); setPreferences(defaultPreferences); setLoggingOut(false); });
-  };
-  const switchSector = (mode: OperationalMode) => {
+  });
+  const switchSector = (mode: OperationalMode) => drafts?.leave(() => {
     if (!modes.includes(mode)) return;
     api.setOperationalSector(mode); setOperationalMode(mode); setPage('home');
     setSelectedMovementId(undefined); setMovementSuccess(undefined); setTransferPrefill(undefined); setReviewPrefill(undefined);
     window.scrollTo({ top: 0, behavior: 'instant' });
-  };
+  });
   const switcher = modes.length > 1 && <OperationalSectorSwitcher value={activeMode} modes={modes} onChange={switchSector} />;
   const areas = homeActions(activeUser);
   const menus: Page[] = ['home', 'operations', 'more'];

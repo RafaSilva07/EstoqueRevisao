@@ -1,7 +1,9 @@
 import { PositionSelect } from './PositionSelect';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { api, Paginated, Product, ShipmentPhotoLimits, StockPosition } from './api';
-import { Modal, Notice, PageHeader } from './components';
+import { LoadingState, Modal, Notice, PageHeader } from './components';
+import { DraftActions } from './FormDrafts';
+import { useFormDraft } from './useFormDraft';
 import { OperationalLotFields } from './OperationalLotFields';
 import { ProductAutocomplete } from './ProductAutocomplete';
 import { emptyLot, OperationalLot } from './operational-lot';
@@ -43,7 +45,12 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
   const [confirming, setConfirming] = useState(false);
   const [photoLimits, setPhotoLimits] = useState<ShipmentPhotoLimits | null>(null);
   const photoUrls = useRef(new Set<string>());
-  const submission = useMovementSubmission('/shipments', onCreated);
+  const submission = useMovementSubmission('/shipments', created);
+  const [productQuery, setProductQuery] = useState({ code: '', name: '' });
+  const draft = useFormDraft(`shipment:${sector}`, 'Novo envio', { destination, positionPage, loadingStatus, vehiclePlate, assemblyMode, product, positionId, batchCode, manufacturingDate, quantity, itemObservation, observation, lot, ready, items, requestKey: submission.requestKey, productQuery }, (saved) => {
+    setProductQuery(saved.productQuery); setDestination(saved.destination); setPositionPage(saved.positionPage); setLoadingStatus(saved.loadingStatus); setVehiclePlate(saved.vehiclePlate); setAssemblyMode(saved.assemblyMode); setProduct(saved.product); setPositionId(saved.positionId); setBatchCode(saved.batchCode); setManufacturingDate(saved.manufacturingDate); setQuantity(saved.quantity); setItemObservation(saved.itemObservation); setObservation(saved.observation); setLot(saved.lot); setReady(saved.ready); setItems(saved.items); submission.setRequestKey(saved.requestKey);
+  }, { busy: submission.busy });
+  async function created(id: string) { await draft.complete(); onCreated(id); }
   const canQueryPositions = outgoing && Boolean(product) && Boolean(batchCode.trim() || manufacturingDate);
   const allPhotosReady = allShipmentPhotosReady(items, photoLimits);
   const photoTotal = items.reduce((sum, item) => sum + item.photos.length, 0);
@@ -152,7 +159,8 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
     setPositionPage(1);
     void resolveLot('manufacturingDate', date);
   }
-  function closeItem() { setAdding(false); setError(''); clearProduct(); resetLot(); setQuantity(''); setItemObservation(''); }
+  function resetItem() { setProductQuery({ code: '', name: '' }); setAdding(false); setError(''); clearProduct(); resetLot(); setQuantity(''); setItemObservation(''); }
+  function closeItem() { draft.close(() => { setAdding(false); setError(''); }); }
 
   function add(event: FormEvent) {
     event.preventDefault();
@@ -164,9 +172,10 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
     if (!outgoing && (!ready || !lot.expirationDate || lot.expirationDate < lot.manufacturingDate)) { setError('Confira lote, fabricação e validade.'); return; }
     setItems((current) => [...current, { key: crypto.randomUUID(), product, lot: outgoing ? position!.batch : { ...lot }, quantity: amount,
       observation: itemObservation.trim() || null, position: outgoing ? position : undefined, photos: [] }]);
-    closeItem();
+    resetItem();
   }
   function clearProduct() {
+    setProductQuery({ code: '', name: '' });
     lotResolutionVersion.current += 1;
     setLotResolving(false);
     setProduct(null);
@@ -212,8 +221,10 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
       remainingTotal={100 - photoTotal} onAdd={(files) => attachPhotos(item.key, files)} onRemove={(index) => removePhoto(item.key, index)} readOnly={confirming} />}
     {!confirming && <button type="button" className="secondary" onClick={() => removeItem(item.key)}>Remover item</button>}
   </li>)}</ul>;
+  if (!draft.ready) return <LoadingState label="Recuperando rascunho do envio" />;
   return <>
-    <PageHeader eyebrow="Envios entre setores" title={outgoing ? 'Novo envio' : 'Novo envio para Revisão'} action={<button className="secondary" onClick={onClose}>Voltar</button>} />
+    <PageHeader eyebrow="Envios entre setores" title={outgoing ? 'Novo envio' : 'Novo envio para Revisão'} action={<button className="secondary" onClick={() => draft.close(onClose)}>Voltar</button>} />
+    <DraftActions draft={draft} />
     {error && !adding && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
     <section className="surface form-panel"><h2>1. Destino</h2>{outgoing ? <label>Enviar para<select value={destination} disabled={items.length > 0} onChange={(event) => { setDestination(event.target.value as ShipmentSector); setAssemblyMode(false); }}><option value="PRODUCAO">Produção</option><option value="EXPEDICAO">Expedição</option></select></label> : <p>Revisão · entrada em A Revisar somente após confirmação.</p>}
       {sector === 'EXPEDICAO' && <div className="form-grid"><label>Carregamento *<select required value={loadingStatus} onChange={(event) => { setLoadingStatus(event.target.value as ShipmentLoadingStatus | ''); setVehiclePlate(''); }}><option value="">Selecione</option><option value="CARREGADO">Carregado</option><option value="NAO_CARREGADO">Não carregado</option></select></label>
@@ -221,9 +232,10 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
       {outgoing && destination === 'EXPEDICAO' && <label className="assembly-mixed-toggle"><input type="checkbox" checked={assemblyMode} disabled={items.length > 0} onChange={(event) => setAssemblyMode(event.target.checked)} /> Montar fardos/caixas com unidades disponíveis</label>}
       {outgoing && <p className="muted">Ao enviar, a quantidade sai do disponível e fica em trânsito. Uma recusa devolve o saldo à posição original.</p>}</section>
     {adding && <Modal labelledBy="add-product-title" onClose={closeItem}><div className="panel-heading item-list-heading"><h2 id="add-product-title">Adicionar produto</h2><button type="button" className="secondary" onClick={closeItem}>Cancelar</button></div>
+      <DraftActions draft={draft} />
       {error && <Notice kind="error">{error}</Notice>}
       {assemblyMode ? <AssemblyItemForm onAdd={addAssemblyItem} excludedPositions={items.flatMap((item) => item.assembly?.sources.map((source) => source.position) ?? [])} /> : <form className="form-grid" onSubmit={add}>
-        <ProductAutocomplete key={productResetKey} onChange={changeProduct} />
+        <ProductAutocomplete draftQuery={productQuery} onQueryChange={setProductQuery} key={productResetKey} initialProduct={product} onChange={changeProduct} />
         {product && <div className="selected-product wide"><strong>Produto selecionado: {product.code}</strong><span>{product.name} · {product.defaultUnit}</span><button type="button" className="secondary" onClick={clearProduct}>Trocar produto</button></div>}
         {outgoing && product && <fieldset className="shipment-position-filter wide"><legend>Lote e posição disponível</legend>
           <p className="muted">Informe o lote ou a fabricação. Depois escolha a posição; Lata Boa aparece primeiro por ser a origem prioritária dos envios externos.</p>
@@ -238,7 +250,7 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
           {canQueryPositions && positionPages > 1 && <div className="row-actions shipment-position-pagination"><button type="button" className="secondary" disabled={positionPage === 1 || isPositionLoading} onClick={() => { setPositionPage((value) => value - 1); setPositionId(''); }}>Posições anteriores</button><span>{positionPage}/{positionPages}</span><button type="button" className="secondary" disabled={positionPage >= positionPages || isPositionLoading} onClick={() => { setPositionPage((value) => value + 1); setPositionId(''); }}>Próximas posições</button></div>}
           {position && <p className="available-balance"><span>Posição escolhida: {position.stockLocation.name}</span><strong>{position.quantity} {product.defaultUnit} disponíveis</strong></p>}
         </fieldset>}
-        {!outgoing && product && <OperationalLotFields key={`${product.id}:${lotKey}`} product={product} value={lot} onChange={setLot} onReady={setReady} resolvePath="/shipments/resolve-lot" />}
+        {!outgoing && product && <OperationalLotFields initiallyResolved={ready} key={`${product.id}:${lotKey}`} product={product} value={lot} onChange={setLot} onReady={setReady} resolvePath="/shipments/resolve-lot" />}
         <label>Quantidade *<input required type="number" inputMode="numeric" min="1" step="1" max={position?.quantity} value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label>
         <label className="wide">Observação deste produto (opcional)<textarea value={itemObservation} onChange={(event) => setItemObservation(event.target.value)} maxLength={1000} rows={2} /></label>
         <div className="form-actions"><button disabled={!product || items.length >= 100 || (outgoing ? !position : !ready)}>Adicionar item</button></div>
@@ -249,7 +261,7 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
       {!photoLimits && <p className="action-hint">Carregando os limites de fotos…</p>}
       {!allPhotosReady && photoLimits && items.length > 0 && <p className="action-hint photo-required">Adicione de {photoLimits.minimum} a {photoLimits.maximum} foto(s) por produto, até 100 no envio.</p>}
       <button disabled={!allPhotosReady || !loadingReady} onClick={() => { submission.resetConfirmation(); setConfirming(true); }}>Conferir e enviar</button></section>
-    {confirming && <Modal labelledBy="shipment-summary-title" busy={submission.busy} onClose={() => setConfirming(false)}>
+    {confirming && <Modal labelledBy="shipment-summary-title" busy={submission.busy} onClose={() => draft.close(() => setConfirming(false))}>
       <h2 id="shipment-summary-title">{sectorLabel[sector]} → {sectorLabel[destination]}</h2>{summary}
       {sector === 'EXPEDICAO' && <p><strong>Carregamento:</strong> {loadingStatus === 'CARREGADO' ? `Carregado · placa ${vehiclePlate.trim().toUpperCase()}` : 'Não carregado'}</p>}
       <p>Após enviar, os itens não poderão ser editados. O destinatário confirmará ou recusará o recebimento.</p>

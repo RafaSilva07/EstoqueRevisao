@@ -6,6 +6,8 @@ import { formatDate } from './format';
 import { calculateDistribution, isIntegerQuantity, quantityUnits } from './review';
 import { useMovementSubmission } from './useMovementSubmission';
 import { ProductAutocomplete } from './ProductAutocomplete';
+import { DraftActions } from './FormDrafts';
+import { useFormDraft } from './useFormDraft';
 
 export interface ReviewPrefill {
   productId: string;
@@ -40,11 +42,16 @@ export function ReviewPage({
   const [items, setItems] = useState<ReviewDraftItem[]>([]);
   const [observation, setObservation] = useState('');
   const [loading, setLoading] = useState(true);
-  const submission = useMovementSubmission('/movements/reviews', onCreated);
+  const submission = useMovementSubmission('/movements/reviews', created);
   const busy = submission.busy;
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState('');
   const prefillApplied = useRef(false);
+  const [productQuery, setProductQuery] = useState({ code: '', name: '' });
+  const formDraft = useFormDraft('review', 'Revisar produtos', { productId, batchId, draft, items, observation, requestKey: submission.requestKey, productQuery }, (saved) => {
+    setProductQuery(saved.productQuery); prefillApplied.current = true; setProductId(saved.productId); setBatchId(saved.batchId); setDraft(saved.draft); setItems(saved.items); setObservation(saved.observation); submission.setRequestKey(saved.requestKey);
+  }, { enabled: !loading, busy });
+  async function created(id: string) { await formDraft.complete(); onCreated(id); }
 
   const load = useCallback(async (preserveError = false) => {
     setLoading(true);
@@ -70,7 +77,7 @@ export function ReviewPage({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setError]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => void load(), 0);
@@ -98,7 +105,7 @@ export function ReviewPage({
   }, []);
 
   useEffect(() => {
-    if (!prefill || prefillApplied.current || loading) return;
+    if (!prefill || prefillApplied.current || loading || !formDraft.ready) return;
     const position = positions.find((candidate) => (
       candidate.productId === prefill.productId && candidate.batchId === prefill.batchId
     ));
@@ -108,7 +115,7 @@ export function ReviewPage({
       prefillApplied.current = true;
     }, 0);
     return () => window.clearTimeout(timeout);
-  }, [addPosition, loading, positions, prefill]);
+  }, [addPosition, loading, positions, prefill, formDraft.ready]);
 
   function addSelected() {
     if (!selectedPosition) {
@@ -169,7 +176,8 @@ export function ReviewPage({
     });
   }
 
-  function closeItem() { setAdding(false); setDraft(null); setError(''); }
+  function resetItem() { setProductQuery({ code: '', name: '' }); setAdding(false); setDraft(null); setProductId(''); setBatchId(''); setError(''); }
+  function closeItem() { formDraft.close(() => { setAdding(false); setError(''); }); }
 
   function renderEditor(item: ReviewDraftItem) {
     const state = itemState(item);
@@ -202,7 +210,7 @@ export function ReviewPage({
     </article>;
   }
 
-  if (loading) return <LoadingState label="Preparando revisao de produtos" />;
+  if (loading || !formDraft.ready) return <LoadingState label="Preparando revisao de produtos" />;
 
   return <>
     <PageHeader
@@ -211,10 +219,11 @@ export function ReviewPage({
       description="Distribua integralmente a quantidade revisada entre os destinos permitidos."
     />
     <OperationGuide review />
+    <DraftActions draft={formDraft} />
     {error && !adding && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
 
     <section className="surface list-panel">
-      <div className="panel-heading item-list-heading"><h2>Produtos ({items.length})</h2><button type="button" onClick={() => { setDraft(null); setProductId(''); setBatchId(''); setError(''); setAdding(true); }}>Adicionar produto</button></div>
+      <div className="panel-heading item-list-heading"><h2>Produtos ({items.length})</h2><button type="button" onClick={() => { setError(''); setAdding(true); }}>{draft ? 'Continuar produto' : 'Adicionar produto'}</button></div>
       {items.length === 0 ? <EmptyState title="Nenhum item adicionado" description="Use Adicionar produto para selecionar o lote e distribuir a quantidade." /> : <ul className="movement-detail-items">{items.map((item) => <li key={item.key}>
         <strong>{item.position.product.code} — {item.position.product.name}</strong>
         <span>Lote {item.position.batch.code} · validade {formatDate(item.position.batch.expirationDate)}</span>
@@ -226,17 +235,18 @@ export function ReviewPage({
     </section>
     {adding && <Modal labelledBy="review-item-title" onClose={closeItem}>
       <div className="panel-heading item-list-heading"><h2 id="review-item-title">{draft && items.some((item) => item.key === draft.key) ? 'Editar produto' : 'Adicionar produto'}</h2><button type="button" className="secondary" onClick={closeItem}>Cancelar</button></div>
+      <DraftActions draft={formDraft} />
       {error && <Notice kind="error">{error}</Notice>}
       {!draft ? <>      {positions.length === 0 ? <EmptyState title="Nenhum saldo em Revisar" description="Registre uma entrada em Revisar antes de iniciar esta operacao." /> : <div className="form-grid">
-        <ProductAutocomplete availableProducts={products} initialProduct={selectedProduct} onChange={(selected) => { setProductId(selected?.id ?? ''); setBatchId(''); }} />
+        <ProductAutocomplete draftQuery={productQuery} onQueryChange={setProductQuery} availableProducts={products} initialProduct={selectedProduct} onChange={(selected) => { setProductId(selected?.id ?? ''); setBatchId(''); }} />
         <PositionSelect label="Lote *" value={batchId} onChange={setBatchId} disabled={!productId}
           options={productPositions.map((position) => ({ value: position.batchId, label: `Lote: ${position.batch.code} · val: ${formatDate(position.batch.expirationDate)} · saldo: ${position.quantity}` }))} />
         {selectedPosition && <div className="available-balance" role="status"><span>Disponivel em Revisar</span><strong>{selectedPosition.quantity} {selectedPosition.product.defaultUnit}</strong><small>Validade {formatDate(selectedPosition.batch.expirationDate)}</small></div>}
         <div className="form-actions"><button type="button" onClick={addSelected}>+ Adicionar produto/lote</button></div>
       </div>}
-</> : <>{renderEditor(draft)}<div className="dialog-actions"><button type="button" className="secondary" disabled={items.some((item) => item.key === draft.key)} onClick={() => setDraft(null)}>Trocar produto/lote</button><button type="button" disabled={!itemReady(draft)} onClick={() => { setItems((current) => current.some((item) => item.key === draft.key) ? current.map((item) => item.key === draft.key ? draft : item) : [...current, draft]); closeItem(); }}>Salvar item</button></div></>}
+</> : <>{renderEditor(draft)}<div className="dialog-actions"><button type="button" className="secondary" disabled={items.some((item) => item.key === draft.key)} onClick={() => setDraft(null)}>Trocar produto/lote</button><button type="button" disabled={!itemReady(draft)} onClick={() => { setItems((current) => current.some((item) => item.key === draft.key) ? current.map((item) => item.key === draft.key ? draft : item) : [...current, draft]); resetItem(); }}>Salvar item</button></div></>}
     </Modal>}
     {!ready && <p className="action-hint">Adicione um item e complete a distribuição para conferir a revisão.</p>}<section className="surface review-submit"><div><span>Total revisado</span><strong>{totalReviewed} em {items.length} produto(s)/lote(s)</strong></div><button disabled={!ready || busy} onClick={() => { submission.resetConfirmation(); setConfirming(true); }}>Revisar operacao</button></section>
-    {confirming && <Modal labelledBy="review-confirm-title" busy={busy} onClose={() => setConfirming(false)}><p className="eyebrow">Resumo</p><h2 id="review-confirm-title">{submission.conflict ? 'Mesmo lote com outra validade' : 'Confirmar revisão?'}</h2>{submission.conflict && <Notice kind="info">{submission.conflict.message}</Notice>}{submission.error && <Notice kind="error">{submission.error}</Notice>}<p>{items.length} produto(s)/lote(s), total revisado de <strong>{totalReviewed}</strong>.</p><ul className="review-summary">{items.map((item) => <li key={item.key}><strong>{item.position.product.name} / lote {item.position.batch.code} / validade {formatDate(item.position.batch.expirationDate)}: {item.quantity} {item.position.product.defaultUnit}</strong>{item.outputProductId && <p>→ {itemState(item).reviewed} UN de {item.position.product.unitProducts?.find((product) => product.id === item.outputProductId)?.code} — {item.position.product.unitProducts?.find((product) => product.id === item.outputProductId)?.name}</p>}<ul>{destinations.map((destination) => ({ destination, quantity: Number(item.distributions[destination.id] || 0) })).filter(({ quantity }) => quantity > 0).map(({ destination, quantity }) => <li key={destination.id}>{quantity} → {destination.name}</li>)}</ul></li>)}</ul><p>A quantidade sera retirada de Revisar e distribuida integralmente em uma unica operacao.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={() => setConfirming(false)}>Voltar e corrigir</button><button disabled={busy} onClick={() => void submit()}>{busy ? 'Processando revisao...' : submission.conflict ? 'Confirmar com validades separadas' : 'Confirmar revisao'}</button></div></Modal>}
+    {confirming && <Modal labelledBy="review-confirm-title" busy={busy} onClose={() => formDraft.close(() => setConfirming(false))}><p className="eyebrow">Resumo</p><h2 id="review-confirm-title">{submission.conflict ? 'Mesmo lote com outra validade' : 'Confirmar revisão?'}</h2>{submission.conflict && <Notice kind="info">{submission.conflict.message}</Notice>}{submission.error && <Notice kind="error">{submission.error}</Notice>}<p>{items.length} produto(s)/lote(s), total revisado de <strong>{totalReviewed}</strong>.</p><ul className="review-summary">{items.map((item) => <li key={item.key}><strong>{item.position.product.name} / lote {item.position.batch.code} / validade {formatDate(item.position.batch.expirationDate)}: {item.quantity} {item.position.product.defaultUnit}</strong>{item.outputProductId && <p>→ {itemState(item).reviewed} UN de {item.position.product.unitProducts?.find((product) => product.id === item.outputProductId)?.code} — {item.position.product.unitProducts?.find((product) => product.id === item.outputProductId)?.name}</p>}<ul>{destinations.map((destination) => ({ destination, quantity: Number(item.distributions[destination.id] || 0) })).filter(({ quantity }) => quantity > 0).map(({ destination, quantity }) => <li key={destination.id}>{quantity} → {destination.name}</li>)}</ul></li>)}</ul><p>A quantidade sera retirada de Revisar e distribuida integralmente em uma unica operacao.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={() => setConfirming(false)}>Voltar e corrigir</button><button disabled={busy} onClick={() => void submit()}>{busy ? 'Processando revisao...' : submission.conflict ? 'Confirmar com validades separadas' : 'Confirmar revisao'}</button></div></Modal>}
   </>;
 }
