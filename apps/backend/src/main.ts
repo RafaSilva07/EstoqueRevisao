@@ -15,7 +15,7 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix('api/v1');
   app.use(cookieParser());
   app.enableCors({
-    origin: configService.getOrThrow<string>('FRONTEND_URL'),
+    origin: new URL(configService.getOrThrow<string>('FRONTEND_URL')).origin,
     credentials: true,
   });
   app.useGlobalPipes(

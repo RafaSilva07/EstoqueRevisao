@@ -25,6 +25,8 @@ describe('Setor operacional nas requisições', () => {
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), {
   status, headers: { 'Content-Type': 'application/json' },
 });
+const requestPath = (input: string | URL | Request): string =>
+  typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
 
 describe('renovação da sessão', () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -102,5 +104,78 @@ describe('renovação da sessão', () => {
     expect(invalidated).not.toHaveBeenCalled();
     unavailable = false;
     await expect(client.get('/protected')).resolves.toEqual({ ok: true });
+  });
+
+  it('serializa a rotacao do cookie entre duas abas sem perder a sessao', async () => {
+    let queue = Promise.resolve();
+    const lockNames: string[] = [];
+    vi.stubGlobal('navigator', { locks: {
+      request: <T>(name: string, work: () => Promise<T>): Promise<T> => {
+        lockNames.push(name);
+        const next = queue.then(work);
+        queue = next.then(() => undefined, () => undefined);
+        return next;
+      },
+    } });
+    let cookieVersion = 0;
+    let activeRefreshes = 0;
+    let maxActiveRefreshes = 0;
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const path = requestPath(input);
+      expect(init?.credentials).toBe('include');
+      if (path.endsWith('/auth/refresh')) {
+        const sentCookie = cookieVersion;
+        activeRefreshes += 1;
+        maxActiveRefreshes = Math.max(maxActiveRefreshes, activeRefreshes);
+        await new Promise<void>((resolve) => setTimeout(resolve, 5));
+        activeRefreshes -= 1;
+        if (sentCookie !== cookieVersion) return json({ error: {} }, 401);
+        cookieVersion += 1;
+        return json({ accessToken: `renewed-${cookieVersion}`, user: { id: 'user-1' } });
+      }
+      if (path.endsWith('/auth/login')) return json({ accessToken: 'old', user: { id: 'user-1' } });
+      return new Headers(init?.headers).get('Authorization')?.startsWith('Bearer renewed-')
+        ? json({ ok: true }) : json({ error: {} }, 401);
+    }));
+    const tabs = [new ApiClient(), new ApiClient()];
+    const invalidated = vi.fn();
+    for (const tab of tabs) {
+      tab.setSessionInvalidHandler(invalidated);
+      await tab.login('operador', 'senha');
+    }
+
+    const results = await Promise.all(tabs.map((tab) => tab.get('/protected')));
+    expect(results).toEqual([{ ok: true }, { ok: true }]);
+    expect(maxActiveRefreshes).toBe(1);
+    expect(cookieVersion).toBe(2);
+    expect(new Set(lockNames).size).toBe(1);
+    expect(invalidated).not.toHaveBeenCalled();
+  });
+
+  it('usa o mesmo lock para login, refresh e logout', async () => {
+    const lock = vi.fn(<T>(_name: string, work: () => Promise<T>) => work());
+    vi.stubGlobal('navigator', { locks: { request: lock } });
+    vi.stubGlobal('fetch', vi.fn((input: string | URL | Request) => {
+      if (requestPath(input).endsWith('/auth/logout')) return Promise.resolve(new Response(null, { status: 204 }));
+      return Promise.resolve(json({ accessToken: 'access', user: { id: 'user-1' } }));
+    }));
+    const client = new ApiClient();
+    await client.login('operador', 'senha');
+    await client.refresh();
+    await client.logout();
+    expect(lock).toHaveBeenCalledTimes(3);
+    expect(new Set(lock.mock.calls.map(([name]) => name)).size).toBe(1);
+  });
+
+  it('encerra a sessao apenas quando a renovacao e realmente recusada', async () => {
+    const client = new ApiClient();
+    const invalidated = vi.fn();
+    client.setSessionInvalidHandler(invalidated);
+    vi.stubGlobal('fetch', vi.fn((input: string | URL | Request) => Promise.resolve(
+      requestPath(input).endsWith('/auth/login') ? json({ accessToken: 'old', user: { id: 'user-1' } }) : json({ error: {} }, 401),
+    )));
+    await client.login('operador', 'senha');
+    await expect(client.get('/protected')).rejects.toMatchObject({ status: 401 });
+    expect(invalidated).toHaveBeenCalledTimes(1);
   });
 });

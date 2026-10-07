@@ -25,6 +25,8 @@ Todas as entradas, saídas, transferências e distribuições de revisão aceita
 
 O frontend possui login, restauração da sessão pelo cookie HttpOnly e navegação condicionada às permissões.
 
+A sessão dura até 14 horas desde o login, com renovação automática do acesso curto e sincronização entre abas em navegadores com Web Locks. O cookie se adapta ao localhost e aos ambientes HTTPS publicados; login, renovação e saída aceitam somente a origem configurada do frontend. Configuração em [COMO_RODAR.md](./COMO_RODAR.md#sessão-nos-ambientes-publicados).
+
 Enquanto a aba está visível, a presença é atualizada a cada 20 segundos e também quando o usuário volta a ela. No modo PCP, um aviso no início da tela mostra o nome de outros colegas PCP online e se atualiza quando alguém entra ou sai. Administradores gerais e de área acessam **Usuários online** pelo menu lateral para consultar todos os usuários ativos e seus modos operacionais recentes. “Online” significa atividade recebida nos últimos 60 segundos; a indicação não reserva registros nem bloqueia operações.
 
 A interface usa transições curtas em botões, cartões, campos, filtros e diálogos, com rolagem suave. Quando o dispositivo solicita redução de movimento, as animações e a rolagem suave são desativadas.

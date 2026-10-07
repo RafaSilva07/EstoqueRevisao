@@ -349,13 +349,16 @@ export class ApiClient {
   }
 
   async login(username: string, password: string): Promise<AuthenticationResult> {
-    const result = await this.request<AuthenticationResult>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ username, password }),
-    }, false);
-    this.accessToken = result.accessToken;
-    this.userId = result.user.id;
-    return result;
+    return this.withSessionLock(async () => {
+      const result = await this.request<AuthenticationResult>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      }, false);
+      this.accessToken = result.accessToken;
+      this.userId = result.user.id;
+      this.refreshDenied = false;
+      return result;
+    });
   }
 
   refresh(): Promise<AuthenticationResult | null> {
@@ -363,7 +366,8 @@ export class ApiClient {
       this.refreshPromise = (async () => {
         try {
           this.refreshDenied = false;
-          const result = await this.request<AuthenticationResult>('/auth/refresh', { method: 'POST' }, false);
+          const result = await this.withSessionLock(() =>
+            this.request<AuthenticationResult>('/auth/refresh', { method: 'POST' }, false));
           if (this.userId && this.userId !== result.user.id) {
             this.invalidateSession();
             return null;
@@ -385,7 +389,7 @@ export class ApiClient {
   async logout(): Promise<void> {
     try {
       if (this.refreshPromise) await this.refreshPromise;
-      await this.request<void>('/auth/logout', { method: 'POST' }, false);
+      await this.withSessionLock(() => this.request<void>('/auth/logout', { method: 'POST' }, false));
     } finally {
       this.accessToken = null;
       this.userId = null;
@@ -459,6 +463,12 @@ export class ApiClient {
     this.userId = null;
     this.operationalSector = null;
     this.onSessionInvalid?.();
+  }
+
+  private async withSessionLock<T>(work: () => Promise<T>): Promise<T> {
+    // The HttpOnly cookie is shared by tabs; rotating it must be serialized too.
+    if (typeof navigator === 'undefined' || !navigator.locks) return work();
+    return await navigator.locks.request(`estoque-revisao:auth:${apiUrl}`, work);
   }
 }
 

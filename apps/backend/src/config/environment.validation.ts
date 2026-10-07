@@ -69,6 +69,9 @@ export class EnvironmentVariables {
   @IsBoolean()
   AUTH_COOKIE_SECURE = false;
 
+  @IsIn(['auto', 'strict', 'lax', 'none'])
+  AUTH_COOKIE_SAME_SITE: 'auto' | 'strict' | 'lax' | 'none' = 'auto';
+
   @Transform(toNumber)
   @IsInt()
   @Min(19456)
@@ -119,6 +122,16 @@ export function validateEnvironment(config: Record<string, unknown>): Environmen
 
   if (errors.length > 0) {
     throw new Error(`Configuracao de ambiente invalida: ${errors.toString()}`);
+  }
+  if (validated.AUTH_COOKIE_SAME_SITE === 'auto') {
+    const frontend = new URL(validated.FRONTEND_URL);
+    const local = ['localhost', '127.0.0.1', '[::1]'].includes(frontend.hostname);
+    validated.AUTH_COOKIE_SAME_SITE = validated.AUTH_COOKIE_SECURE && frontend.protocol === 'https:' && !local
+      ? 'none'
+      : 'strict';
+  }
+  if (validated.AUTH_COOKIE_SAME_SITE === 'none' && !validated.AUTH_COOKIE_SECURE) {
+    throw new Error('AUTH_COOKIE_SAME_SITE=none exige AUTH_COOKIE_SECURE=true.');
   }
   if (validated.STORAGE_DRIVER === 'supabase' && (!validated.SUPABASE_URL || (!validated.SUPABASE_SECRET_KEY && !validated.SUPABASE_SERVICE_ROLE_KEY))) {
     throw new Error('SUPABASE_URL e SUPABASE_SECRET_KEY são obrigatórias para STORAGE_DRIVER=supabase.');

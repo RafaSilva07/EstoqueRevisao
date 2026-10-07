@@ -13,6 +13,7 @@ import { TokenService } from './token.service';
 import { PresenceController } from './presence.controller';
 import { PresenceRepository } from './presence.repository';
 import { PresenceService } from './presence.service';
+import { AuthOriginGuard } from './guards/auth-origin.guard';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { PresenceService } from './presence.service';
   controllers: [AuthController, PresenceController],
   providers: [
     AuthService,
+    AuthOriginGuard,
     AuthSessionsRepository,
     PasswordHasherService,
     TokenService,

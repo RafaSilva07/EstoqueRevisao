@@ -9,9 +9,10 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Request, Response } from 'express';
+import { CookieOptions, Request, Response } from 'express';
 import { getAuditRequestMetadata } from '../audit/audit-request-metadata';
 import { REFRESH_TOKEN_COOKIE } from './auth.constants';
 import { AuthenticatedUser } from './authenticated-user.interface';
@@ -20,6 +21,7 @@ import { Public } from './decorators/public.decorator';
 import { LoginDto } from './dto/login.dto';
 import { UpdateUserPreferencesDto } from '../users/dto/user-preferences.dto';
 import { UserPreferences, UserPreferencesService } from '../users/user-preferences.service';
+import { AuthOriginGuard } from './guards/auth-origin.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -31,6 +33,7 @@ export class AuthController {
 
   @Public()
   @Post('login')
+  @UseGuards(AuthOriginGuard)
   @HttpCode(HttpStatus.OK)
   async login(
     @Body() dto: LoginDto,
@@ -44,6 +47,7 @@ export class AuthController {
 
   @Public()
   @Post('refresh')
+  @UseGuards(AuthOriginGuard)
   @HttpCode(HttpStatus.OK)
   async refresh(
     @Req() request: Request,
@@ -64,6 +68,7 @@ export class AuthController {
 
   @Public()
   @Post('logout')
+  @UseGuards(AuthOriginGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(
     @Req() request: Request,
@@ -98,16 +103,13 @@ export class AuthController {
     });
   }
 
-  private cookieOptions(): {
-    httpOnly: true;
-    secure: boolean;
-    sameSite: 'strict';
-    path: string;
-  } {
+  private cookieOptions(): CookieOptions {
+    const sameSite = this.configService.getOrThrow<'strict' | 'lax' | 'none'>('AUTH_COOKIE_SAME_SITE');
     return {
       httpOnly: true,
       secure: this.configService.getOrThrow<boolean>('AUTH_COOKIE_SECURE'),
-      sameSite: 'strict',
+      sameSite,
+      partitioned: sameSite === 'none',
       path: '/api/v1/auth',
     };
   }

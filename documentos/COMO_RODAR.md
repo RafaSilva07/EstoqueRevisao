@@ -96,6 +96,26 @@ Abra no navegador:
 
 Entre na aplicação com os valores configurados em `BOOTSTRAP_USERNAME` e `BOOTSTRAP_PASSWORD`.
 
+## Sessão nos ambientes publicados
+
+Nas variáveis do backend de cada ambiente (teste e produção), mantenha:
+
+```dotenv
+JWT_ACCESS_TTL=15m
+REFRESH_TOKEN_TTL_HOURS=14
+AUTH_COOKIE_SECURE=true
+AUTH_COOKIE_SAME_SITE=auto
+FRONTEND_URL=https://endereco-exato-do-frontend
+```
+
+`AUTH_COOKIE_SAME_SITE` é opcional: sem a variável, `auto` adapta o cookie para frontend HTTPS externo (Pages/Railway). No localhost usa `Strict`; em HTTP local o exemplo mantém `AUTH_COOKIE_SECURE=false`. Frontend e backend precisam utilizar o mesmo hostname local, sem misturar `localhost` e `127.0.0.1`.
+
+No frontend publicado, `VITE_API_URL` precisa apontar para a API do mesmo ambiente, incluindo `/api/v1`. Após publicar a correção, entre novamente para receber o cookie atualizado. Atualizar a página e renovar o JWT não prolongam o limite de 14 horas. Mudar senha/permissões ou sair ainda pode encerrar a sessão antes desse limite.
+
+POSTs de `/auth/login`, `/auth/refresh` e `/auth/logout` exigem `Origin` igual à origem de `FRONTEND_URL`; o navegador envia automaticamente. Em clientes como curl/Postman, envie esse cabeçalho explicitamente. Um `403/AUTH_ORIGIN_NOT_ALLOWED` indica origem incorreta/ausente, não senha inválida. CORS não substitui essa validação.
+
+Cookies externos usam `Partitioned` para navegadores compatíveis. Se o navegador bloquear também esse cookie ou não suportar o recurso, disponibilize a API no mesmo site do frontend via domínio/proxy; aumentar `JWT_ACCESS_TTL` não resolve esse bloqueio. A coordenação entre abas exige Web Locks (HTTPS ou localhost); sem suporte, só as requisições da mesma aba são coordenadas.
+
 ## Usuários de Produção e Expedição
 
 No `.env` da raiz, configure um novo `BOOTSTRAP_USERNAME`, uma senha forte em `BOOTSTRAP_PASSWORD` e `BOOTSTRAP_ROLE_CODE=PRODUCAO` ou `EXPEDICAO`. Execute `npm run db:user:create` para cada usuário. O script usa Argon2id e vincula o setor ao perfil; `ADMIN` continua na Revisão. Não recrie usuários existentes nem compartilhe a conta administrativa com setores externos.

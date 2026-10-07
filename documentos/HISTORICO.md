@@ -213,3 +213,7 @@ A separação imediata passou a mostrar a fabricação junto ao lote em cada car
 ## Etapa 68 — Importação do catálogo no Supabase de teste
 
 O projeto configurado localmente foi distinguido do Supabase da carga anterior e recebeu os mesmos 10.944 produtos válidos da planilha, com 5.899 vínculos e auditoria. O banco foi conferido após a transação; [relatório da etapa 68](./relatorios/RELATORIO_ETAPA_68_IMPORTACAO_PRODUTOS_TESTE.md).
+
+## Etapa 69 — Renovação de sessão nos navegadores
+
+Corrigido o cookie para ambientes HTTPS externos e coordenadas as alterações de sessão entre abas, mantendo 14 horas desde o login. As rotas que alteram a sessão passam a validar a origem do frontend. Sem mudança de schema; [relatório da etapa 69](./relatorios/RELATORIO_ETAPA_69_RENOVACAO_SESSAO.md).
