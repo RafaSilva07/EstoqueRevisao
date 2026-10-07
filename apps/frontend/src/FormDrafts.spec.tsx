@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, useLayoutEffect, useState } from 'react';
+import { act, StrictMode, useLayoutEffect, useState } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +12,7 @@ import { NewShipment } from './NewShipment';
 import { api, Product } from './api';
 import { emptyLot } from './operational-lot';
 import { UsersPage } from './UsersPage';
+import { App } from './App';
 
 interface Value { observation: string; items: string[]; photos: { file: File; url: string }[]; requestKey: string }
 const initial: Value = { observation: '', items: [], photos: [], requestKey: 'idempotency-key' };
@@ -182,6 +183,55 @@ describe('rascunhos dos formulários', () => {
     await click('Cancelar'); await click('Salvar rascunho e sair'); await until(() => !host.querySelector('[role=dialog]'));
     await click('Adicionar produto'); expect(host.querySelector<HTMLInputElement>('input[type=number]')?.value).toBe('4');
     expect(done).not.toHaveBeenCalled();
+  });
+  it.each(['Voltar', 'breadcrumb', 'menu'])('protege o envio iniciado em Envios e recebimentos no modo Expedição ao sair por %s', async (exit) => {
+    const product: Product = { id: 'product', code: '005601.90', name: 'Produto UN', defaultUnit: 'UN', active: true, shelfLifeYears: 3 };
+    const emptyPage = { items: [], meta: { page: 1, limit: 10, total: 0, totalPages: 0 } };
+    vi.spyOn(api, 'refresh').mockResolvedValue({ accessToken: 'test-session', user: { id: 'administrator', username: 'admin', sector: 'REVISAO', roles: ['ADMIN'], permissions: ['shipments.read', 'shipments.create', 'products.read'] } });
+    vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve(path === '/settings/shipment-photos' ? { minimum: 1, maximum: 5 }
+      : path.startsWith('/products?') ? { ...emptyPage, items: [product] } : emptyPage));
+    vi.spyOn(api, 'post').mockImplementation((path) => Promise.resolve(path === '/shipments/resolve-lot'
+      ? { code: 'CICINV', manufacturingDate: '2026-09-09', suggestedExpirationDate: '2029-09-09' } : undefined));
+    const submit = vi.spyOn(api, 'postMultipart');
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
+    await act(async () => { root.render(<StrictMode><App /></StrictMode>); await Promise.resolve(); });
+    await until(() => Boolean(host.querySelector('[aria-label="Modo operacional"]')));
+    await act(async () => { const mode = host.querySelector<HTMLSelectElement>('[aria-label="Modo operacional"]')!; mode.value = 'EXPEDICAO'; mode.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
+    await act(async () => { host.querySelector<HTMLButtonElement>('.sidebar [aria-label="Envios e recebimentos"]')!.click(); await Promise.resolve(); });
+    await until(() => host.textContent?.includes('Novo envio para Revisão') ?? false);
+    await click('Novo envio para Revisão');
+    await until(() => Boolean(host.querySelector('.draft-toolbar')));
+    await click('Adicionar produto');
+    await act(async () => { host.querySelector<HTMLButtonElement>('[aria-label="Abrir lista de códigos"]')!.click(); await Promise.resolve(); });
+    await until(() => Boolean(host.querySelector('[role=option]')));
+    await act(async () => { host.querySelector<HTMLButtonElement>('[role=option]')!.click(); await Promise.resolve(); });
+    const lot = host.querySelector<HTMLInputElement>('.operational-lot input')!;
+    await act(async () => { lot.focus(); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(lot, 'CICINV'); lot.dispatchEvent(new Event('input', { bubbles: true })); await Promise.resolve(); });
+    await act(async () => { lot.blur(); await Promise.resolve(); });
+    await until(() => host.querySelector<HTMLInputElement>('.operational-lot input[type=date]')?.value === '2026-09-09');
+    await act(async () => { const quantity = host.querySelector<HTMLInputElement>('input[type=number]')!; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(quantity, '10'); quantity.dispatchEvent(new Event('input', { bubbles: true })); await Promise.resolve(); });
+    await click('Adicionar item');
+    expect(host.textContent).toContain('Produtos (1)');
+    await act(async () => {
+      const button = exit === 'Voltar' ? [...host.querySelectorAll<HTMLButtonElement>('button')].find((item) => item.textContent === 'Voltar')!
+        : exit === 'breadcrumb' ? host.querySelector<HTMLButtonElement>('.navigation-trail button')!
+          : host.querySelector<HTMLButtonElement>('.sidebar [aria-label="Início"]')!;
+      button.click();
+      await Promise.resolve();
+    });
+    expect(document.body.textContent).toContain('Guardar o preenchimento?');
+    expect(host.textContent).toContain('Produtos (1)');
+    await click('Salvar rascunho e sair');
+    await until(() => !host.querySelector('[role=dialog]'));
+    const saved = await formDraftStore.read('administrator:EXPEDICAO:shipment:EXPEDICAO');
+    expect(saved?.value).toEqual(expect.objectContaining({ items: [expect.objectContaining({ product, quantity: 10, lot: { code: 'CICINV', manufacturingDate: '2026-09-09', expirationDate: '2029-09-09' } })] }));
+    expect(submit).not.toHaveBeenCalled();
+    if (exit !== 'Voltar') await act(async () => { host.querySelector<HTMLButtonElement>('.sidebar [aria-label="Envios e recebimentos"]')!.click(); await Promise.resolve(); });
+    await until(() => host.textContent?.includes('Envios e recebimentos') ?? false);
+    await click('Novo envio para Revisão');
+    await until(() => host.textContent?.includes('Produtos (1)') ?? false);
+    expect(host.textContent).toContain('Rascunho recuperado.');
+    expect(host.textContent).toContain('10 UN');
   });
   it('recupera um cadastro de usuário, mas exige digitar a senha novamente', async () => {
     vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve(path === '/users/roles' ? [{ code: 'REVISAO', name: 'Revisão', editable: true, version: 1, userCount: 0, modes: ['REVISAO'], permissionCodes: [] }]
