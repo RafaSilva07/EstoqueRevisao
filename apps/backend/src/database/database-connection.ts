@@ -22,7 +22,7 @@ export function parseDatabaseConnection(
     ssl: sslEnabled
       ? {
           rejectUnauthorized: false,
-          ...(hostOverride ? { servername: originalHostname } : {}),
+          ...{ servername: originalHostname },
         }
       : false,
   };

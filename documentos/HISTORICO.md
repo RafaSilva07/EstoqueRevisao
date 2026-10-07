@@ -209,3 +209,7 @@ O Histórico passou a exportar CSV filtrado por registro, sem incluir etapas pen
 ## Etapa 67 — Data na separação para retorno
 
 A separação imediata passou a mostrar a fabricação junto ao lote em cada card de produto. Ajuste somente visual, descrito no [relatório da etapa 67](./relatorios/RELATORIO_ETAPA_67_DATA_SEPARACAO_RETORNO.md).
+
+## Etapa 68 — Importação do catálogo no Supabase de teste
+
+O projeto configurado localmente foi distinguido do Supabase da carga anterior e recebeu os mesmos 10.944 produtos válidos da planilha, com 5.899 vínculos e auditoria. O banco foi conferido após a transação; [relatório da etapa 68](./relatorios/RELATORIO_ETAPA_68_IMPORTACAO_PRODUTOS_TESTE.md).

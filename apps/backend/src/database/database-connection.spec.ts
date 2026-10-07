@@ -20,4 +20,17 @@ describe('parseDatabaseConnection', () => {
       },
     });
   });
+
+  it('preserves the database hostname for TLS when connecting through DNS', () => {
+    const options = parseDatabaseConnection(
+      'postgresql://postgres.project:Senha%40Segura@pooler.supabase.com:5432/postgres',
+      true,
+    );
+
+    expect(options.ssl).toEqual({
+      rejectUnauthorized: false,
+      servername: 'pooler.supabase.com',
+    });
+    expect(options.host).toBe('pooler.supabase.com');
+  });
 });
