@@ -13,6 +13,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { trimString } from '../../../shared/validation/transforms';
+import { DuplicateConfirmationDto } from '../../../shared/operations/duplicate-confirmation.dto';
 
 export class CreateEffectiveMovementItemDto {
   @IsUUID()
@@ -27,7 +28,7 @@ export class CreateEffectiveMovementItemDto {
   quantity!: number;
 }
 
-export class CreateEffectiveMovementDto {
+export class CreateEffectiveMovementDto extends DuplicateConfirmationDto {
   @IsUUID()
   requestKey!: string;
 

@@ -96,12 +96,67 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
   const image = (): UploadedImage => ({ buffer: Buffer.from('valid-photo'), mimetype: 'image/jpeg', size: 11, originalname: 'ignored.jpg' });
   const createShipment = (dto: CreateShipmentDto, user: AuthenticatedUser, meta: AuditRequestMetadata): Promise<ShipmentEntity> =>
     service.create(dto, dto.items.map(image), user, meta);
-  const incoming = (sector: 'PRODUCAO' | 'EXPEDICAO' = 'PRODUCAO'): Promise<ShipmentEntity> => createShipment({ requestKey: randomUUID(), destinationSector: 'REVISAO',
+  const incoming = (sector: 'PRODUCAO' | 'EXPEDICAO' = 'PRODUCAO', confirmedDuplicateKeys?: string[], requestKey = randomUUID()): Promise<ShipmentEntity> => createShipment({ requestKey, confirmedDuplicateKeys, destinationSector: 'REVISAO',
     ...(sector === 'EXPEDICAO' ? { loadingStatus: 'NAO_CARREGADO' as const } : {}), items: [{ productId, batchId, quantity: 10 }] }, users[sector], metadata());
   const reserve = (destinationSector: 'PRODUCAO' | 'EXPEDICAO' = 'PRODUCAO', quantity = 6, requestKey = randomUUID()): Promise<ShipmentEntity> => createShipment({ requestKey, destinationSector, items: [{ productId, batchId, stockLocationId: sourceId, quantity }] }, users.REVISAO, metadata());
   const balance = (location = sourceId): Promise<number> => stock.getBalance({ productId, batchId, stockLocationId: location });
   const seed = (quantity = 10, location = sourceId): Promise<StockPositionEntity> => db.transaction((manager) => stock.addQuantity({ productId, batchId, stockLocationId: location }, quantity, manager));
   const decide = (id: string, sector: Sector, refuse = false): Promise<ShipmentEntity> => service.decide(id, refuse ? 'RECUSADO' : 'CONFIRMADO', refuse ? 'Quantidade divergente' : null, {}, users[sector], metadata());
+
+  async function duplicateWarning(operation: Promise<unknown>): Promise<string[]> {
+    try { await operation; }
+    catch (error) {
+      expect(error).toBeInstanceOf(ConflictException);
+      const response = (error as ConflictException).getResponse() as { code: string; details: { duplicateKeys: string[] } };
+      expect(response.code).toBe('RECENT_DUPLICATE_CONFIRMATION_REQUIRED');
+      return response.details.duplicateKeys;
+    }
+    throw new Error('Esperado aviso de duplicidade.');
+  }
+  it.each(['PRODUCAO', 'EXPEDICAO'] as const)('avisa envio %s idêntico antes do recebimento e permite seguir', async (sector) => {
+    const first = await incoming(sector);
+    const key = randomUUID(); const confirmed = await duplicateWarning(incoming(sector, undefined, key));
+    expect(await db.getRepository(ShipmentEntity).count()).toBe(1); expect(await balance()).toBe(0);
+    const second = await incoming(sector, confirmed, key);
+    expect(second.id).not.toBe(first.id); expect(await incoming(sector, undefined, key)).toMatchObject({ id: second.id });
+    expect((await db.getRepository(AuditLogEntity).findOneByOrFail({ entityId: second.id, action: 'SHIPMENT_CREATE' })).newValues).toMatchObject({ confirmedDuplicateKeys: confirmed });
+  });
+  it('avisa envio da Revisão sem reservar duas vezes nem manter fotos do envio rejeitado', async () => {
+    await seed(100); await reserve();
+    const storage = (service as unknown as { storage: StorageService }).storage;
+    const removePhoto = jest.spyOn(storage, 'deleteImage');
+    const confirmed = await duplicateWarning(reserve());
+    expect(removePhoto).toHaveBeenCalled(); expect(await balance()).toBe(94);
+    await createShipment({ requestKey: randomUUID(), confirmedDuplicateKeys: confirmed, destinationSector: 'PRODUCAO',
+      items: [{ productId, batchId, stockLocationId: sourceId, quantity: 6 }] }, users.REVISAO, metadata());
+    expect(await balance()).toBe(88);
+  });
+  it('ignora envios recusados/cancelados e diferencia o setor destinatário', async () => {
+    const first = await incoming(); await decide(first.id, 'REVISAO', true);
+    const second = await incoming(); await service.cancel(second.id, 'Teste', users.PRODUCAO, metadata());
+    await expect(incoming()).resolves.toBeDefined();
+    await seed(20); await reserve('PRODUCAO'); await expect(reserve('EXPEDICAO')).resolves.toBeDefined();
+  });
+  it('montagem idêntica considera parcelas reordenadas e produto da embalagem', async () => {
+    await seed(100); await seed(100, lataBoaId);
+    const sources = [{ batchId, stockLocationId: sourceId, quantity: 12 }, { batchId, stockLocationId: lataBoaId, quantity: 8 }];
+    const input: CreateShipmentDto = { requestKey: randomUUID(), destinationSector: 'EXPEDICAO', items: [{ productId, quantity: 2,
+      assembly: { packageProductId: packageId, mixedDates: false, sources } }] };
+    await createShipment(input, users.REVISAO, metadata());
+    const next = { ...input, requestKey: randomUUID(), items: [{ ...input.items[0], assembly: { ...input.items[0].assembly!, sources: [...sources].reverse() } }] };
+    const confirmedDuplicateKeys = await duplicateWarning(createShipment(next, users.REVISAO, metadata()));
+    expect(await balance()).toBe(88); expect(await balance(lataBoaId)).toBe(92);
+    await createShipment({ ...next, confirmedDuplicateKeys }, users.REVISAO, metadata());
+    expect(await balance()).toBe(76); expect(await balance(lataBoaId)).toBe(84);
+  });
+  it('envios concorrentes iguais geram um envio e um aviso, sem duas reservas', async () => {
+    await seed(100);
+    const results = await Promise.allSettled([reserve(), reserve()]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((result) => result.status === 'rejected') as PromiseRejectedResult;
+    expect((rejected.reason as ConflictException).getResponse()).toMatchObject({ code: 'RECENT_DUPLICATE_CONFIRMATION_REQUIRED' });
+    expect(await balance()).toBe(94);
+  });
   const assembly = (quantity: number, sources: Array<{ batchId: string; stockLocationId: string; quantity: number }>, mixedDates = false): Promise<ShipmentEntity> =>
     createShipment({ requestKey: randomUUID(), destinationSector: 'EXPEDICAO', items: [{ productId, quantity,
       assembly: { packageProductId: packageId, mixedDates, sources } }] }, users.REVISAO, metadata());
@@ -269,8 +324,9 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     await expect(service.photo(shipment.id, shipment.items[0].id, users.EXPEDICAO, 2)).rejects.toBeInstanceOf(NotFoundException);
     await expect(db.getRepository(ShipmentItemAdditionalPhotoEntity).update(shipment.items[0].additionalPhotos[0].id, { size: 12 })).rejects.toThrow();
     const next = { ...dto, requestKey: randomUUID() };
+    const confirmedDuplicateKeys = await duplicateWarning(service.create(next, [image(), image()], users.PRODUCAO, metadata()));
     jest.spyOn(audit, 'record').mockRejectedValueOnce(new Error('audit failed'));
-    await expect(service.create(next, [image(), image()], users.PRODUCAO, metadata())).rejects.toThrow('audit failed');
+    await expect(service.create({ ...next, confirmedDuplicateKeys }, [image(), image()], users.PRODUCAO, metadata())).rejects.toThrow('audit failed');
     expect(await db.getRepository(ShipmentItemAdditionalPhotoEntity).count()).toBe(1);
     expect(await db.getRepository(ShipmentEntity).count()).toBe(1);
   });
@@ -469,7 +525,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
   it('lista envios paginados e preserva a entrada manual permitida de Produção', async () => {
     const external = await db.getRepository(StockLocationEntity).findOneByOrFail({sector:'PRODUCAO'});
     await expect(movements.createExternalEntry({requestKey:randomUUID(),originLocationId:external.id,destinationLocationId:sourceId,items:[{productId,batchId,quantity:1}]},users.REVISAO.id,metadata())).resolves.toMatchObject({type:'ENTRADA_EXTERNA',originLocationId:external.id,destinationLocationId:sourceId});
-    for (let i = 0; i < 3; i++) await createShipment({requestKey:randomUUID(),destinationSector:'REVISAO',items:[{productId,lot:{manufacturingDate:'2026-09-14',expirationDate:'2028-09-14'},quantity:1}]},users.PRODUCAO,metadata());
+    for (let i = 0; i < 3; i++) await createShipment({requestKey:randomUUID(),destinationSector:'REVISAO',items:[{productId,lot:{manufacturingDate:'2026-09-14',expirationDate:'2028-09-14'},quantity:i+1}]},users.PRODUCAO,metadata());
     const first = await service.list({view:'pending',page:1,limit:2},users.REVISAO);
     const second = await service.list({view:'pending',page:2,limit:2},users.REVISAO);
     expect(first.meta.total).toBe(3); expect(second.items).toHaveLength(1);

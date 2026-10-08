@@ -1,11 +1,13 @@
 import { PositionSelect } from './PositionSelect';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { api, Movement, Paginated, Product, StockLocation, StockPosition } from './api';
+import { api, Paginated, Product, StockLocation, StockPosition } from './api';
 import { EmptyState, LoadingState, Modal, Notice, OperationGuide, PageHeader } from './components';
 import { formatDate } from './format';
 import { ProductAutocomplete } from './ProductAutocomplete';
 import { DraftActions } from './FormDrafts';
 import { useFormDraft } from './useFormDraft';
+import { useMovementSubmission } from './useMovementSubmission';
+import { MovementConfirmationNotice } from './MovementConfirmationNotice';
 
 export interface ExitPrefill {
   originLocationId: string;
@@ -39,14 +41,14 @@ export function ExternalExitPage({
   const [quantity, setQuantity] = useState('');
   const [observation, setObservation] = useState('');
   const [items, setItems] = useState<ExitDraftItem[]>([]);
-  const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
   const [loading, setLoading] = useState(true);
   const [loadingStock, setLoadingStock] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
   const [productQuery, setProductQuery] = useState({ code: '', name: '' });
+  const submission = useMovementSubmission('/movements/external-exits', created);
+  const { busy, requestKey, setRequestKey } = submission;
   const draft = useFormDraft('exit', 'Saída externa', { originId, destinationId, productId, batchId, quantity, observation, items, requestKey, productQuery }, (saved) => {
     setProductQuery(saved.productQuery); setOriginId(saved.originId); setDestinationId(saved.destinationId); setProductId(saved.productId); setBatchId(saved.batchId); setQuantity(saved.quantity); setObservation(saved.observation); setItems(saved.items); setRequestKey(saved.requestKey);
   }, { enabled: !loading, busy });
@@ -133,32 +135,24 @@ export function ExternalExitPage({
     resetItem();
   }
 
+  async function created(id: string) {
+    setConfirming(false);
+    await draft.complete();
+    onCreated(id);
+  }
+
   async function submit() {
-    setBusy(true);
-    setError('');
-    try {
-      const movement = await api.post<Movement>('/movements/external-exits', {
-        requestKey,
-        originLocationId: originId,
-        destinationLocationId: destinationId,
-        observation: observation || undefined,
-        items: items.map((item) => ({
-          productId: item.position.productId,
-          batchId: item.position.batchId,
-          quantity: item.quantity,
-        })),
-      });
-      setRequestKey(crypto.randomUUID());
-      setConfirming(false);
-      await draft.complete();
-      onCreated(movement.id);
-    } catch (caught) {
-      setError(messageFrom(caught));
-      setConfirming(false);
-      await loadPositions();
-    } finally {
-      setBusy(false);
-    }
+    const result = await submission.submit({
+      originLocationId: originId,
+      destinationLocationId: destinationId,
+      observation: observation || undefined,
+      items: items.map((item) => ({
+        productId: item.position.productId,
+        batchId: item.position.batchId,
+        quantity: item.quantity,
+      })),
+    });
+    if (result === 'error') await loadPositions();
   }
 
   if (loading || !draft.ready) return <LoadingState label="Preparando nova saida" />;
@@ -210,8 +204,8 @@ export function ExternalExitPage({
     <section className="surface list-panel">
       <div className="panel-heading item-list-heading"><h2>Produtos ({items.length})</h2><button type="button" disabled={!originId || busy} onClick={() => { setError(''); setAdding(true); }}>Adicionar produto</button></div>
       {items.length === 0 ? <EmptyState title="Nenhum item adicionado" description="Adicione ao menos um produto e lote com saldo." /> : <div className="entry-items">{items.map((item) => <article key={item.key} className="entry-item"><div><strong>{item.position.product.name}</strong><span>Lote {item.position.batch.code} / validade {formatDate(item.position.batch.expirationDate)}</span><span>{item.quantity} de {item.position.quantity} {item.position.product.defaultUnit} disponiveis</span></div><button className="secondary" onClick={() => setItems((current) => current.filter((candidate) => candidate.key !== item.key))}>Remover</button></article>)}</div>}
-      {(!originId || !destinationId || items.length === 0) && <p className="action-hint">Selecione origem, destino e adicione ao menos um item para continuar.</p>}<button className="button-wide" disabled={!originId || !destinationId || items.length === 0 || busy} onClick={() => setConfirming(true)}>Revisar saida</button>
+      {(!originId || !destinationId || items.length === 0) && <p className="action-hint">Selecione origem, destino e adicione ao menos um item para continuar.</p>}<button className="button-wide" disabled={!originId || !destinationId || items.length === 0 || busy} onClick={() => { submission.resetConfirmation(); setConfirming(true); }}>Revisar saida</button>
     </section>
-    {confirming && <Modal labelledBy="exit-confirm-title" busy={busy} onClose={() => draft.close(() => setConfirming(false))}><p className="eyebrow">Confirmacao</p><h2 id="exit-confirm-title">Confirmar saida para {locationFor(destinationId)?.name}?</h2><p>Origem: <strong>{locationFor(originId)?.name}</strong>. {items.length} item(ns).</p><ul>{items.map((item) => <li key={item.key}>{item.position.product.name} / lote {item.position.batch.code} / validade {formatDate(item.position.batch.expirationDate)}: <strong>{item.quantity} {item.position.product.defaultUnit}</strong></li>)}</ul><p>O saldo da origem sera reduzido e o registro ficara imutavel no historico.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={() => setConfirming(false)}>Voltar e corrigir</button><button disabled={busy} onClick={() => void submit()}>{busy ? 'Efetivando...' : 'Confirmar saida'}</button></div></Modal>}
+    {confirming && <Modal labelledBy="exit-confirm-title" busy={busy} onClose={() => draft.close(() => setConfirming(false))}><p className="eyebrow">Confirmacao</p><h2 id="exit-confirm-title">{submission.confirmationTitle(`Confirmar saída para ${locationFor(destinationId)?.name}?`)}</h2><MovementConfirmationNotice conflict={submission.conflict} />{submission.error && <Notice kind="error">{submission.error}</Notice>}<p>Origem: <strong>{locationFor(originId)?.name}</strong>. {items.length} item(ns).</p><ul>{items.map((item) => <li key={item.key}>{item.position.product.name} / lote {item.position.batch.code} / validade {formatDate(item.position.batch.expirationDate)}: <strong>{item.quantity} {item.position.product.defaultUnit}</strong></li>)}</ul><p>O saldo da origem sera reduzido e o registro ficara imutavel no historico.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={() => setConfirming(false)}>Voltar e corrigir</button><button disabled={busy} onClick={() => void submit()}>{busy ? 'Efetivando...' : submission.confirmationLabel('Confirmar saída')}</button></div></Modal>}
   </>;
 }

@@ -4,6 +4,7 @@ import { EmptyState, LoadingState, Modal, Notice, OperationGuide, PageHeader } f
 import { OperationalLotFields } from './OperationalLotFields';
 import { emptyLot, OperationalLot } from './operational-lot';
 import { useMovementSubmission } from './useMovementSubmission';
+import { MovementConfirmationNotice } from './MovementConfirmationNotice';
 import { formatDate } from './format';
 import { ProductAutocomplete } from './ProductAutocomplete';
 import { DraftActions } from './FormDrafts';
@@ -86,16 +87,16 @@ export function ExternalEntryPage({ onCreated, onManageLocations }: { onCreated:
       <button className="button-wide" disabled={!originId || !destinationId || !items.length} onClick={() => { submission.resetConfirmation(); setConfirming(true); }}>Revisar e confirmar entrada</button>
     </section>
     {confirming && <Modal labelledBy="entry-title" busy={submission.busy} onClose={() => draft.close(() => setConfirming(false))}>
-      <h2 id="entry-title">{submission.conflict ? 'Mesmo lote com outra validade' : 'Confirmar entrada?'}</h2>
+      <h2 id="entry-title">{submission.confirmationTitle('Confirmar entrada?')}</h2>
       <p>{locationName(originId)} → {locationName(destinationId)}</p>
       {originLocations.find((item) => item.id === originId)?.sector && <Notice kind="info">Esta entrada de Produção ou Expedição será efetivada agora, sem Envio nem confirmação do remetente. Confira se a mesma entrega ainda não foi registrada em Envios.</Notice>}
-      {submission.conflict && <Notice kind="info">{submission.conflict.message}</Notice>}
+      <MovementConfirmationNotice conflict={submission.conflict} />
       {submission.error && <Notice kind="error">{submission.error}</Notice>}
       <div className="entry-items">{items.map((item) => <article className="entry-item" key={item.key}><div>{itemSummary(item)}</div></article>)}</div>
       <div className="dialog-actions"><button className="secondary" disabled={submission.busy} onClick={() => setConfirming(false)}>Voltar e corrigir</button><button disabled={submission.busy} onClick={() => void submission.submit({
         originLocationId: originId, destinationLocationId: destinationId, observation: observation || undefined,
         items: items.map((item) => ({ productId: item.product.id, lot: item.lot, quantity: item.quantity })),
-      })}>{submission.busy ? 'Confirmando…' : submission.conflict ? 'Confirmar com validades separadas' : 'Confirmar entrada'}</button></div>
+      })}>{submission.busy ? 'Confirmando…' : submission.confirmationLabel('Confirmar entrada')}</button></div>
     </Modal>}
   </>;
 }

@@ -53,6 +53,7 @@ import { UserPermissionEntity } from '../modules/users/entities/user-permission.
 import { PermissionPresets1791244800000 } from './migrations/1791244800000-permission-presets';
 import { AccountFormDrafts1791331200000 } from './migrations/1791331200000-account-form-drafts';
 import { AdministrativeShipmentCorrections1791417600000 } from './migrations/1791417600000-administrative-shipment-corrections';
+import { RecentOperationLookup1791504000000 } from './migrations/1791504000000-recent-operation-lookup';
 
 export const databaseEntities = [
   ShipmentEntity,
@@ -111,6 +112,7 @@ export const databaseMigrations = [
   PermissionPresets1791244800000,
   AccountFormDrafts1791331200000,
   AdministrativeShipmentCorrections1791417600000,
+  RecentOperationLookup1791504000000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {

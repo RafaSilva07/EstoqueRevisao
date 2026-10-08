@@ -68,7 +68,7 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
   });
   afterAll(async () => { if (dataSource?.isInitialized) await dataSource.destroy(); });
 
-  const create = (requestKey = randomUUID()): Promise<MovementEntity> => service.createExternalEntry({ requestKey, originLocationId: originId, destinationLocationId: destinationId, items: [{ productId: productAId, batchId: batchAId, quantity: 10 }, { productId: productBId, batchId: batchBId, quantity: 3 }] }, userId, { requestId: randomUUID(), ipAddress: null, userAgent: 'jest' });
+  const create = (requestKey = randomUUID(), confirmedDuplicateKeys?: string[]): Promise<MovementEntity> => service.createExternalEntry({ requestKey, confirmedDuplicateKeys, originLocationId: originId, destinationLocationId: destinationId, items: [{ productId: productAId, batchId: batchAId, quantity: 10 }, { productId: productBId, batchId: batchBId, quantity: 3 }] }, userId, { requestId: randomUUID(), ipAddress: null, userAgent: 'jest' });
   const seedStock = (productId: string, batchId: string, quantity: number, stockLocationId = destinationId): Promise<StockPositionEntity> => dataSource.transaction(
     (manager) => stockService.addQuantity({
       productId,
@@ -135,9 +135,76 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
   });
 
   it('acumula em posicao existente e nao cria saldo na origem externa', async () => {
-    await create(); await create();
+    await create();
+    const requestKey = randomUUID();
+    const confirmed = await duplicateWarning(create(requestKey));
+    await create(requestKey, confirmed);
     expect(await stockService.getBalance({ productId: productAId, batchId: batchAId, stockLocationId: destinationId })).toBe(20);
     expect(await dataSource.getRepository(StockPositionEntity).countBy({ stockLocationId: originId })).toBe(0);
+  });
+
+  async function duplicateWarning(operation: Promise<unknown>): Promise<string[]> {
+    try { await operation; }
+    catch (error) {
+      expect(error).toBeInstanceOf(ConflictException);
+      const response = (error as ConflictException).getResponse() as { code: string; details: { duplicateKeys: string[] } };
+      expect(response.code).toBe('RECENT_DUPLICATE_CONFIRMATION_REQUIRED');
+      return response.details.duplicateKeys;
+    }
+    throw new Error('Esperado aviso de duplicidade.');
+  }
+
+  it.each(['entrada', 'saída', 'transferência', 'revisão'])('avisa %s idêntica, faz rollback e permite confirmação auditada', async (kind) => {
+    await seedStock(productAId, batchAId, 100);
+    const key = randomUUID();
+    const item = { productId: productAId, batchId: batchAId, quantity: 10 };
+    const meta = { requestId: randomUUID(), ipAddress: null, userAgent: 'jest' };
+    const run = (requestKey: string, confirmedDuplicateKeys?: string[]): Promise<MovementEntity> => {
+      const dto = { requestKey, confirmedDuplicateKeys, originLocationId: kind === 'entrada' ? originId : destinationId,
+        destinationLocationId: kind === 'transferência' ? transferDestinationId : kind === 'entrada' ? destinationId : originId, items: [item] };
+      if (kind === 'entrada') return service.createExternalEntry(dto, userId, meta);
+      if (kind === 'saída') return service.createExternalExit(dto, userId, meta);
+      if (kind === 'transferência') return service.createInternalTransfer({ ...dto, items: [{ ...item, destinationBatchId: batchAId }] }, userId, meta);
+      return service.createReview({ requestKey, confirmedDuplicateKeys, items: [{ ...item, distributions: [
+        { destinationLocationId: lataBoaId, quantity: 6 }, { destinationLocationId: varejoId, quantity: 3 }, { destinationLocationId: transferDestinationId, quantity: 1 },
+      ] }] }, userId, meta);
+    };
+    const first = await run(randomUUID());
+    const before = await dataSource.getRepository(StockPositionEntity).find({ order: { id: 'ASC' } });
+    const confirmed = await duplicateWarning(run(key));
+    expect(await dataSource.getRepository(StockPositionEntity).find({ order: { id: 'ASC' } })).toEqual(before);
+    expect(await dataSource.getRepository(MovementEntity).count()).toBe(1);
+    expect(await dataSource.getRepository(AuditLogEntity).countBy({ entityType: 'MOVEMENT' })).toBe(1);
+    const second = await run(key, confirmed);
+    expect(second.id).not.toBe(first.id);
+    expect(await dataSource.getRepository(MovementEntity).count()).toBe(2);
+    expect((await dataSource.getRepository(AuditLogEntity).findOneByOrFail({ entityId: second.id })).newValues).toMatchObject({ confirmedDuplicateKeys: confirmed });
+    expect(await run(key)).toMatchObject({ id: second.id });
+  });
+
+  it('identifica a operação completa com itens reordenados e não alerta quantidades diferentes', async () => {
+    await create();
+    const input = { requestKey: randomUUID(), originLocationId: originId, destinationLocationId: destinationId,
+      items: [{ productId: productBId, batchId: batchBId, quantity: 3 }, { productId: productAId, batchId: batchAId, quantity: 10 }] };
+    await duplicateWarning(service.createExternalEntry(input, userId, { requestId: randomUUID(), ipAddress: null, userAgent: null }));
+    await expect(service.createExternalEntry({ ...input, items: [{ ...input.items[0], quantity: 4 }, input.items[1]] }, userId,
+      { requestId: randomUUID(), ipAddress: null, userAgent: null })).resolves.toBeDefined();
+  });
+
+  it('ignora canceladas e operações antigas, usando criação e não data operacional', async () => {
+    const first = await create();
+    await service.cancel(first.id, { reason: 'Teste cancelado' }, userId, { requestId: randomUUID(), ipAddress: null, userAgent: null });
+    const second = await create();
+    await dataSource.query("UPDATE movements SET created_at=clock_timestamp()-interval '31 minutes' WHERE id=$1", [second.id]);
+    await expect(create()).resolves.toBeDefined();
+  });
+
+  it('serializa criações idênticas concorrentes com saldo suficiente e devolve aviso ao segundo', async () => {
+    const results = await Promise.allSettled([create(), create()]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((result) => result.status === 'rejected') as PromiseRejectedResult;
+    expect((rejected.reason as ConflictException).getResponse()).toMatchObject({ code: 'RECENT_DUPLICATE_CONFIRMATION_REQUIRED' });
+    expect(await stockService.getBalance({ productId: productAId, batchId: batchAId, stockLocationId: destinationId })).toBe(10);
   });
 
   it('reverte cabecalho, primeiro item e saldo quando um item posterior falha', async () => {
@@ -916,10 +983,10 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
         shelfLifeYears: 3, createdById: userId, updatedById: userId,
       }));
     });
-    const entry = (expirationDate = lot.expirationDate, confirmedExpirationKeys: string[] = [], quantity = 1000, requestKey = randomUUID()): Promise<MovementEntity> =>
+    const entry = (expirationDate = lot.expirationDate, confirmedExpirationKeys: string[] = [], quantity = 1000, requestKey = randomUUID(), confirmedDuplicateKeys: string[] = []): Promise<MovementEntity> =>
       service.createExternalEntry({
         requestKey, originLocationId: originId, destinationLocationId: destinationId,
-        confirmedExpirationKeys, items: [{ productId, lot: { ...lot, expirationDate }, quantity }],
+        confirmedExpirationKeys, confirmedDuplicateKeys, items: [{ productId, lot: { ...lot, expirationDate }, quantity }],
       }, userId, metadata);
     const balance = (batchId: string, stockLocationId = destinationId): Promise<number> =>
       stockService.getBalance({ productId, batchId, stockLocationId });
@@ -1051,7 +1118,13 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     });
 
     it('concorrência resolve a mesma variante uma vez e mantém idempotência', async () => {
-      const [first, second] = await Promise.all([entry(), entry()]);
+      const keys = [randomUUID(), randomUUID()];
+      const outcomes = await Promise.allSettled(keys.map((key) => entry(lot.expirationDate, [], 1000, key)));
+      expect(outcomes.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      const first = (outcomes.find((result) => result.status === 'fulfilled') as PromiseFulfilledResult<MovementEntity>).value;
+      const rejectedIndex = outcomes.findIndex((result) => result.status === 'rejected');
+      const confirmed = await duplicateWarning(Promise.reject((outcomes[rejectedIndex] as PromiseRejectedResult).reason as ConflictException));
+      const second = await entry(lot.expirationDate, [], 1000, keys[rejectedIndex], confirmed);
       expect(first.items[0].batchId).toBe(second.items[0].batchId);
       expect(await balance(first.items[0].batchId)).toBe(2000);
       const requestKey = randomUUID();

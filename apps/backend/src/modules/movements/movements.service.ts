@@ -25,6 +25,7 @@ import { MovementItemDistributionEntity } from './entities/movement-item-distrib
 import { MovementEntity } from './entities/movement.entity';
 import { MovementListEntry, MovementsRepository } from './movements.repository';
 import { SettingsService } from '../settings/settings.service';
+import { confirmRecentDuplicates } from '../../shared/operations/recent-operation-duplicates';
 
 type EffectiveMovementItem = CreateEffectiveMovementDto['items'][number] & {
   destinationBatchId?: string;
@@ -353,6 +354,11 @@ export class MovementsService {
             }));
           }
         }
+        const confirmedDuplicateKeys = await confirmRecentDuplicates(manager, {
+          kind: 'MOVEMENT', type: MovementType.Review, origin: source.id, destination: null,
+          requestKey: dto.requestKey,
+          items: items.map((item, index) => ({ ...item, distributions: effectiveItems[index].distributions })),
+        }, dto.confirmedDuplicateKeys);
         await this.stockPositions.lockPositions(items.flatMap((item, index) => [
           { productId: item.productId, batchId: item.batchId, stockLocationId: source.id },
           ...effectiveItems[index].distributions.map((part) => ({ productId: item.outputProductId ?? item.productId, batchId: item.outputBatchId ?? item.batchId, stockLocationId: part.destinationLocationId })),
@@ -385,6 +391,7 @@ export class MovementsService {
             items: items.map((item, index) => ({ productId: item.productId, batchId: item.batchId, quantity: item.quantity, distributions: effectiveItems[index].distributions,
               outputProductId: item.outputProductId, outputBatchId: item.outputBatchId, outputQuantity: item.outputQuantity, unitsPerPackage: item.unitsPerPackage })),
             confirmedExpirationKeys: dto.confirmedExpirationKeys ?? [],
+            confirmedDuplicateKeys,
           },
         });
         return movement.id;
@@ -469,6 +476,10 @@ export class MovementsService {
           }
         }
 
+        const confirmedDuplicateKeys = await confirmRecentDuplicates(manager, {
+          kind: 'MOVEMENT', type: rules.type, origin: dto.originLocationId,
+          destination: dto.destinationLocationId, requestKey: dto.requestKey, items: dto.items,
+        }, dto.confirmedDuplicateKeys);
         const movement = Object.assign(new MovementEntity(), {
           requestKey: dto.requestKey,
           type: rules.type,
@@ -518,6 +529,7 @@ export class MovementsService {
             observation: movement.observation,
             items: effectiveItems,
             confirmedExpirationKeys: dto.confirmedExpirationKeys ?? [],
+            confirmedDuplicateKeys,
           },
         });
         return movement.id;

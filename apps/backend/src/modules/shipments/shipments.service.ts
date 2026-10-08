@@ -26,6 +26,7 @@ import { AuditLogEntity } from '../audit/entities/audit-log.entity';
 import { validatePhotoCounts } from './shipment-photo-counts';
 import { assemblyOutput } from './shipment-assembly';
 import { resolveShipmentLoading } from './shipment-loading';
+import { confirmRecentDuplicates } from '../../shared/operations/recent-operation-duplicates';
 
 @Injectable()
 export class ShipmentsService {
@@ -305,6 +306,10 @@ export class ShipmentsService {
           shipmentItemId, ordinal: offset + 2, storageKey: photo.key, mimeType: photo.mimeType, size: photo.size,
         })));
       }
+      const confirmedDuplicateKeys = correction ? [] : await confirmRecentDuplicates(manager, {
+        kind: 'SHIPMENT', type: shipment.shipmentKind, origin: sector, destination: dto.destinationSector,
+        requestKey: dto.requestKey, items,
+      }, dto.confirmedDuplicateKeys);
       // Reject repeated positions to make the available balance check unambiguous.
       const keys = new Set<string>();
       for (const item of this.ordered(items)) {
@@ -330,6 +335,7 @@ export class ShipmentsService {
         items: items.map((item, index) => ({ productId: item.productId, batchId: item.batchId, stockLocationId: item.stockLocationId,
           quantity: item.quantity, assembly: item.assembly, observation: item.observation, productSnapshot: item.productSnapshot, photoCount: counts[index] })),
         confirmedExpirationKeys: dto.confirmedExpirationKeys ?? [],
+        confirmedDuplicateKeys,
       });
       return { id: shipment.id, created: true };
     };

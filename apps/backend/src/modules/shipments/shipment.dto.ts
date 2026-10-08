@@ -1,9 +1,11 @@
 import { Type, Transform } from 'class-transformer';
+import { IntersectionType } from '@nestjs/mapped-types';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 import { OperationalLotDto } from '../batches/dto/operational-lot.dto';
 import { PaginationQueryDto } from '../../shared/pagination/pagination-query.dto';
 import { trimString } from '../../shared/validation/transforms';
 import { Sector, ShipmentLoadingStatus, ShipmentStatus } from './shipment.entity';
+import { DuplicateConfirmationDto } from '../../shared/operations/duplicate-confirmation.dto';
 
 export class ShipmentAssemblySourceDto {
   @IsUUID() batchId!: string;
@@ -45,7 +47,7 @@ export class SeparationDraftDto {
 }
 
 export class CompleteSeparationDto extends SeparationDraftDto {}
-export class CreateShipmentDto extends ExpirationConfirmationDto {
+export class CreateShipmentDto extends IntersectionType(ExpirationConfirmationDto, DuplicateConfirmationDto) {
   @IsUUID() requestKey!: string;
   @IsIn(['REVISAO','PRODUCAO','EXPEDICAO']) destinationSector!: Sector;
   @IsOptional() @IsIn(['CARREGADO', 'NAO_CARREGADO']) loadingStatus?: ShipmentLoadingStatus;

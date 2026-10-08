@@ -14,6 +14,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { trimString } from '../../../shared/validation/transforms';
+import { DuplicateConfirmationDto } from '../../../shared/operations/duplicate-confirmation.dto';
 
 export class CreateReviewDistributionDto {
   @IsUUID()
@@ -54,7 +55,7 @@ export class CreateReviewItemDto {
   distributions!: CreateReviewDistributionDto[];
 }
 
-export class CreateReviewDto {
+export class CreateReviewDto extends DuplicateConfirmationDto {
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(200)

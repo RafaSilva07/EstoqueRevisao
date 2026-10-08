@@ -229,3 +229,7 @@ Rascunhos passaram de armazenamento apenas local para sincronização privada po
 ## Etapa 72 — Layout da revisão na fila PCP
 
 Produto/lote e distribuição passaram a ocupar a largura inteira do card mobile do PCP. A matriz compartilhada ajusta suas colunas ao espaço disponível e o aviso do editor de revisão mantém contraste nos dois temas. Sem alteração de regras ou banco; [relatório da etapa 72](./relatorios/RELATORIO_ETAPA_72_LAYOUT_REVISAO_PCP.md).
+
+## Etapa 73 — Aviso de possível duplicidade
+
+Novas operações comuns passam a conferir equivalência operacional recente e exigir confirmação explícita, sem proibir repetições legítimas. Idempotência e transações permanecem; acrescentado somente índice de consulta pela migration `RecentOperationLookup1791504000000`, aplicada ao Supabase de teste. Publicação exclusiva na `develop`, sem alterações na produção. [Relatório da etapa 73](./relatorios/RELATORIO_ETAPA_73_AVISO_DUPLICIDADE.md).

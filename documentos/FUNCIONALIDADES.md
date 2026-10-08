@@ -163,6 +163,12 @@ A entrada principal **Estoque e validades** consulta posições com saldo positi
 
 Abaixo dos filtros há dois níveis de seleção rápida: **Todos** ou um estoque principal; ao escolher um estoque, **Geral** (principal e filhos) ou um local filho. Cada local configura no cadastro se a consulta mostra posições separadas por lote/validade ou total por produto com os lotes e validades expansíveis. A opção por produto é paginada no backend e respeita os mesmos filtros; não modifica os saldos. Com **Todos**, a consulta continua por posições.
 
+## Conferência de possíveis duplicatas
+
+Entradas, saídas, transferências, revisões e novos envios/montagens avisam antes da gravação quando existe uma operação inteira equivalente nos últimos 30 minutos. A confirmação mostra código, responsável, data/hora e estado anteriores, preserva o formulário/fotos e oferece voltar ou **Conferi: continuar mesmo assim**. O aceite não substitui validação de saldo nem idempotência; regras em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#aviso-de-possível-duplicidade-recente).
+
+As rotas de criação existentes podem retornar `409/RECENT_DUPLICATE_CONFIRMATION_REQUIRED`, com `details.duplicateKeys` e `details.duplicates`. Reenvio explícito usa `confirmedDuplicateKeys` e a mesma `requestKey`; não foi criado outro fluxo ou endpoint. Confirmações de validade e de duplicidade permanecem independentes.
+
 ## Entrada externa
 
 `POST /api/v1/movements/external-entries`

@@ -302,6 +302,9 @@ dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font-weight: 700; }
 .movement-detail-items li { display: grid; gap: .2rem; border-radius: .5rem; background: #f3f7f8; padding: .75rem; }
 .movement-detail-items span { color: var(--muted); font-size: .85rem; }
 .confirmation-dialog ul { padding-left: 1.2rem; line-height: 1.6; }
+.duplicate-operation-list { margin: .7rem 0; }
+.duplicate-operation-list li { margin-bottom: .5rem; }
+.duplicate-operation-list :is(strong, span, small) { display: block; overflow-wrap: anywhere; }
 .review-observation { display: grid; gap: .4rem; margin-top: 1rem; }
 .review-items { display: grid; gap: 1rem; margin: 1rem 0; }
 .review-card { display: grid; gap: 1rem; padding: 1rem; }

@@ -116,6 +116,7 @@ UUIDs são gerados pela aplicação. Chaves estrangeiras usam `RESTRICT` onde o 
 - Erros internos não expõem stack trace, SQL ou detalhes de infraestrutura ao cliente.
 - A criação de envio usa `multipart/form-data`, com JSON em `payload`, `photoCount` opcional por item e arquivos `photos` agrupados na ordem dos itens. A ausência de `photoCount` equivale a uma foto para clientes anteriores. O retorno da separação usa o mesmo esquema apenas para itens positivos. O backend valida os limites configurados, até 100 arquivos por requisição, tamanho, MIME e conteúdo antes de gravar; as fotos adicionais participam da transação e são removidas do storage se ela falhar.
 - Criações de movimentação usam `request_key` UUID para idempotência.
+- `confirmRecentDuplicates` usa o manager transacional existente para comparar dados operacionais normalizados com documentos recentes, em uma consulta sem N+1. Um advisory lock por assinatura serializa criações equivalentes; não se persiste fingerprint nem outro histórico. Aviso `RECENT_DUPLICATE_CONFIRMATION_REQUIRED` causa rollback e utiliza confirmação vinculada aos registros/dados apresentados. A migration `RecentOperationLookup1791504000000` acrescenta somente índice parcial por tipo/rota/criação às movimentações efetivadas; envios reutilizam os índices setoriais existentes. O frontend reutiliza `useMovementSubmission`, sem aceitar confirmações automaticamente nem gravá-las no rascunho.
 - Não existem endpoints públicos para alterar saldo nem endpoints de edição/exclusão de movimentação.
 
 ## Autenticação e autorização

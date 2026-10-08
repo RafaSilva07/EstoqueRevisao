@@ -214,6 +214,15 @@ saldo original diminui em embalagens; saldo resultante aumenta em unidades
 código do lote, fabricação e validade são preservados
 ```
 
+## Aviso de possível duplicidade recente
+
+- A criação de entradas, saídas, transferências, revisões e envios comuns/montagem confere a operação inteira contra registros criados nos últimos **30 minutos**, inclusive por outro usuário. Movimentações são comparadas por tipo/rota; envios, por modalidade e setores de origem/destino. A janela usa a criação no servidor, não a data operacional informada.
+- Devem coincidir produtos, variantes imutáveis de lote/validade, quantidades e posições. Revisões também comparam código resultante, fator e distribuições; montagens comparam embalagem e todas as parcelas. A ordem dos itens não interfere. Fotos, observações, autor e dados de carregamento não diferenciam os efeitos de estoque.
+- Movimentações canceladas e envios recusados/cancelados não geram aviso. Envios pendentes, em separação e confirmados participam da conferência. A comparação é de operação inteira, não de itens isolados ou entregas parcialmente semelhantes.
+- Havendo correspondência, nada é confirmado ou reservado: o usuário vê até cinco referências recentes com código, responsável, instante e estado, podendo voltar ou **continuar mesmo assim** após confirmação explícita. A operação legítima repetida permanece permitida, respeitando saldo, permissões e todas as demais validações.
+- O aceite fica vinculado aos dados e registros apresentados. Alterar o preenchimento ou surgir outra operação igual exige nova conferência. A confirmação efetiva fica na auditoria da criação. Reenvios com a mesma chave idempotente continuam retornando a operação original, sem aviso nem efeito adicional.
+- Recebimento, separação/retorno derivado, correção administrativa, cancelamento e execução PCP conservam seus controles próprios; não são tratados como uma nova criação comum pelo aviso.
+
 ## Cancelamento e estorno
 
 - Cancelamento é sempre integral; não existe cancelamento parcial.

@@ -317,12 +317,19 @@ export interface StockReportTotals {
   quantityByUnit: QuantityByUnit[];
 }
 
+export interface ConfirmationDetails {
+  expirationKeys?: string[];
+  duplicateKeys?: string[];
+  windowMinutes?: number;
+  duplicates?: Array<{ id: string; kind: 'MOVEMENT' | 'SHIPMENT'; code: string | null; createdAt: string; responsible: string; status: string }>;
+}
+
 interface ErrorEnvelope {
-  error?: { message?: string; code?: string; details?: { expirationKeys?: string[] } };
+  error?: { message?: string; code?: string; details?: ConfirmationDetails };
 }
 
 export class ApiError extends Error {
-  constructor(message: string, readonly code?: string, readonly details?: { expirationKeys?: string[] }, readonly status?: number) {
+  constructor(message: string, readonly code?: string, readonly details?: ConfirmationDetails, readonly status?: number) {
     super(message);
   }
 }

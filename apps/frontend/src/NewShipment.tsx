@@ -9,6 +9,7 @@ import { ProductAutocomplete } from './ProductAutocomplete';
 import { emptyLot, OperationalLot } from './operational-lot';
 import { formatDate } from './format';
 import { useMovementSubmission } from './useMovementSubmission';
+import { MovementConfirmationNotice } from './MovementConfirmationNotice';
 import { ShipmentLoadingStatus, ShipmentSector, sectorLabel } from './shipments';
 import { allShipmentPhotosReady, PhotoAttachment } from './shipment-photo-state';
 import { ShipmentPhotoInput } from './ShipmentPhotoInput';
@@ -265,7 +266,7 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
       <h2 id="shipment-summary-title">{sectorLabel[sector]} → {sectorLabel[destination]}</h2>{summary}
       {sector === 'EXPEDICAO' && <p><strong>Carregamento:</strong> {loadingStatus === 'CARREGADO' ? `Carregado · placa ${vehiclePlate.trim().toUpperCase()}` : 'Não carregado'}</p>}
       <p>Após enviar, os itens não poderão ser editados. O destinatário confirmará ou recusará o recebimento.</p>
-      {submission.conflict && <Notice kind="info">{submission.conflict.message}</Notice>}
+      <MovementConfirmationNotice conflict={submission.conflict} />
       {submission.error && <Notice kind="error">{submission.error}</Notice>}
       {observation.trim() && <p><strong>Observação geral:</strong> {observation.trim()}</p>}
       <div className="dialog-actions"><button className="secondary" disabled={submission.busy} onClick={() => setConfirming(false)}>Voltar para conferir</button><button disabled={submission.busy || !allPhotosReady || !loadingReady} onClick={() => void submission.submit({ destinationSector: destination, observation: observation.trim() || undefined,
@@ -273,7 +274,7 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
         items: items.map((item) => ({ productId: item.product.id, quantity: item.quantity, observation: item.observation ?? undefined, photoCount: item.photos.length,
         ...(item.assembly ? { assembly: { packageProductId: item.assembly.packageProduct.id, mixedDates: item.assembly.mixedDates,
           sources: item.assembly.sources.map((source) => ({ batchId: source.position.batchId, stockLocationId: source.position.stockLocationId, quantity: source.quantity })) } }
-          : item.position ? { batchId: item.position.batchId, stockLocationId: item.position.stockLocationId } : { lot: item.lot }) })) }, items.flatMap((item) => item.photos.map((photo) => photo.file)))}>{submission.busy ? 'Enviando…' : submission.conflict ? 'Confirmar validade diferente e enviar' : 'Enviar ao destinatário'}</button></div>
+          : item.position ? { batchId: item.position.batchId, stockLocationId: item.position.stockLocationId } : { lot: item.lot }) })) }, items.flatMap((item) => item.photos.map((photo) => photo.file)))}>{submission.busy ? 'Enviando…' : submission.confirmationLabel('Enviar ao destinatário', 'Confirmar validade diferente e enviar')}</button></div>
     </Modal>}
   </>;
 }
