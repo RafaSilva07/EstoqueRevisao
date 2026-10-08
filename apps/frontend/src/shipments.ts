@@ -5,7 +5,7 @@ export const sectorLabel: Record<Sector, string> = { REVISAO: 'Revisão', PRODUC
 export type ShipmentStatus = 'AGUARDANDO_RECEBIMENTO' | 'EM_SEPARACAO' | 'CONFIRMADO' | 'RECUSADO' | 'CANCELADO';
 export type ShipmentLoadingStatus = 'CARREGADO' | 'NAO_CARREGADO';
 export const shipmentStatusLabel: Record<ShipmentStatus, string> = {
-  AGUARDANDO_RECEBIMENTO: 'Aguardando recebimento', EM_SEPARACAO: 'Em separação pela Revisão', CONFIRMADO: 'Confirmado', RECUSADO: 'Recusado', CANCELADO: 'Cancelado pelo remetente',
+  AGUARDANDO_RECEBIMENTO: 'Aguardando recebimento', EM_SEPARACAO: 'Em separação pela Revisão', CONFIRMADO: 'Confirmado', RECUSADO: 'Recusado', CANCELADO: 'Cancelado',
 };
 export interface ShipmentAuditEvent {
   id: string; action: string; createdAt: string;
@@ -27,12 +27,15 @@ export interface ShipmentAssembly {
 export interface Shipment {
   codigoMovimentacao: string;
   movements?: Array<{ id: string; codigoMovimentacao: string | null; pcpExecutionStatus: 'PENDENTE' | 'EXECUTADA'; requiresPcpExecution: boolean;
-      occurredAt: string; items?: Array<{ id: string; shipmentItemId?: string | null; codigoRegistro?: string | null; quantity: number; productSnapshot: Pick<Product, 'code' | 'name' | 'defaultUnit'> | null; batch: Batch }> }>;
+      occurredAt: string; items?: Array<{ id: string; shipmentItemId?: string | null; codigoRegistro?: string | null; quantity: number; pcpExecutionStatus?: 'PENDENTE' | 'EXECUTADA'; productSnapshot: Pick<Product, 'code' | 'name' | 'defaultUnit'> | null; batch: Batch }> }>;
 
   id: string; originSector: ShipmentSector; destinationSector: ShipmentSector; status: ShipmentStatus;
   loadingStatus: ShipmentLoadingStatus | null; vehiclePlate: string | null;
   shipmentKind: 'NORMAL' | 'RETORNO_IMEDIATO' | 'MONTAGEM'; sourceShipmentId: string | null;
   sourceShipment?: { id: string; codigoMovimentacao: string } | null;
+  correctedFromId?: string | null; correctedFrom?: { id: string; codigoMovimentacao: string } | null;
+  corrections?: Array<{ id: string; codigoMovimentacao: string }>;
+  canceledBy?: { username: string } | null; canceledAt?: string | null; cancellationReason?: string | null;
   derivedShipments?: Array<{ id: string; status: ShipmentStatus }>;
   receivedAt: string | null; separationStartedAt: string | null; separationExpiresAt: string | null; separationCompletedAt: string | null;
   observation: string | null;

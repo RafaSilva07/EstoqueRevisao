@@ -44,6 +44,13 @@ export class ShipmentEntity {
   @Column({ name: 'source_shipment_id', type: 'uuid', nullable: true }) sourceShipmentId!: string | null;
   @ManyToOne(() => ShipmentEntity, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'source_shipment_id' }) sourceShipment!: ShipmentEntity | null;
   @OneToMany(() => ShipmentEntity, (shipment) => shipment.sourceShipment) derivedShipments!: ShipmentEntity[];
+  @Column({ name: 'corrected_from_id', type: 'uuid', nullable: true }) correctedFromId!: string | null;
+  @ManyToOne(() => ShipmentEntity, { nullable: true, onDelete: 'RESTRICT' }) @JoinColumn({ name: 'corrected_from_id' }) correctedFrom!: ShipmentEntity | null;
+  @OneToMany(() => ShipmentEntity, (shipment) => shipment.correctedFrom) corrections!: ShipmentEntity[];
+  @Column({ name: 'canceled_by_id', type: 'uuid', nullable: true }) canceledById!: string | null;
+  @ManyToOne(() => UserEntity) @JoinColumn({ name: 'canceled_by_id' }) canceledBy!: UserEntity | null;
+  @Column({ name: 'canceled_at', type: 'timestamptz', nullable: true }) canceledAt!: Date | null;
+  @Column({ name: 'cancellation_reason', type: 'varchar', length: 1000, nullable: true }) cancellationReason!: string | null;
   @Column({ name: 'received_by_id', type: 'uuid', nullable: true }) receivedById!: string | null;
   @ManyToOne(() => UserEntity) @JoinColumn({ name: 'received_by_id' }) receivedBy!: UserEntity | null;
   @Column({ name: 'received_at', type: 'timestamptz', nullable: true }) receivedAt!: Date | null;

@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { ShipmentObservations1789430400000 } from '../../database/migrations/1789430400000-shipment-observations';
+import { AdministrativeShipmentCorrections1791417600000 } from '../../database/migrations/1791417600000-administrative-shipment-corrections';
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, In } from 'typeorm';
 import { databaseEntities, databaseMigrations } from '../../database/typeorm.config';
 import { AuditService } from '../audit/audit.service';
 import { AuditRepository } from '../audit/audit.repository';
@@ -22,6 +23,8 @@ import { StockLocationsService } from '../stocks/stock-locations.service';
 import { StockLocationKind } from '../stocks/domain/stock-location-kind.enum';
 import { StockPositionsService } from '../stocks/stock-positions.service';
 import { MovementEntity } from '../movements/entities/movement.entity';
+import { MovementStatus } from '../movements/domain/movement-status.enum';
+import { MovementItemEntity } from '../movements/entities/movement-item.entity';
 import { MovementsRepository } from '../movements/movements.repository';
 import { MovementsService } from '../movements/movements.service';
 import { Sector, ShipmentEntity, ShipmentItemAdditionalPhotoEntity, ShipmentItemEntity } from './shipment.entity';
@@ -31,6 +34,8 @@ import { StorageService, UploadedImage } from '../storage/storage.service';
 import { HistoryService } from '../history/history.service';
 import { HistoryQueryDto } from '../history/history-query.dto';
 import { SettingsService } from '../settings/settings.service';
+import { PcpMovementsService } from '../pcp/pcp-movements.service';
+import { PcpMovementsRepository } from '../pcp/pcp-movements.repository';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 (databaseUrl ? describe : describe.skip)('Envios entre setores (PostgreSQL)', () => {
@@ -78,6 +83,16 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     await db.query('UPDATE products SET active = true WHERE id = $1', [productId]);
   });
   afterAll(async () => { if (db?.isInitialized) await db.destroy(); });
+  it('reverte e reaplica a migration administrativa sem perder a constraint de recebimento', async () => {
+    const runner = db.createQueryRunner();
+    await runner.connect(); await runner.startTransaction();
+    try {
+      const migration = new AdministrativeShipmentCorrections1791417600000();
+      await migration.down(runner); await migration.up(runner);
+      const constraints = await runner.query("SELECT 1 FROM pg_constraint WHERE conname='shipment_separation_state'") as unknown[];
+      expect(constraints).toHaveLength(1);
+    } finally { await runner.rollbackTransaction(); await runner.release(); }
+  });
   const image = (): UploadedImage => ({ buffer: Buffer.from('valid-photo'), mimetype: 'image/jpeg', size: 11, originalname: 'ignored.jpg' });
   const createShipment = (dto: CreateShipmentDto, user: AuthenticatedUser, meta: AuditRequestMetadata): Promise<ShipmentEntity> =>
     service.create(dto, dto.items.map(image), user, meta);
@@ -459,6 +474,90 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     const second = await service.list({view:'pending',page:2,limit:2},users.REVISAO);
     expect(first.meta.total).toBe(3); expect(second.items).toHaveLength(1);
     expect(first.items.map((item) => item.id)).not.toContain(second.items[0].id);
+  });
+  const admin = (): AuthenticatedUser => ({ ...users.REVISAO, roles: ['ADMIN'] });
+  it('admin cancela entrada aceita preservando original, recebimento e auditoria', async () => {
+    const shipment = await incoming(); await decide(shipment.id, 'REVISAO');
+    const original = await service.get(shipment.id, users.REVISAO);
+    const canceled = await service.administrativeCancel(shipment.id, 'Teste de correção', admin(), metadata());
+    expect(await balance()).toBe(0);
+    expect(canceled).toMatchObject({ status: 'CANCELADO', canceledById: admin().id, cancellationReason: 'Teste de correção', decidedById: original.decidedById, decidedAt: original.decidedAt, refusalReason: null });
+    expect(canceled.items[0].quantity).toBe(10);
+    expect(await db.getRepository(MovementEntity).findOneBy({ shipmentId: shipment.id })).toMatchObject({ status: 'CANCELADA', cancellationReason: 'Teste de correção' });
+    expect(await db.getRepository(AuditLogEntity).countBy({ action: 'SHIPMENT_ADMIN_CANCEL', entityId: shipment.id })).toBe(1);
+    const history = await new HistoryService(db).list(new HistoryQueryDto(), admin());
+    expect(history.items).toHaveLength(1); expect(history.items[0]).toMatchObject({ groupId: shipment.id, receivedBy: 'REVISAO', status: 'CANCELADO' });
+    await expect(service.administrativeCancel(shipment.id, 'Repetido', admin(), metadata())).rejects.toBeInstanceOf(ConflictException);
+    await expect(db.getRepository(ShipmentEntity).delete(shipment.id)).rejects.toThrow();
+  });
+  it('admin corrige quantidade em nova solicitação vinculada, com retry idempotente', async () => {
+    await seed(); const shipment = await reserve(); await decide(shipment.id, 'PRODUCAO');
+    const dto = { requestKey: randomUUID(), reason: 'Quantidade correta', items: [{ shipmentItemId: shipment.items[0].id, quantity: 8, observation: 'Conferir' }] };
+    const corrected = await service.correct(shipment.id, dto, admin(), metadata());
+    expect(corrected).toMatchObject({ correctedFromId: shipment.id, status: 'AGUARDANDO_RECEBIMENTO', items: [{ quantity: 8, observation: 'Conferir' }] });
+    expect(corrected.codigoMovimentacao).not.toBe(shipment.codigoMovimentacao);
+    expect(await balance()).toBe(2);
+    expect((await service.correct(shipment.id, dto, admin(), metadata())).id).toBe(corrected.id);
+    expect(await balance()).toBe(2); expect(await db.getRepository(ShipmentEntity).count()).toBe(2);
+  });
+  it('cancelamento administrativo pendente não inventa um recebimento', async () => {
+    const shipment = await incoming();
+    const canceled = await service.administrativeCancel(shipment.id, 'Não enviado', admin(), metadata());
+    expect(canceled).toMatchObject({ status: 'CANCELADO', decidedById: null, decidedAt: null, refusalReason: null, canceledById: admin().id });
+    expect(await balance()).toBe(0);
+  });
+  it('falha na nova reserva faz rollback do cancelamento, saldo, histórico e auditoria', async () => {
+    await seed(); const shipment = await reserve(); await decide(shipment.id, 'PRODUCAO');
+    const count = await db.getRepository(AuditLogEntity).count();
+    await expect(service.correct(shipment.id, { requestKey: randomUUID(), reason: 'Maior', items: [{ shipmentItemId: shipment.items[0].id, quantity: 11 }] }, admin(), metadata())).rejects.toThrow();
+    expect(await balance()).toBe(4); expect((await service.get(shipment.id, users.REVISAO)).status).toBe('CONFIRMADO');
+    expect(await db.getRepository(AuditLogEntity).count()).toBe(count); expect(await db.getRepository(ShipmentEntity).count()).toBe(1);
+    expect(await db.getRepository(MovementEntity).findOneBy({ shipmentId: shipment.id })).toMatchObject({ status: 'EFETIVADA' });
+  });
+  it('bloqueia saldo consumido, operador sem administração e admin de outro setor', async () => {
+    const shipment = await incoming('EXPEDICAO'); await decide(shipment.id, 'REVISAO');
+    await db.transaction((manager) => stock.removeQuantity({ productId, batchId, stockLocationId: sourceId }, 1, manager));
+    await expect(service.administrativeCancel(shipment.id, 'Consumido', admin(), metadata())).rejects.toThrow();
+    await expect(service.administrativeCancel(shipment.id, 'Sem acesso', users.REVISAO, metadata())).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.administrativeCancel(shipment.id, 'Outro setor', { ...users.PRODUCAO, roles: ['ADMIN_PRODUCAO_PCP'] }, metadata())).rejects.toBeInstanceOf(ForbiddenException);
+    expect(await balance()).toBe(9); expect((await service.get(shipment.id, users.REVISAO)).status).toBe('CONFIRMADO');
+  });
+  it('estorna montagem aceita para todos os lotes/locais exatos em UN', async () => {
+    await seed(12); await seed(8, lataBoaId);
+    const shipment = await assembly(2, [{ batchId, stockLocationId: sourceId, quantity: 12 }, { batchId, stockLocationId: lataBoaId, quantity: 8 }]);
+    await decide(shipment.id, 'EXPEDICAO'); await service.administrativeCancel(shipment.id, 'Montagem incorreta', admin(), metadata());
+    expect(await balance()).toBe(12); expect(await balance(lataBoaId)).toBe(8);
+  });
+  it('cancela entrada líquida e retorno derivado juntos sem saldo fictício', async () => {
+    const shipment = await incoming('EXPEDICAO');
+    await service.decide(shipment.id, 'CONFIRMADO', null, { immediateSeparation: true }, users.REVISAO, metadata());
+    await service.completeSeparation(shipment.id, { items: [{ shipmentItemId: shipment.items[0].id, returnQuantity: 3 }] }, [image()], users.REVISAO, metadata());
+    const returned = await db.getRepository(ShipmentEntity).findOneByOrFail({ sourceShipmentId: shipment.id });
+    await decide(returned.id, 'EXPEDICAO');
+    await service.administrativeCancel(returned.id, 'Cancelar recebimento completo', admin(), metadata());
+    expect(await balance()).toBe(0);
+    expect((await db.getRepository(ShipmentEntity).findBy({ id: In([shipment.id, returned.id]) })).every((item) => item.status === 'CANCELADO')).toBe(true);
+    expect((await db.getRepository(MovementEntity).find()).every((item) => item.status === MovementStatus.Canceled)).toBe(true);
+  });
+  it('bloqueia execução parcial mesmo com grupo ainda pendente', async () => {
+    const shipment = await createShipment({ requestKey: randomUUID(), destinationSector: 'REVISAO', items: [{ productId, batchId, quantity: 10 }, { productId, batchId, quantity: 5 }] }, users.PRODUCAO, metadata());
+    await decide(shipment.id, 'REVISAO');
+    const movement = await db.getRepository(MovementEntity).findOneOrFail({ where: { shipmentId: shipment.id }, relations: { items: true } });
+    const pcp = new PcpMovementsService(new PcpMovementsRepository(db.getRepository(MovementEntity), db.getRepository(MovementItemEntity), db.getRepository(AuditLogEntity), db.getRepository(ShipmentItemEntity), db.getRepository(ShipmentEntity)), new MovementsRepository(db.getRepository(MovementEntity)), db, audit);
+    await pcp.executeRecord(movement.items[0].id, {}, admin().id, metadata());
+    expect((await db.getRepository(MovementEntity).findOneByOrFail({ id: movement.id })).pcpExecutionStatus).toBe('PENDENTE');
+    await expect(service.administrativeCancel(shipment.id, 'Parcial', admin(), metadata())).rejects.toBeInstanceOf(ConflictException);
+    expect(await balance()).toBe(15);
+  });
+  it('serializa disputa entre PCP e cancelamento', async () => {
+    const shipment = await incoming(); await decide(shipment.id, 'REVISAO');
+    const movement = await db.getRepository(MovementEntity).findOneOrFail({ where: { shipmentId: shipment.id }, relations: { items: true } });
+    const pcp = new PcpMovementsService(new PcpMovementsRepository(db.getRepository(MovementEntity), db.getRepository(MovementItemEntity), db.getRepository(AuditLogEntity), db.getRepository(ShipmentItemEntity), db.getRepository(ShipmentEntity)), new MovementsRepository(db.getRepository(MovementEntity)), db, audit);
+    const results = await Promise.allSettled([pcp.executeRecord(movement.items[0].id, {}, admin().id, metadata()), service.administrativeCancel(shipment.id, 'Disputa', admin(), metadata())]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const current = await db.getRepository(MovementEntity).findOneByOrFail({ id: movement.id });
+    expect(await balance()).toBe(current.status === MovementStatus.Canceled ? 0 : 10);
+    if (current.status === MovementStatus.Effective) await expect(service.administrativeCancel(shipment.id, 'Depois do PCP', admin(), metadata())).rejects.toBeInstanceOf(ConflictException);
   });
   it('unifica o histórico sem duplicar envio confirmado e só finaliza após PCP', async () => {
     const history = new HistoryService(db);

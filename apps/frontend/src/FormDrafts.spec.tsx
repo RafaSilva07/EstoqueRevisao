@@ -63,6 +63,7 @@ async function click(text: string) {
 
 describe('rascunhos dos formulários', () => {
   beforeEach(() => {
+    formDraftStore.setAccount(null);
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     vi.stubGlobal('indexedDB', new IDBFactory());
     // Node's structuredClone does not preserve browser File objects. Emulate the browser here.
@@ -73,7 +74,7 @@ describe('rascunhos dos formulários', () => {
     Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: vi.fn() });
     host = document.createElement('div'); document.body.append(host); root = createRoot(host); done.mockReset();
   });
-  afterEach(async () => { await act(async () => { root.unmount(); await Promise.resolve(); }); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+  afterEach(async () => { await act(async () => { root.unmount(); await Promise.resolve(); }); formDraftStore.setAccount(null); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
   it('salva automaticamente dados incompletos sem confirmar uma operação', async () => {
     await render(); await type('Ainda preenchendo');
@@ -185,14 +186,19 @@ describe('rascunhos dos formulários', () => {
     expect(done).not.toHaveBeenCalled();
   });
   it.each(['Voltar', 'breadcrumb', 'menu'])('protege o envio iniciado em Envios e recebimentos no modo Expedição ao sair por %s', async (exit) => {
+    let cloud: { version: number; record: { title: string; updatedAt: string; value: unknown; files: [] } | null } = { version: 0, record: null };
     const product: Product = { id: 'product', code: '005601.90', name: 'Produto UN', defaultUnit: 'UN', active: true, shelfLifeYears: 3 };
     const emptyPage = { items: [], meta: { page: 1, limit: 10, total: 0, totalPages: 0 } };
     vi.spyOn(api, 'refresh').mockResolvedValue({ accessToken: 'test-session', user: { id: 'administrator', username: 'admin', sector: 'REVISAO', roles: ['ADMIN'], permissions: ['shipments.read', 'shipments.create', 'products.read'] } });
-    vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve(path === '/settings/shipment-photos' ? { minimum: 1, maximum: 5 }
+    vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve(path.startsWith('/form-drafts/') ? cloud : path === '/settings/shipment-photos' ? { minimum: 1, maximum: 5 }
       : path.startsWith('/products?') ? { ...emptyPage, items: [product] } : emptyPage));
     vi.spyOn(api, 'post').mockImplementation((path) => Promise.resolve(path === '/shipments/resolve-lot'
       ? { code: 'CICINV', manufacturingDate: '2026-09-09', suggestedExpirationDate: '2029-09-09' } : undefined));
-    const submit = vi.spyOn(api, 'postMultipart');
+    const submit = vi.spyOn(api, 'postMultipart').mockImplementation((_path, payload) => {
+      const body = payload as { version: number; title: string; value: unknown };
+      cloud = { version: body.version + 1, record: { title: body.title, value: body.value, updatedAt: new Date().toISOString(), files: [] } };
+      return Promise.resolve({ version: cloud.version });
+    });
     vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
     await act(async () => { root.render(<StrictMode><App /></StrictMode>); await Promise.resolve(); });
     await until(() => Boolean(host.querySelector('[aria-label="Modo operacional"]')));
@@ -225,7 +231,7 @@ describe('rascunhos dos formulários', () => {
     await until(() => !host.querySelector('[role=dialog]'));
     const saved = await formDraftStore.read('administrator:EXPEDICAO:shipment:EXPEDICAO');
     expect(saved?.value).toEqual(expect.objectContaining({ items: [expect.objectContaining({ product, quantity: 10, lot: { code: 'CICINV', manufacturingDate: '2026-09-09', expirationDate: '2029-09-09' } })] }));
-    expect(submit).not.toHaveBeenCalled();
+    expect(submit.mock.calls.some(([path]) => path === '/shipments')).toBe(false);
     if (exit !== 'Voltar') await act(async () => { host.querySelector<HTMLButtonElement>('.sidebar [aria-label="Envios e recebimentos"]')!.click(); await Promise.resolve(); });
     await until(() => host.textContent?.includes('Envios e recebimentos') ?? false);
     await click('Novo envio para Revisão');

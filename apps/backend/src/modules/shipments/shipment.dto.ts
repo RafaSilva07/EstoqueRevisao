@@ -62,6 +62,22 @@ export class CancelShipmentDto {
   @Transform(trimString)
   @IsString() @MinLength(1) @MaxLength(1000) reason!: string;
 }
+export class CorrectShipmentItemDto {
+  @IsUUID() shipmentItemId!: string;
+  @Type(() => Number) @IsInt() @Min(1) quantity!: number;
+  @IsOptional() @Transform(trimString) @IsString() @MaxLength(1000) observation?: string;
+}
+export class CorrectShipmentDto extends CancelShipmentDto {
+  @IsOptional() @IsArray() @ArrayMaxSize(1000)
+  @Matches(/^[0-9a-f-]{36}:[CONSERVADI]{6}:\d{4}-\d{2}-\d{2}$/, { each: true })
+  confirmedExpirationKeys?: string[];
+  @IsUUID() requestKey!: string;
+  @IsOptional() @Transform(trimString) @IsString() @MaxLength(1000) observation?: string;
+  @IsOptional() @IsIn(['CARREGADO', 'NAO_CARREGADO']) loadingStatus?: ShipmentLoadingStatus;
+  @IsOptional() @Transform(trimString) @IsString() @MaxLength(20) vehiclePlate?: string;
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => CorrectShipmentItemDto)
+  items!: CorrectShipmentItemDto[];
+}
 export class ShipmentQueryDto extends PaginationQueryDto {
   @IsOptional() @IsIn(['RECENT','OLDEST','STATUS']) sort?: 'RECENT' | 'OLDEST' | 'STATUS' = 'RECENT';
   @IsOptional() @IsString() @MaxLength(30) codigoMovimentacao?: string;

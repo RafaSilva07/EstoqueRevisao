@@ -139,6 +139,7 @@ export class HistoryService {
             ELSE batch.manufacturing_date::text END AS manufacturing_date,
           entry.responsible AS sent_by,
           CASE WHEN shipment.status IN ('CONFIRMADO', 'EM_SEPARACAO')
+            OR (shipment.status = 'CANCELADO' AND shipment.canceled_at IS NOT NULL AND (shipment.received_at IS NOT NULL OR linked_movement.id IS NOT NULL))
             THEN COALESCE(receiver.username, early_receiver.username) ELSE NULL END AS received_by,
           pcp_user.username AS pcp_executed_by,
           COALESCE(linked_movement.requires_pcp_execution, shipment.shipment_kind <> 'RETORNO_IMEDIATO') AS pcp_required,

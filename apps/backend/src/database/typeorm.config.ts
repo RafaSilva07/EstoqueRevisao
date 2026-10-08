@@ -51,6 +51,8 @@ import { ShipmentLoading1791158400000 } from './migrations/1791158400000-shipmen
 import { ReviewDestinationEntity } from '../modules/settings/review-destination.entity';
 import { UserPermissionEntity } from '../modules/users/entities/user-permission.entity';
 import { PermissionPresets1791244800000 } from './migrations/1791244800000-permission-presets';
+import { AccountFormDrafts1791331200000 } from './migrations/1791331200000-account-form-drafts';
+import { AdministrativeShipmentCorrections1791417600000 } from './migrations/1791417600000-administrative-shipment-corrections';
 
 export const databaseEntities = [
   ShipmentEntity,
@@ -107,6 +109,8 @@ export const databaseMigrations = [
   SessionPresence1791072000000,
   ShipmentLoading1791158400000,
   PermissionPresets1791244800000,
+  AccountFormDrafts1791331200000,
+  AdministrativeShipmentCorrections1791417600000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {

@@ -5,7 +5,7 @@ import { RequirePermissions } from '../auth/decorators/require-permissions.decor
 import { getAuditRequestMetadata } from '../audit/audit-request-metadata';
 import { OperationalLotsService } from '../batches/operational-lots.service';
 import { ResolveOperationalLotDto } from '../batches/dto/operational-lot.dto';
-import { AssemblyOptionsQueryDto, AvailableShipmentPositionsQueryDto, CancelShipmentDto, CreateShipmentDto, ExpirationConfirmationDto, RefuseShipmentDto, SeparationDraftDto, ShipmentQueryDto } from './shipment.dto';
+import { AssemblyOptionsQueryDto, AvailableShipmentPositionsQueryDto, CancelShipmentDto, CorrectShipmentDto, CreateShipmentDto, ExpirationConfirmationDto, RefuseShipmentDto, SeparationDraftDto, ShipmentQueryDto } from './shipment.dto';
 import { ShipmentsService } from './shipments.service';
 import { CreateShipmentMultipartPipe } from './create-shipment-multipart.pipe';
 import { UploadedImage } from '../storage/storage.service';
@@ -72,6 +72,14 @@ export class ShipmentsController {
   @Patch(':id/separation-draft') @RequirePermissions('shipments.decide')
   draft(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: SeparationDraftDto, @Req() req: Request): ReturnType<ShipmentsService['saveSeparationDraft']> {
     return this.service.saveSeparationDraft(id, dto, req.user as AuthenticatedUser, getAuditRequestMetadata(req));
+  }
+  @Post(':id/admin-cancellation') @RequirePermissions('shipments.read')
+  administrativeCancel(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: CancelShipmentDto, @Req() req: Request): ReturnType<ShipmentsService['administrativeCancel']> {
+    return this.service.administrativeCancel(id, dto.reason, req.user as AuthenticatedUser, getAuditRequestMetadata(req));
+  }
+  @Post(':id/correction') @RequirePermissions('shipments.read')
+  correct(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: CorrectShipmentDto, @Req() req: Request): ReturnType<ShipmentsService['correct']> {
+    return this.service.correct(id, dto, req.user as AuthenticatedUser, getAuditRequestMetadata(req));
   }
   @Post(':id/separation-completion') @RequirePermissions('shipments.decide') @UseInterceptors(ShipmentPhotosInterceptor)
   async completeSeparation(@Param('id', new ParseUUIDPipe()) id: string, @Body('payload') payload: string,

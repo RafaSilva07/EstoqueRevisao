@@ -221,3 +221,7 @@ Corrigido o cookie para ambientes HTTPS externos e coordenadas as alterações d
 ## Etapa 70 — Rascunhos e proteção de saída
 
 Formulários passaram a preservar preenchimento e fotos localmente por usuário/modo, sem alterar estoque antes da confirmação. Saída protegida por confirmação compartilhada; CRUD de produtos excluído. Separação mantém seu rascunho servidor e prazo. Sem migration; publicação somente na `develop`. [Relatório da etapa 70](./relatorios/RELATORIO_ETAPA_70_RASCUNHOS_FORMULARIOS.md).
+
+## Etapa 71 — Rascunhos por conta e correções administrativas
+
+Rascunhos passaram de armazenamento apenas local para sincronização privada por conta/modo, incluindo fotos e proteção contra concorrência. Adicionados favicon e atalho de revisão da entrada aceita. Administradores responsáveis podem cancelar solicitações antes de execução PCP; edição gera nova solicitação vinculada, com estorno/criação/auditoria atômicos. Migrations `AccountFormDrafts1791331200000` e `AdministrativeShipmentCorrections1791417600000`; esta etapa substitui a restrição anterior de correções administrativas de envios somente por devolução independente. Publicação exclusiva na `develop` e banco Supabase de teste configurado localmente. [Relatório da etapa 71](./relatorios/RELATORIO_ETAPA_71_RASCUNHOS_CONTA_CORRECOES.md).

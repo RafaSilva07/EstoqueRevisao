@@ -12,7 +12,9 @@ Todas as entradas, saídas, transferências e distribuições de revisão aceita
 
 ## Rascunhos de formulários
 
-Os formulários operacionais e administrativos possuem salvamento automático e botão **Salvar rascunho**, com recuperação ao reabrir o mesmo fluxo. Itens, campos ainda incompletos e fotos são mantidos no navegador, separados por conta/modo. Sair de um preenchimento oferece **Salvar rascunho e sair**, **Descartar e sair** ou **Continuar preenchendo**; navegar, trocar modo e sair da conta usam a mesma proteção. CRUD de produtos e consultas permanecem sem rascunhos. Senhas devem ser digitadas novamente. Limitações e efeito sobre a separação estão em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#rascunhos-de-preenchimento).
+Os formulários operacionais e administrativos possuem salvamento automático e botão **Salvar rascunho**, com recuperação ao reabrir o mesmo fluxo, inclusive em outro computador/celular com a mesma conta, ambiente e modo. Itens, campos incompletos e fotos são sincronizados na conta; o navegador mantém uma cópia de segurança para falhas de conexão. Sair oferece **Salvar rascunho e sair**, **Descartar e sair** ou **Continuar preenchendo**; navegar, trocar modo e sair da conta usam a mesma proteção. Conflitos entre dispositivos não sobrescrevem o preenchimento local: **Carregar versão da conta** exige confirmação. CRUD de produtos e consultas permanecem sem rascunhos. Senhas devem ser digitadas novamente. Limitações e efeito sobre separação em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#rascunhos-de-preenchimento).
+
+API autenticada: `GET/POST/DELETE /api/v1/form-drafts/:key?mode=...` e `GET /api/v1/form-drafts/:key/photos/:ordinal?mode=...&version=...`. Escrita multipart contém payload/arquivos e versão; descarte exige a versão atual. Não há rascunhos compartilhados entre usuários.
 
 ## Acesso e sessão
 
@@ -88,7 +90,11 @@ Destinatário e remetente podem visualizar todas as miniaturas e abrir cada foto
 
 Os detalhes de envios abertos ou históricos usam a mesma apresentação para todos os perfis, na Home, no Histórico, em Envios e recebimentos e nos avisos: código/status, rota destacada, produtos, responsáveis/datas e observações. Cada produto possui seu próprio botão para mostrar/ocultar fotos, inicialmente recolhidas no detalhe; a confirmação de recebimento mantém as fotos abertas para conferência. As ações continuam condicionadas às permissões e ao estado do envio.
 
-Não há edição posterior: destinatário confirma ou recusa com motivo e responsável/data registrados. Recusas oferecem **Criar novo envio**, sem alterar o documento recusado. Loading, erros, sucesso e bloqueio de duplo envio seguem os componentes existentes.
+Destinatário confirma ou recusa com motivo e responsável/data registrados. Recusas oferecem **Criar novo envio**, sem alterar o documento recusado. Nos detalhes de envios e movimentações vinculadas, administradores responsáveis podem **Editar solicitação** ou **Cancelar solicitação**, antes de qualquer execução PCP. O fluxo exige motivo, conferência do impacto e confirmação, sem duplo envio. Edição produz uma nova solicitação vinculada, preservando a original cancelada e exigindo novo recebimento. Escopo, campos permitidos e estorno em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#envios-entre-setores).
+
+`POST /api/v1/shipments/:id/admin-cancellation` recebe motivo; `POST /api/v1/shipments/:id/correction` recebe motivo, chave idempotente, itens originais com quantidades/observações e campos do envio. Bloqueios de saldo/PCP causam rollback integral. O histórico mantém responsáveis originais e dados do cancelamento separados; os detalhes permitem navegar entre original e correção.
+
+Na Revisão, detalhes de entrada manual efetivada e recebimento aceito oferecem **Revisar produto** dentro do produto, somente com permissão de revisão. O fluxo existente abre com produto/lote preenchidos e saldo atual, deixando quantidade e distribuição para o operador. Na separação com retorno, o atalho aparece apenas para o volume líquido realmente creditado. Entradas pendentes/canceladas não oferecem a ação. O favicon local identifica a aplicação com caminhão e símbolo de reaproveitamento.
 
 ```text
 GET/POST        /api/v1/shipments

@@ -16,8 +16,9 @@ import { MovementEntity } from '../movements/entities/movement.entity';
 import { MovementItemEntity } from '../movements/entities/movement-item.entity';
 import { MovementType } from '../movements/domain/movement-type.enum';
 import { MovementStatus } from '../movements/domain/movement-status.enum';
+import { PcpExecutionStatus } from '../pcp/domain/pcp-execution-status.enum';
 import { PaginatedResult, paginate } from '../../shared/pagination/paginated-result.interface';
-import { AssemblyOptionsQueryDto, AvailableShipmentPositionsQueryDto, CompleteSeparationDto, CreateShipmentDto, ExpirationConfirmationDto, SeparationDraftDto, ShipmentItemDto, ShipmentQueryDto } from './shipment.dto';
+import { AssemblyOptionsQueryDto, AvailableShipmentPositionsQueryDto, CompleteSeparationDto, CorrectShipmentDto, CreateShipmentDto, ExpirationConfirmationDto, SeparationDraftDto, ShipmentItemDto, ShipmentQueryDto } from './shipment.dto';
 import { Sector, ShipmentAssembly, ShipmentEntity, ShipmentItemAdditionalPhotoEntity, ShipmentItemEntity, ShipmentSeparationDraftEntity } from './shipment.entity';
 import { StoredImage, StorageService, UploadedImage } from '../storage/storage.service';
 import { SettingsService } from '../settings/settings.service';
@@ -44,6 +45,9 @@ export class ShipmentsService {
       .innerJoinAndSelect('shipment.createdBy', 'creator')
       .leftJoinAndSelect('shipment.decidedBy', 'decider')
       .leftJoinAndSelect('shipment.receivedBy', 'receiver')
+      .leftJoinAndSelect('shipment.canceledBy', 'canceler')
+      .leftJoinAndSelect('shipment.correctedFrom', 'correctedFrom')
+      .leftJoinAndSelect('shipment.corrections', 'correction')
       .leftJoinAndSelect('shipment.sourceShipment', 'sourceShipment')
       .leftJoinAndSelect('shipment.derivedShipments', 'derivedShipment')
       .leftJoinAndSelect('shipment.items', 'item')
@@ -56,12 +60,13 @@ export class ShipmentsService {
 
   async get(id: string, user: AuthenticatedUser, manager = this.dataSource.manager, processExpiration = true): Promise<ShipmentEntity> {
     if (processExpiration) await this.expireDueSeparations();
-    const sector = this.sector(user);
-    const shipment = await this.details(manager)
+    const builder = this.details(manager)
       .leftJoinAndSelect('linkedMovement.items', 'linkedMovementItem')
       .leftJoinAndSelect('linkedMovementItem.batch', 'movementBatch')
-      .where('shipment.id = :id', { id })
-      .andWhere('(shipment.originSector = :sector OR shipment.destinationSector = :sector)', { sector }).getOne();
+      .where('shipment.id = :id', { id });
+    if (user.sector === 'PCP' && user.permissions.includes('pcp.movements.read')) builder.andWhere('linkedMovement.id IS NOT NULL');
+    else if (!user.roles.includes('ADMIN')) builder.andWhere('(shipment.originSector = :sector OR shipment.destinationSector = :sector)', { sector: this.sector(user) });
+    const shipment = await builder.getOne();
     if (!shipment) throw new NotFoundException('Envio não encontrado neste setor.');
     return shipment;
   }
@@ -208,11 +213,11 @@ export class ShipmentsService {
     }
   }
 
-  private async persist(dto: CreateShipmentDto, photos: StoredImage[], counts: number[], user: AuthenticatedUser, metadata: AuditRequestMetadata): Promise<{ id: string; created: boolean }> {
+  private async persist(dto: CreateShipmentDto, photos: StoredImage[], counts: number[], user: AuthenticatedUser, metadata: AuditRequestMetadata, correction?: { manager: EntityManager; original: ShipmentEntity }): Promise<{ id: string; created: boolean }> {
     const sector = this.sector(user);
     if ((sector === 'REVISAO') === (dto.destinationSector === 'REVISAO')) throw new BadRequestException('O envio deve ocorrer entre Revisão e Produção ou Expedição.');
     const loading = resolveShipmentLoading(sector, dto.destinationSector, dto.loadingStatus, dto.vehiclePlate);
-    return this.dataSource.transaction(async (manager) => {
+    const execute = async (manager: EntityManager): Promise<{ id: string; created: boolean }> => {
       // Serializes retries before reserving stock or creating immutable lots.
       await manager.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [dto.requestKey]);
       const existing = await manager.findOneBy(ShipmentEntity, { requestKey: dto.requestKey });
@@ -239,6 +244,7 @@ export class ShipmentsService {
         destinationLocationId: sector === 'REVISAO' ? external.id : source.id,
         observation: dto.observation?.trim() || null,
         shipmentKind: assembling ? 'MONTAGEM' : 'NORMAL',
+        correctedFromId: correction?.original.id ?? null,
       });
       // Same product lock order as inline entries. Outgoing reservations lock locations before stock.
       const products = new Map<string, ProductEntity>();
@@ -292,8 +298,8 @@ export class ShipmentsService {
           quantity: assembly ? assembly.packageQuantity * assembly.unitsPerPackage : input.quantity,
           assembly,
           observation: input.observation?.trim() || null,
-          photoStorageKey: firstPhoto.key, photoMimeType: firstPhoto.mimeType, photoSize: firstPhoto.size,
-          productSnapshot: { code: product.code, name: product.name, defaultUnit: product.defaultUnit },
+          photoStorageKey: firstPhoto?.key ?? null, photoMimeType: firstPhoto?.mimeType ?? null, photoSize: firstPhoto?.size ?? null,
+          productSnapshot: correction?.original.items.find((item) => item.productId === input.productId && item.batchId === batch.id)?.productSnapshot ?? { code: product.code, name: product.name, defaultUnit: product.defaultUnit },
         }));
         itemPhotos.slice(1).forEach((photo, offset) => additionalPhotos.push(Object.assign(new ShipmentItemAdditionalPhotoEntity(), {
           shipmentItemId, ordinal: offset + 2, storageKey: photo.key, mimeType: photo.mimeType, size: photo.size,
@@ -326,7 +332,8 @@ export class ShipmentsService {
         confirmedExpirationKeys: dto.confirmedExpirationKeys ?? [],
       });
       return { id: shipment.id, created: true };
-    });
+    };
+    return correction ? execute(correction.manager) : this.dataSource.transaction(execute);
   }
 
   async photo(shipmentId: string, itemId: string, user: AuthenticatedUser, ordinal = 1): Promise<{ data: Buffer; mimeType: string }> {
@@ -457,6 +464,98 @@ export class ShipmentsService {
       .leftJoinAndSelect('audit.user', 'user')
       .where('audit.entityType = :entityType AND audit.entityId = :id', { entityType: 'SHIPMENT', id })
       .orderBy('audit.createdAt', 'ASC').addOrderBy('audit.id', 'ASC').getMany();
+  }
+
+  private authorizeAdministration(shipment: ShipmentEntity, user: AuthenticatedUser): void {
+    const permitted = user.roles.includes('ADMIN')
+      || (user.roles.includes('ADMIN_REVISAO_EXPEDICAO') && [shipment.originSector, shipment.destinationSector].some((sector) => sector === 'REVISAO' || sector === 'EXPEDICAO'))
+      || (user.roles.includes('ADMIN_PRODUCAO_PCP') && [shipment.originSector, shipment.destinationSector].includes('PRODUCAO'));
+    if (!permitted) throw new ForbiddenException('Somente administradores responsáveis por estes setores podem alterar a solicitação.');
+  }
+
+  async administrativeCancel(id: string, reason: string, user: AuthenticatedUser, metadata: AuditRequestMetadata): Promise<ShipmentEntity> {
+    await this.dataSource.transaction((manager) => this.cancelFamily(id, reason, user, metadata, manager));
+    return this.get(id, user, this.dataSource.manager, false);
+  }
+
+  async correct(id: string, dto: CorrectShipmentDto, user: AuthenticatedUser, metadata: AuditRequestMetadata): Promise<ShipmentEntity> {
+    const result = await this.dataSource.transaction(async (manager) => {
+      await manager.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [dto.requestKey]);
+      const existing = await manager.findOneBy(ShipmentEntity, { requestKey: dto.requestKey });
+      if (existing) {
+        if (existing.correctedFromId !== id || existing.createdById !== user.id) throw new ConflictException('Chave de correção já utilizada.');
+        this.authorizeAdministration(existing, user); return existing.id;
+      }
+      const original = await this.details(manager).addSelect('item.photoStorageKey').addSelect('additionalPhoto.storageKey').where('shipment.id=:id', { id }).getOne();
+      if (!original) throw new NotFoundException('Envio não encontrado.');
+      this.authorizeAdministration(original, user);
+      if (original.sourceShipmentId) throw new ConflictException('Corrija o recebimento original. O retorno e a entrada precisam ser tratados juntos.');
+      const selected = new Set<string>(); const photos: StoredImage[] = []; const counts: number[] = [];
+      const items: ShipmentItemDto[] = dto.items.map((input) => {
+        const old = original.items.find((item) => item.id === input.shipmentItemId);
+        if (!old || selected.has(old.id)) throw new BadRequestException('Selecione itens distintos do envio original.');
+        selected.add(old.id);
+        if (!Number.isSafeInteger(input.quantity) || input.quantity < 1) throw new BadRequestException('A quantidade deve ser inteira e positiva.');
+        if (old.assembly && input.quantity !== old.assembly.packageQuantity) throw new BadRequestException('A quantidade montada exige redefinir as parcelas. Cancele e crie uma nova montagem.');
+        const itemPhotos: StoredImage[] = [...(old.photoStorageKey ? [{ key: old.photoStorageKey, mimeType: old.photoMimeType!, size: old.photoSize! }] : []),
+          ...(old.additionalPhotos ?? []).map((photo) => ({ key: photo.storageKey, mimeType: photo.mimeType, size: photo.size }))];
+        counts.push(itemPhotos.length); photos.push(...itemPhotos);
+        return { productId: old.productId, quantity: input.quantity, observation: input.observation,
+          ...(old.assembly ? { assembly: { packageProductId: old.assembly.packageProductId, mixedDates: old.assembly.mixedDates, sources: old.assembly.sources.map(({ batchId, stockLocationId, quantity }) => ({ batchId, stockLocationId, quantity })) } }
+            : { batchId: old.batchId, ...(original.originSector === 'REVISAO' ? { stockLocationId: old.stockLocationId! } : {}) }) };
+      });
+      await this.cancelFamily(id, dto.reason, user, metadata, manager);
+      original.status = 'CANCELADO';
+      const replacement = await this.persist({ requestKey: dto.requestKey, destinationSector: original.destinationSector, items,
+        observation: dto.observation, loadingStatus: dto.loadingStatus, vehiclePlate: dto.vehiclePlate, confirmedExpirationKeys: dto.confirmedExpirationKeys }, photos, counts,
+      { ...user, sector: original.originSector }, metadata, { manager, original });
+      await this.record(original, user.id, 'SHIPMENT_ADMIN_CORRECTION', manager, metadata, { correctedShipmentId: replacement.id, reason: dto.reason });
+      return replacement.id;
+    });
+    const replacement = await this.dataSource.getRepository(ShipmentEntity).findOneByOrFail({ id: result });
+    return this.get(result, { ...user, sector: replacement.originSector }, this.dataSource.manager, false);
+  }
+
+  private async cancelFamily(id: string, reason: string, user: AuthenticatedUser, metadata: AuditRequestMetadata, manager: EntityManager): Promise<void> {
+    const normalized = reason.trim();
+    if (!normalized || normalized.length > 1000) throw new BadRequestException('Informe o motivo (até 1000 caracteres).');
+    const candidate = await manager.findOneBy(ShipmentEntity, { id });
+    if (!candidate) throw new NotFoundException('Envio não encontrado.');
+    this.authorizeAdministration(candidate, user);
+    // Lock the original before querying dependent returns: separation may still be finishing.
+    const rootId = candidate.sourceShipmentId ?? candidate.id;
+    await manager.getRepository(ShipmentEntity).createQueryBuilder('s').where('s.id=:rootId', { rootId }).setLock('pessimistic_write').getOneOrFail();
+    const locked = await manager.getRepository(ShipmentEntity).createQueryBuilder('s').where('s.id=:rootId OR s.sourceShipmentId=:rootId', { rootId })
+      .orderBy('s.id', 'ASC').setLock('pessimistic_write').getMany();
+    if (!locked.some((shipment) => shipment.id === id && ['AGUARDANDO_RECEBIMENTO', 'EM_SEPARACAO', 'CONFIRMADO'].includes(shipment.status))) throw new ConflictException('A solicitação já foi cancelada ou recusada.');
+    const ids = locked.map((shipment) => shipment.id);
+    const movements = await manager.getRepository(MovementEntity).createQueryBuilder('m').where('m.shipmentId IN (:...ids)', { ids }).orderBy('m.id', 'ASC').setLock('pessimistic_write').getMany();
+    const movementIds = movements.map((movement) => movement.id);
+    const records = movementIds.length ? await manager.getRepository(MovementItemEntity).findBy({ movementId: In(movementIds) }) : [];
+    if (movements.some((movement) => movement.pcpExecutionStatus === PcpExecutionStatus.Executed) || records.some((record) => record.pcpExecutionStatus === PcpExecutionStatus.Executed)) throw new ConflictException('Não é permitido alterar uma solicitação com registro já executado no PCP.');
+    const active = locked.filter((shipment) => ['AGUARDANDO_RECEBIMENTO', 'EM_SEPARACAO', 'CONFIRMADO'].includes(shipment.status));
+    const entries = movements.filter((movement) => movement.status === MovementStatus.Effective && movement.type === MovementType.ExternalEntry)
+      .flatMap((movement) => records.filter((record) => record.movementId === movement.id).map((record) => ({ productId: record.productId, batchId: record.batchId, stockLocationId: movement.destinationLocationId!, quantity: record.quantity })));
+    for (const entry of entries.sort((a, b) => `${a.productId}:${a.batchId}:${a.stockLocationId}`.localeCompare(`${b.productId}:${b.batchId}:${b.stockLocationId}`))) await this.stock.removeQuantity({ productId: entry.productId, batchId: entry.batchId, stockLocationId: entry.stockLocationId }, entry.quantity, manager);
+    for (const shipment of active) {
+      if (shipment.originSector === 'REVISAO' && shipment.shipmentKind !== 'RETORNO_IMEDIATO') {
+        const detail = await this.details(manager).where('shipment.id=:id', { id: shipment.id }).getOneOrFail();
+        await this.restoreSources(detail.items, manager);
+      }
+    }
+    const canceledAt = new Date();
+    for (const movement of movements.filter((movement) => movement.status === MovementStatus.Effective)) {
+      await manager.getRepository(MovementEntity).update(movement.id, { status: MovementStatus.Canceled, canceledByUserId: user.id, canceledAt, cancellationReason: normalized });
+      await this.audit.record({ ...metadata, manager, userId: user.id, action: 'SHIPMENT_ADMIN_MOVEMENT_CANCEL', entityType: 'MOVEMENT', entityId: movement.id, result: 'SUCCESS',
+        oldValues: { status: movement.status }, newValues: { status: MovementStatus.Canceled, shipmentId: movement.shipmentId, reason: normalized, canceledAt } });
+    }
+    for (const shipment of active) {
+      const previousStatus = shipment.status;
+      const changes = { status: 'CANCELADO' as const, canceledById: user.id, canceledAt, cancellationReason: normalized };
+      await manager.getRepository(ShipmentEntity).update(shipment.id, changes);
+      Object.assign(shipment, changes);
+      await this.record(shipment, user.id, 'SHIPMENT_ADMIN_CANCEL', manager, metadata, { previousStatus, reason: normalized, rootShipmentId: rootId, canceledAt });
+    }
   }
 
   async saveSeparationDraft(id: string, dto: SeparationDraftDto, user: AuthenticatedUser,

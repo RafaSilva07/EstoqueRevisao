@@ -49,7 +49,7 @@ export function ReviewPage({
   const prefillApplied = useRef(false);
   const [productQuery, setProductQuery] = useState({ code: '', name: '' });
   const formDraft = useFormDraft('review', 'Revisar produtos', { productId, batchId, draft, items, observation, requestKey: submission.requestKey, productQuery }, (saved) => {
-    setProductQuery(saved.productQuery); prefillApplied.current = true; setProductId(saved.productId); setBatchId(saved.batchId); setDraft(saved.draft); setItems(saved.items); setObservation(saved.observation); submission.setRequestKey(saved.requestKey);
+    setProductQuery(saved.productQuery); setProductId(saved.productId); setBatchId(saved.batchId); setDraft(saved.draft); setItems(saved.items); setObservation(saved.observation); submission.setRequestKey(saved.requestKey);
   }, { enabled: !loading, busy });
   async function created(id: string) { await formDraft.complete(); onCreated(id); }
 
@@ -70,14 +70,15 @@ export function ReviewPage({
       const positionData = await api.get<Paginated<StockPosition>>(
         `/stock-positions?limit=100&stockLocationId=${source.id}`,
       );
-      setPositions(positionData.items);
+      const requested = prefill ? await api.get<Paginated<StockPosition>>(`/stock-positions?limit=100&stockLocationId=${source.id}&productId=${prefill.productId}&batchId=${prefill.batchId}`) : null;
+      setPositions([...new Map([...positionData.items, ...(requested?.items ?? [])].map((position) => [position.id, position])).values()]);
       if (!preserveError) setError('');
     } catch (caught) {
       setError(messageFrom(caught));
     } finally {
       setLoading(false);
     }
-  }, [setError]);
+  }, [prefill, setError]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => void load(), 0);
@@ -109,13 +110,17 @@ export function ReviewPage({
     const position = positions.find((candidate) => (
       candidate.productId === prefill.productId && candidate.batchId === prefill.batchId
     ));
-    if (!position) return;
     const timeout = window.setTimeout(() => {
-      addPosition(position);
       prefillApplied.current = true;
+      if (!position || Number(position.quantity) <= 0) { setError('Este produto e lote não possuem saldo disponível em Revisar.'); return; }
+      setProductId(position.productId); setBatchId(position.batchId);
+      const existing = items.find((item) => item.position.id === position.id);
+      if (existing) { setDraft(existing); setAdding(true); }
+      else if (draft && draft.position.id !== position.id) setError('Há um produto em preenchimento no rascunho. Conclua-o e selecione o produto desta entrada, já preenchido acima.');
+      else addPosition(position);
     }, 0);
     return () => window.clearTimeout(timeout);
-  }, [addPosition, loading, positions, prefill, formDraft.ready]);
+  }, [addPosition, loading, positions, prefill, formDraft.ready, items, draft]);
 
   function addSelected() {
     if (!selectedPosition) {

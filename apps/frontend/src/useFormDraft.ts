@@ -39,6 +39,7 @@ export function useFormDraft<T>(key: string, title: string, value: T, restore: (
         latest.current.restore(restoreDraftFiles(record.value as T, urls.current));
         setSavedFingerprint(draftFingerprint(record.value));
         setStatus('Rascunho recuperado. Confira os dados antes de confirmar.');
+        if (record.syncError) setError(record.syncError);
       }
     }).catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível recuperar o rascunho.'); })
       .finally(() => { if (active) setReadyKey(storageKey); });
@@ -55,10 +56,22 @@ export function useFormDraft<T>(key: string, title: string, value: T, restore: (
     serial.current = pending;
     try {
       await pending; persisted.current = true; persistedFingerprint.current = draftFingerprint(record.value);
-      if (mounted.current) { setError(''); setSavedFingerprint(persistedFingerprint.current); setStatus('Rascunho salvo neste navegador.'); }
+      if (mounted.current) { setError(''); setSavedFingerprint(persistedFingerprint.current); setStatus(formDraftStore.isCloud(storageKey) ? 'Rascunho salvo na sua conta.' : 'Rascunho salvo neste navegador.'); }
     }
     catch (caught) { if (mounted.current) setError(caught instanceof Error ? caught.message : 'Não foi possível salvar o rascunho.'); throw caught; }
   }, [storageKey, enabled, title]);
+  const reload = useCallback(async () => {
+    if (!storageKey || !window.confirm('Substituir este preenchimento pela última versão salva na conta? Alterações locais não sincronizadas serão descartadas.')) return;
+    await serial.current.catch(() => undefined);
+    try {
+      const record = await formDraftStore.read(storageKey, true);
+      if (record?.syncError) throw new Error(record.syncError);
+      const value = record ? restoreDraftFiles(record.value as T, urls.current) : initial.current;
+      latest.current.restore(value);
+      persisted.current = Boolean(record); persistedFingerprint.current = draftFingerprint(value);
+      setSavedFingerprint(persistedFingerprint.current); setError(''); setStatus('Versão da conta carregada.');
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Não foi possível carregar o rascunho da conta.'); }
+  }, [storageKey]);
   const discard = useCallback(async () => {
     if (!storageKey) return;
     suppressed.current = true;
@@ -78,7 +91,7 @@ export function useFormDraft<T>(key: string, title: string, value: T, restore: (
     baseline.current = draftFingerprint(latest.current.value);
     await serial.current.catch(() => undefined);
     initial.current = latest.current.value;
-    if (storageKey) await formDraftStore.removeTree(storageKey).catch(() => { if (mounted.current) setError('Operação concluída. Não foi possível remover o rascunho local; não reenvie esta operação.'); });
+    if (storageKey) await formDraftStore.removeTree(storageKey).catch(() => { if (mounted.current) setError('Operação concluída. Não foi possível remover o rascunho; não reenvie esta operação.'); });
     persisted.current = false;
     if (mounted.current) setStatus('');
   }, [storageKey]);
@@ -92,9 +105,9 @@ export function useFormDraft<T>(key: string, title: string, value: T, restore: (
   }, [workspace, storageKey, enabled, ready, title, dirty, save, discard]);
   useEffect(() => {
     if (!ready || !enabled || !storageKey || !dirty()) return;
-    const timer = window.setTimeout(() => { void save().catch(() => undefined); }, 350);
+    const timer = window.setTimeout(() => { void save().catch(() => undefined); }, 800);
     return () => window.clearTimeout(timer);
   }, [fingerprint, ready, enabled, storageKey, dirty, save]);
   const visibleStatus = status && fingerprint !== savedFingerprint ? 'Alterações aguardando salvamento…' : status;
-  return { ready, status: visibleStatus, error, save, complete, discard, close: (action: () => void) => workspace ? workspace.leave(action) : action() };
+  return { ready, status: visibleStatus, error, save, reload, complete, discard, close: (action: () => void) => workspace ? workspace.leave(action) : action() };
 }

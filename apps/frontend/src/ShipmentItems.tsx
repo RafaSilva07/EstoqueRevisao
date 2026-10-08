@@ -4,6 +4,7 @@ import { formatDate } from './format';
 import { MovementEvidence } from './MovementEvidence';
 import { PhotoViewer } from './PhotoViewer';
 import { Shipment } from './shipments';
+import { ReviewEntryAction } from './ReviewEntryAction';
 
 export function ShipmentPhoto({ shipmentId, itemId, productName, available, additionalPhotos = [] }: { shipmentId: string; itemId: string; productName: string; available: boolean; additionalPhotos?: Array<{ ordinal: number; mimeType: string; size: number }> }) {
   const ordinals = [...(available ? [1] : []), ...additionalPhotos.map((photo) => photo.ordinal)].sort((a, b) => a - b);
@@ -40,6 +41,7 @@ export function ShipmentItems({ shipment, onSelectRecord, collapsePhotos = false
           : item.stockLocation && <span>Origem da posição: {item.stockLocation.name}</span>}
         {item.observation && <span><strong>Observação do produto:</strong> {item.observation}</span>}
       </div>
+      <ReviewEntryAction productId={item.productId} batchId={item.batchId} eligible={shipment.status === 'CONFIRMADO' && shipment.destinationSector === 'REVISAO' && Boolean(shipment.movements?.some((movement) => movement.items?.some((entry) => entry.shipmentItemId === item.id && Number(entry.quantity) > 0)))} />
       {hasPhotos ? <MovementEvidence initiallyCollapsed={collapsePhotos}><ShipmentPhoto shipmentId={shipment.id} itemId={item.id} productName={product.name} available={Boolean(item.photoMimeType)} additionalPhotos={item.additionalPhotos} /></MovementEvidence>
         : <small className="muted">Item histórico sem foto.</small>}
     </li>;

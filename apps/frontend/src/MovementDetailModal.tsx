@@ -5,6 +5,8 @@ import { formatDate, formatDateTime } from './format';
 import { ShipmentPhoto } from './ShipmentItems';
 import { Shipment } from './shipments';
 import { MovementEvidence } from './MovementEvidence';
+import { ReviewEntryAction } from './ReviewEntryAction';
+import { AdministrativeShipmentActions } from './AdministrativeShipmentActions';
 
 const typeLabel: Record<Movement['type'], string> = {
   ENTRADA_EXTERNA: 'Entrada externa',
@@ -93,6 +95,7 @@ export function MovementDetailModal({ movementId, initialMovement, onClose, chil
         {item.assembly && <span>Montagem: {item.quantity} UN de {(item.productSnapshot ?? item.product).code}. Origens: {item.assembly.sources.map((source) => `${source.locationName} / ${source.lot}: ${source.quantity} UN`).join('; ')}</span>}
         {item.outputProductSnapshot && <span>Desmontagem: {item.quantity} {(item.productSnapshot ?? item.product).defaultUnit} × {item.unitsPerPackage} → {item.outputQuantity} UN de {item.outputProductSnapshot.code} — {item.outputProductSnapshot.name}</span>}
         {item.distributions?.length > 0 && <ul className="distribution-detail">{item.distributions.map((distribution) => <li key={distribution.id}>{distribution.destinationLocation.name}: <strong>{distribution.quantity} {(item.outputProductSnapshot ?? item.productSnapshot ?? item.product).defaultUnit}</strong></li>)}</ul>}
+        <ReviewEntryAction productId={item.productId} batchId={item.batchId} eligible={movement.type === 'ENTRADA_EXTERNA' && movement.status === 'EFETIVADA' && movement.destinationLocation?.reviewRole === 'SOURCE'} />
         {pcp && !recordId && <small>PCP: {movement.requiresPcpExecution === false ? 'Não necessário' : item.pcpExecutionStatus === 'EXECUTADA' ? 'Executada' : 'Pendente'}</small>}
         {evidence.length > 0 && <MovementEvidence key={`${item.pcpExecutionStatus ?? movement.pcpExecutionStatus}:${item.id}`} initiallyCollapsed={movement.status === 'EFETIVADA' && movement.requiresPcpExecution && (item.pcpExecutionStatus ?? movement.pcpExecutionStatus) === 'PENDENTE'}>
           <div className="pcp-evidence-grid">{evidence.map((photo) => <ShipmentPhoto key={'itemId' in photo ? photo.itemId : photo.id} shipmentId={'itemId' in photo ? photo.shipmentId : shipment!.id} itemId={'itemId' in photo ? photo.itemId : photo.id} productName={(item.assembly?.packageProductSnapshot ?? item.productSnapshot ?? item.product).name} available={Boolean(photo.photoMimeType)} additionalPhotos={photo.additionalPhotos} />)}</div>
@@ -117,6 +120,7 @@ export function MovementDetailModal({ movementId, initialMovement, onClose, chil
         {movement.cancellationReason && <p><strong>Motivo do cancelamento:</strong> {movement.cancellationReason}</p>}
       </section>}
       {audit}
+      {movement.shipmentId && <AdministrativeShipmentActions shipmentId={movement.shipmentId} shipment={shipment ?? undefined} onDone={onClose} />}
       {children && <div className="movement-detail-footer">{children(movement)}</div>}
     </>}
   </Modal>;

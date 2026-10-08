@@ -3,6 +3,7 @@ import { formatDateTime } from './format';
 import { ShipmentItems } from './ShipmentItems';
 import { ShipmentStockOutcome } from './ShipmentStockOutcome';
 import { Shipment, sectorLabel, shipmentStatusLabel } from './shipments';
+import { AdministrativeShipmentActions } from './AdministrativeShipmentActions';
 
 export function ShipmentDetailView({ shipment, titleId, recordId, onSelectRecord, onViewGroup, onClose, onOpenShipment, onOpenMovement, audit, actions }: {
   shipment: Shipment;
@@ -36,7 +37,7 @@ export function ShipmentDetailView({ shipment, titleId, recordId, onSelectRecord
   const awaitingDecision = shipment.status === 'AGUARDANDO_RECEBIMENTO';
   const decisionLabel = shipment.status === 'CANCELADO' ? 'Cancelado por'
     : shipment.status === 'CONFIRMADO' || shipment.status === 'EM_SEPARACAO' ? 'Recebido por' : 'Decisão por';
-  const decisionActor = shipment.status === 'CANCELADO' ? shipment.createdBy.username
+  const decisionActor = shipment.status === 'CANCELADO' ? shipment.canceledBy?.username ?? shipment.decidedBy?.username ?? shipment.createdBy.username
     : decidedBy ?? (awaitingDecision ? 'Pendente' : 'Não informado');
 
   return <>
@@ -75,7 +76,8 @@ export function ShipmentDetailView({ shipment, titleId, recordId, onSelectRecord
         <div><span>Enviado por</span><strong>{shipment.createdBy.username}</strong></div>
         <div><span>Data e hora</span><strong>{formatDateTime(shipment.createdAt)}</strong></div>
         <div><span>{decisionLabel}</span><strong>{decisionActor}</strong></div>
-        <div><span>Data da decisão</span><strong>{shipment.decidedAt ? formatDateTime(shipment.decidedAt) : awaitingDecision ? 'Pendente' : 'Não informada'}</strong></div>
+        <div><span>Data da decisão</span><strong>{shipment.canceledAt ? formatDateTime(shipment.canceledAt) : shipment.decidedAt ? formatDateTime(shipment.decidedAt) : awaitingDecision ? 'Pendente' : 'Não informada'}</strong></div>
+        {shipment.canceledAt && shipment.decidedAt && <div><span>Recebimento original</span><strong>{decidedBy ?? '—'}</strong><small>{formatDateTime(shipment.decidedAt)}</small></div>}
         {shipment.separationStartedAt && <div><span>Início da separação</span><strong>{formatDateTime(shipment.separationStartedAt)}</strong></div>}
         {shipment.separationExpiresAt && <div><span>Prazo da separação</span><strong>{formatDateTime(shipment.separationExpiresAt)}</strong></div>}
         {shipment.separationCompletedAt && <div><span>Separação concluída</span><strong>{formatDateTime(shipment.separationCompletedAt)}</strong></div>}
@@ -84,10 +86,10 @@ export function ShipmentDetailView({ shipment, titleId, recordId, onSelectRecord
 
     <ShipmentStockOutcome shipment={visibleShipment} onOpenMovement={onOpenMovement} />
 
-    {(shipment.observation || shipment.refusalReason) && <section className="movement-detail-section movement-notes" aria-labelledby="shipment-notes-title">
+    {(shipment.observation || shipment.refusalReason || shipment.cancellationReason) && <section className="movement-detail-section movement-notes" aria-labelledby="shipment-notes-title">
       <h3 id="shipment-notes-title">Observações</h3>
       {shipment.observation && <p>{shipment.observation}</p>}
-      {shipment.refusalReason && <p><strong>{shipment.status === 'CANCELADO' ? 'Motivo do cancelamento:' : 'Motivo da recusa:'}</strong> {shipment.refusalReason}</p>}
+      {(shipment.cancellationReason || shipment.refusalReason) && <p><strong>{shipment.status === 'CANCELADO' ? 'Motivo do cancelamento:' : 'Motivo da recusa:'}</strong> {shipment.cancellationReason ?? shipment.refusalReason}</p>}
     </section>}
 
     {(shipment.sourceShipmentId || shipment.derivedShipments?.length) && onOpenShipment && <section className="movement-detail-section shipment-related" aria-labelledby="shipment-related-title">
@@ -96,7 +98,12 @@ export function ShipmentDetailView({ shipment, titleId, recordId, onSelectRecord
       {shipment.derivedShipments?.map((derived) => <button type="button" className="secondary" key={derived.id} onClick={() => onOpenShipment(derived.id)}>Ver retorno · {shipmentStatusLabel[derived.status]}</button>)}
     </section>}
 
+    {(shipment.correctedFromId || shipment.corrections?.length) && onOpenShipment && <section className="movement-detail-section"><h3>Correções vinculadas</h3>
+      {shipment.correctedFromId && <button type="button" className="secondary" onClick={() => onOpenShipment(shipment.correctedFromId!)}>Ver original · {shipment.correctedFrom?.codigoMovimentacao}</button>}
+      {shipment.corrections?.map((correction) => <button type="button" className="secondary" key={correction.id} onClick={() => onOpenShipment(correction.id)}>Ver correção · {correction.codigoMovimentacao}</button>)}
+    </section>}
     {audit}
+    <AdministrativeShipmentActions shipmentId={shipment.id} shipment={shipment} onDone={onClose} />
     {actions && <div className="movement-detail-footer">{actions}</div>}
   </>;
 }

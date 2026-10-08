@@ -4,6 +4,7 @@ import { createRoot, Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Movement, PcpMovementDetail } from './api';
 import { MovementDetailModal } from './MovementDetailModal';
+import { OperationalActionsContext } from './operational-actions';
 
 vi.mock('./ShipmentItems', () => ({ ShipmentPhoto: ({ productName }: { productName: string }) => <span>Foto de {productName}</span> }));
 
@@ -47,6 +48,18 @@ describe('detalhe da movimentação', () => {
     expect(products.compareDocumentPosition(facts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(facts.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(host.textContent).toContain('Conferido no recebimento.');
+  });
+  it('abre revisão pré-preenchida somente para entrada aceita e operador autorizado', () => {
+    const review = vi.fn();
+    const entry = { ...movement, type: 'ENTRADA_EXTERNA', destinationLocation: { name: 'Revisar', reviewRole: 'SOURCE' },
+      items: [{ ...movement.items[0], productId: 'product-id', batchId: 'exact-batch', distributions: [] }] } as unknown as Movement;
+    act(() => root.render(<OperationalActionsContext.Provider value={{ review, adminRoles: [] }}><MovementDetailModal movementId={entry.id} initialMovement={entry} onClose={() => undefined} /></OperationalActionsContext.Provider>));
+    const button = [...host.querySelectorAll('button')].find((button) => button.textContent === 'Revisar produto')!;
+    expect(button).toBeTruthy(); act(() => button.click()); expect(review).toHaveBeenCalledExactlyOnceWith({ productId: 'product-id', batchId: 'exact-batch' });
+    act(() => root.render(<OperationalActionsContext.Provider value={{ review, adminRoles: [] }}><MovementDetailModal movementId={entry.id} initialMovement={{ ...entry, status: 'CANCELADA' }} onClose={() => undefined} /></OperationalActionsContext.Provider>));
+    expect(host.textContent).not.toContain('Revisar produto');
+    act(() => root.render(<MovementDetailModal movementId={entry.id} initialMovement={entry} onClose={() => undefined} />));
+    expect(host.textContent).not.toContain('Revisar produto');
   });
 
   it('abre a foto somente dentro do produto escolhido enquanto aguarda PCP', () => {

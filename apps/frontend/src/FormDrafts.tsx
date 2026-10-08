@@ -53,6 +53,6 @@ export function FormDraftProvider({ children }: { children: ReactNode }) {
   </DraftContext.Provider>;
 }
 
-export function DraftActions({ draft }: { draft: Pick<ReturnType<typeof useFormDraft>, 'status' | 'error' | 'save' | 'ready'> }) {
-  return <aside className="draft-toolbar" aria-label="Rascunho do formulário"><div><strong>Rascunho automático</strong><small>{draft.status || 'Disponível neste navegador, para este usuário e modo operacional.'}</small>{draft.error && <span role="alert" className="field-error">{draft.error}</span>}</div><button type="button" className="secondary" disabled={!draft.ready} onClick={() => void draft.save().catch(() => undefined)}>Salvar rascunho</button></aside>;
+export function DraftActions({ draft }: { draft: Pick<ReturnType<typeof useFormDraft>, 'status' | 'error' | 'save' | 'reload' | 'ready'> }) {
+  return <aside className="draft-toolbar" aria-label="Rascunho do formulário"><div><strong>Rascunho automático</strong><small>{draft.status || 'Salve para continuar em outro dispositivo com a mesma conta e modo operacional.'}</small>{draft.error && <span role="alert" className="field-error">{draft.error}</span>}</div>{draft.error && <button type="button" className="secondary" disabled={!draft.ready} onClick={() => void draft.reload()}>Carregar versão da conta</button>}<button type="button" className="secondary" disabled={!draft.ready} onClick={() => void draft.save().catch(() => undefined)}>Salvar rascunho</button></aside>;
 }

@@ -2,12 +2,14 @@ import { FormEvent, ReactNode, useCallback, useEffect, useLayoutEffect, useRef, 
 import { DraftActions, FormDraftProvider } from './FormDrafts';
 import { useDraftWorkspace } from './draft-context';
 import { useFormDraft } from './useFormDraft';
+import { formDraftStore } from './form-draft-store';
 import { api, Batch, Movement, Paginated, Product, StockDisplayMode, StockLocation, StockLocationKind, StockPosition, UnitConversion, UserPreferences, UserSession } from './api';
 import { ConfirmDialog, EmptyState, FilterPanel, LoadingState, Modal, Notice, PageHeader } from './components';
 import { formatDate, formatDateTime } from './format';
 import { ExternalExitPage } from './ExternalExitPage';
 import { InternalTransferPage, TransferPrefill } from './InternalTransferPage';
 import { ReviewPage, ReviewPrefill } from './ReviewPage';
+import { OperationalActionsContext } from './operational-actions';
 import { ExternalEntryPage } from './ExternalEntryPage';
 import { MovementCancellationDialog } from './MovementCancellationDialog';
 import { ReportsPage } from './ReportsPage';
@@ -260,6 +262,7 @@ function AppSession() {
   const [movementSuccess, setMovementSuccess] = useState<string>();
   const [transferPrefill, setTransferPrefill] = useState<TransferPrefill>();
   const [reviewPrefill, setReviewPrefill] = useState<ReviewPrefill>();
+  const [operationRevision, setOperationRevision] = useState(0);
   useEffect(() => { void api.refresh().then((result) => {
     const authenticated = result?.user ?? null;
     const sector = authenticated?.sector ?? 'REVISAO';
@@ -284,7 +287,7 @@ function AppSession() {
   const activeMode: OperationalMode = user ? (modes.length > 1 ? operationalMode : modes[0]) : 'REVISAO';
   const draftScope = user ? `${user.id}:${activeMode}` : null;
   const setDraftScope = drafts?.setScope;
-  useLayoutEffect(() => { setDraftScope?.(draftScope); }, [setDraftScope, draftScope]);
+  useLayoutEffect(() => { formDraftStore.setAccount(user?.id ?? null); setDraftScope?.(draftScope); return () => formDraftStore.setAccount(null); }, [setDraftScope, draftScope, user?.id]);
   const presenceAdmin = isPresenceAdmin(user);
   const presence = useOnlinePresence(user?.id, activeMode, presenceAdmin && page === 'online-users');
   if (checking) return <main className="splash"><span className="spinner" /><p>Preparando seu ambiente...</p></main>;
@@ -346,10 +349,10 @@ function AppSession() {
     else if (destination === 'movements' || destination === 'history') openHistory();
     else navigate(destination);
   };
-  return <div className={`app-shell${sidebarExpanded ? ' sidebar-is-expanded' : ''}`}><a className="skip-link" href="#main-content">Ir para o conteúdo</a>
+  return <OperationalActionsContext.Provider value={{ review: reviewSector && can('movements.review') ? openReview : undefined, adminRoles: can('shipments.read') ? user.roles : [], changed: () => { setSelectedMovementId(undefined); setSelectedRecordId(undefined); setOperationRevision((value) => value + 1); } }}><div className={`app-shell${sidebarExpanded ? ' sidebar-is-expanded' : ''}`}><a className="skip-link" href="#main-content">Ir para o conteúdo</a>
     <header className="topbar"><button className="brand" onClick={() => go('home')} aria-label="Ir para o início"><span>ER</span><strong>Estoque Revisão</strong></button><div className="user-area">{switcher}<span className="user-name">{user.username} · {operationalModeLabel[activeMode]}</span><button className="secondary desktop-logout" onClick={logout} disabled={loggingOut}>Sair</button></div></header>
     <SidebarNavigation page={page} user={activeUser} areas={areas} modeLabel={operationalModeLabel[activeMode]} showOnlineUsers={presenceAdmin} expanded={sidebarExpanded} onToggle={() => setSidebarExpanded((value) => !value)} navigate={go} />
-    <main className="workspace" id="main-content" tabIndex={-1}>
+    <main className="workspace" id="main-content" tabIndex={-1} key={operationRevision}>
       {activeMode === 'PCP' && <PcpOnlineNotice users={presence.pcpUsers} error={presence.error} />}
       <NavigationTrail page={page} user={activeUser} navigate={go} />
       {page === 'home' && <OperationalHomePage key={activeMode} user={activeUser} navigate={go} onOpenRecord={(destination, id, recordId) => { navigate(destination === 'movements' ? 'history' : destination); setSelectedRecordId(recordId ?? id); setSelectedMovementId(id); setMovementSuccess(undefined); }} />}
@@ -381,5 +384,5 @@ function AppSession() {
       {areas.slice(0, 2).map((area) => <NavButton key={area.page} active={page === area.page || parentPage(page, activeUser) === area.page} onClick={() => go(area.page)}>{area.title}</NavButton>)}
       <NavButton active={page === 'more' || page === 'users' || page === 'settings' || page === 'preferences' || page === 'online-users'} onClick={() => go('more')}>Menu</NavButton>
     </nav>
-  </div>;
+  </div></OperationalActionsContext.Provider>;
 }
