@@ -248,6 +248,8 @@ No desktop, registros individuais aparecem em linhas compactas na Home, Históri
 
 Quando um item de revisão possui mais de um destino, seu registro mostra uma matriz compacta com os destinos e, logo abaixo, as quantidades efetivamente distribuídas em cada um. A Home, o Histórico e a fila PCP usam as distribuições gravadas no item; a unidade exibida é a do produto resultante quando houve desmontagem. Destinos sem distribuição não são inventados.
 
+No celular, o card da fila PCP reserva a largura inteira para produto/lote e distribuição, com os três destinos iniciais visíveis sem rolagem horizontal. Código e referência ao grupo ficam separados. O aviso de distribuição do editor de revisão usa cores próprias para manter contraste nos temas claro e escuro.
+
 O detalhe de movimentação apresenta identificador, tipo, estados operacional e PCP, data/hora, responsável, rota, observação, itens, lotes, fabricação, validade, quantidades e distribuições. Os dados do produto confirmados em novos itens são preservados por snapshot; datas são preservadas nas variantes imutáveis. Relatórios históricos e CSVs existentes também mostram as datas de origem/destino. Registros efetivados e cancelados permanecem consultáveis.
 
 Na interface, o detalhe prioriza identificação e estados no cabeçalho, rota e produtos; responsáveis/data aparecem em uma faixa compacta, observações depois e ações ao final. As listas da Home usam fundos suaves diferentes para envios abertos, pendências PCP e finalizadas, mantendo os registros individuais em destaque. No tema escuro, as cores distinguem os painéis; os registros internos compartilham uma superfície neutra que contrasta com cada fundo.

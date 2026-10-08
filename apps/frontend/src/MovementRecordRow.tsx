@@ -43,7 +43,7 @@ export function ReviewDistributionMatrix({ distributions, unit }: {
       || left.destination.localeCompare(right.destination, 'pt-BR'));
   return <span className="review-distribution-matrix" role="group" aria-label="Distribuição da revisão">
     <span className="review-distribution-caption">Distribuição da revisão · {unit ?? 'UN'}</span>
-    <span className="review-distribution-grid" style={{ gridTemplateColumns: `repeat(${ordered.length}, minmax(5.5rem, max-content))` }}>
+    <span className="review-distribution-grid" style={{ gridTemplateColumns: `repeat(${ordered.length}, minmax(0, 1fr))` }}>
       {ordered.map((distribution) => <span className="review-distribution-destination" key={`${distribution.destinationCode}:name`} title={distribution.destination}>{distribution.destination}</span>)}
       {ordered.map((distribution) => <span className="review-distribution-quantity" key={`${distribution.destinationCode}:quantity`} aria-label={`${distribution.destination}: ${distribution.quantity} ${unit ?? 'UN'}`}>
         {distribution.quantity.toLocaleString('pt-BR', { maximumFractionDigits: 6 })}

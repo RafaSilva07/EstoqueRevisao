@@ -225,3 +225,7 @@ Formulários passaram a preservar preenchimento e fotos localmente por usuário/
 ## Etapa 71 — Rascunhos por conta e correções administrativas
 
 Rascunhos passaram de armazenamento apenas local para sincronização privada por conta/modo, incluindo fotos e proteção contra concorrência. Adicionados favicon e atalho de revisão da entrada aceita. Administradores responsáveis podem cancelar solicitações antes de execução PCP; edição gera nova solicitação vinculada, com estorno/criação/auditoria atômicos. Migrations `AccountFormDrafts1791331200000` e `AdministrativeShipmentCorrections1791417600000`; esta etapa substitui a restrição anterior de correções administrativas de envios somente por devolução independente. Publicação exclusiva na `develop` e banco Supabase de teste configurado localmente. [Relatório da etapa 71](./relatorios/RELATORIO_ETAPA_71_RASCUNHOS_CONTA_CORRECOES.md).
+
+## Etapa 72 — Layout da revisão na fila PCP
+
+Produto/lote e distribuição passaram a ocupar a largura inteira do card mobile do PCP. A matriz compartilhada ajusta suas colunas ao espaço disponível e o aviso do editor de revisão mantém contraste nos dois temas. Sem alteração de regras ou banco; [relatório da etapa 72](./relatorios/RELATORIO_ETAPA_72_LAYOUT_REVISAO_PCP.md).
