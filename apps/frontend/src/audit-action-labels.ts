@@ -1,4 +1,5 @@
 const labels: Record<string, string> = {
+  SETTINGS_DUPLICATE_WINDOW_UPDATE: 'Intervalo do aviso de duplicidade atualizado',
   USER_CREATE: 'Usuário cadastrado',
   USER_UPDATE: 'Dados e acessos do usuário atualizados',
   USER_DEACTIVATE: 'Usuário inativado',

@@ -1,8 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { EntityManager } from 'typeorm';
-
-export const RECENT_DUPLICATE_MINUTES = 30;
+import { recentDuplicateMinutes } from '../../modules/settings/recent-duplicate-window';
 
 interface Distribution { destinationLocationId: string; quantity: number }
 interface AssemblySource { batchId: string; stockLocationId: string; quantity: number }
@@ -67,6 +66,7 @@ export async function confirmRecentDuplicates(
   ])).digest('hex');
   // Identical concurrent operations wait here, then see the first committed operation.
   await manager.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`recent-operation:${fingerprint}`]);
+  const windowMinutes = await recentDuplicateMinutes(manager);
   const movement = operation.kind === 'MOVEMENT';
   const itemSql = movement ? `
     SELECT jsonb_build_object(
@@ -99,14 +99,14 @@ export async function confirmRecentDuplicates(
       AND (SELECT jsonb_agg(value ORDER BY value::text) FROM (${itemSql}) actual)
         = (SELECT jsonb_agg(value ORDER BY value::text) FROM jsonb_array_elements($4::jsonb) expected(value))
     ORDER BY o.created_at DESC, o.id DESC LIMIT 5
-  `, [operation.type, operation.origin, operation.destination, JSON.stringify(items), operation.requestKey, RECENT_DUPLICATE_MINUTES]);
+  `, [operation.type, operation.origin, operation.destination, JSON.stringify(items), operation.requestKey, windowMinutes]);
   const keys = matches.map((match) => `${operation.kind}:${match.id}:${fingerprint}`);
   if (keys.some((key) => !confirmedKeys.includes(key))) {
     throw new ConflictException({
       code: 'RECENT_DUPLICATE_CONFIRMATION_REQUIRED',
-      message: `Já existe uma operação com os mesmos produtos, lotes, quantidades e rota nos últimos ${RECENT_DUPLICATE_MINUTES} minutos. Confira antes de continuar.`,
+      message: `Já existe uma operação com os mesmos produtos, lotes, quantidades e rota nos últimos ${windowMinutes} minutos. Confira antes de continuar.`,
       details: {
-        duplicateKeys: keys, windowMinutes: RECENT_DUPLICATE_MINUTES,
+        duplicateKeys: keys, windowMinutes,
         duplicates: matches.map((match) => ({ ...match, kind: operation.kind })),
       },
     });

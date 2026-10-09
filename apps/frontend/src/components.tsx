@@ -17,10 +17,12 @@ export function PageHeader({
   </div>;
 }
 
-export function Notice({ kind, children, onClose }: {
+export function Notice({ kind, children, onClose, title, className = '' }: {
   kind: 'error' | 'success' | 'info';
   children: ReactNode;
   onClose?: () => void;
+  title?: ReactNode;
+  className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -30,8 +32,8 @@ export function Notice({ kind, children, onClose }: {
       ref.current?.scrollIntoView({ block: 'center' });
     }
   }, [kind, children]);
-  return <div ref={ref} className={`notice notice-${kind}`} role={kind === 'error' ? 'alert' : 'status'}>
-    <span><strong className="notice-title">{kind === 'error' ? 'Não foi possível concluir' : kind === 'success' ? 'Concluído' : 'Atenção'}</strong>{children}</span>
+  return <div ref={ref} className={`notice notice-${kind} ${className}`} role={kind === 'error' ? 'alert' : 'status'}>
+    <span><strong className="notice-title">{title ?? (kind === 'error' ? 'Não foi possível concluir' : kind === 'success' ? 'Concluído' : 'Atenção')}</strong>{children}</span>
     {onClose && <button type="button" className="notice-close" aria-label="Fechar mensagem" onClick={onClose}>Fechar</button>}
   </div>;
 }

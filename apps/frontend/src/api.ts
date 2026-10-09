@@ -82,6 +82,7 @@ export interface StockLocation {
 
 export interface OperationalSettings {
   immediateSeparationMinutes: number;
+  recentDuplicateMinutes: number;
   reviewDestinations: StockLocation[];
   shipmentPhotos: ShipmentPhotoLimits;
 }

@@ -3,6 +3,7 @@ import { auditActionLabel } from './audit-action-labels';
 
 describe('nomes dos eventos de auditoria', () => {
   it.each([
+    ['SETTINGS_DUPLICATE_WINDOW_UPDATE', 'Intervalo do aviso de duplicidade atualizado'],
     ['SHIPMENT_CREATE', 'Envio criado'],
     ['SHIPMENT_CONFIRM', 'Recebimento confirmado'],
     ['SHIPMENT_REFUSE', 'Envio recusado'],

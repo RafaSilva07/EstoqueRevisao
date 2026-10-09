@@ -16,7 +16,7 @@ import { MovementsService } from './movements.service';
 describe('MovementsService', () => {
   const findBatch = jest.fn(({ id }: { id: string }) => Promise.resolve({ id, code: id }));
   const lockQuery = { where: jest.fn().mockReturnThis(), setLock: jest.fn().mockReturnThis(), getOne: jest.fn() };
-  const manager = { query: jest.fn().mockResolvedValue([]), getRepository: () => ({ findOneBy: findBatch, createQueryBuilder: (): typeof lockQuery => lockQuery }) } as unknown as EntityManager;
+  const manager = { query: jest.fn().mockResolvedValue([]), findOneBy: jest.fn().mockResolvedValue(null), getRepository: () => ({ findOneBy: findBatch, createQueryBuilder: (): typeof lockQuery => lockQuery }) } as unknown as EntityManager;
   const lots = { resolveExistingInTransaction: jest.fn() };
   const originId = '10000000-0000-4000-8000-000000000006';
   const destinationId = '10000000-0000-4000-8000-000000000002';

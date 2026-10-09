@@ -34,6 +34,7 @@ import { StorageService, UploadedImage } from '../storage/storage.service';
 import { HistoryService } from '../history/history.service';
 import { HistoryQueryDto } from '../history/history-query.dto';
 import { SettingsService } from '../settings/settings.service';
+import { SystemSettingEntity } from '../settings/system-setting.entity';
 import { PcpMovementsService } from '../pcp/pcp-movements.service';
 import { PcpMovementsRepository } from '../pcp/pcp-movements.repository';
 
@@ -78,6 +79,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
   beforeEach(async () => {
     jest.restoreAllMocks();
     await db.query('TRUNCATE audit_logs, movements, stock_positions, shipments CASCADE');
+    await db.getRepository(SystemSettingEntity).delete({ key: 'recent_duplicate_minutes' });
     await db.query('DELETE FROM batches WHERE product_id = $1 AND id <> $2', [productId, batchId]);
     await db.query("UPDATE system_settings SET value = CASE key WHEN 'shipment_photo_minimum' THEN '1' ELSE '5' END WHERE key IN ('shipment_photo_minimum', 'shipment_photo_maximum')");
     await db.query('UPDATE products SET active = true WHERE id = $1', [productId]);
@@ -120,6 +122,14 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     const second = await incoming(sector, confirmed, key);
     expect(second.id).not.toBe(first.id); expect(await incoming(sector, undefined, key)).toMatchObject({ id: second.id });
     expect((await db.getRepository(AuditLogEntity).findOneByOrFail({ entityId: second.id, action: 'SHIPMENT_CREATE' })).newValues).toMatchObject({ confirmedDuplicateKeys: confirmed });
+  });
+  it('envios usam o mesmo intervalo configurado e preservam as reservas no aviso', async () => {
+    await seed(100); await reserve();
+    const settings = new SettingsService(db, audit);
+    await settings.updateDuplicateWindow(120, users.REVISAO.id, metadata());
+    await expect(reserve()).rejects.toMatchObject({ response: { details: { windowMinutes: 120 } } });
+    expect(await balance()).toBe(94);
+    expect(await db.getRepository(ShipmentEntity).count()).toBe(1);
   });
   it('avisa envio da Revisão sem reservar duas vezes nem manter fotos do envio rejeitado', async () => {
     await seed(100); await reserve();

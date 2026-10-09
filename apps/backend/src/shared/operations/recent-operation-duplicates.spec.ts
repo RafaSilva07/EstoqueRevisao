@@ -13,9 +13,10 @@ const operation: DuplicateOperation = { kind: 'MOVEMENT', type: 'REVISAO', origi
 
 describe('aviso de operação recente idêntica', () => {
   const query = jest.fn<Promise<unknown[]>, [string, unknown[]?]>();
-  const manager = { query } as unknown as EntityManager;
+  const findOneBy = jest.fn();
+  const manager = { query, findOneBy } as unknown as EntityManager;
   const match = { id: uuid, code: 'REV-000001', createdAt: new Date(), responsible: 'Outro operador', status: 'EFETIVADA' };
-  beforeEach(() => { query.mockReset(); query.mockResolvedValue([]); });
+  beforeEach(() => { query.mockReset(); query.mockResolvedValue([]); findOneBy.mockReset(); findOneBy.mockResolvedValue(null); });
   async function warning(input = operation): Promise<{ details: { duplicateKeys: string[] } }> {
     query.mockResolvedValueOnce([]).mockResolvedValueOnce([match]);
     try { await confirmRecentDuplicates(manager, input); }
@@ -51,6 +52,21 @@ describe('aviso de operação recente idêntica', () => {
     expect(query.mock.calls[1][0]).toContain('o.created_at >= clock_timestamp()');
     expect(query.mock.calls[1][0]).toContain("o.status='EFETIVADA'");
     expect(query.mock.calls[1][1]!.at(-1)).toBe(30);
+  });
+  it.each([1, 90, 1440])('usa o intervalo configurado de %s minutos na consulta e no aviso', async (minutes) => {
+    findOneBy.mockResolvedValue({ value: String(minutes) });
+    const response = await warning();
+    expect((response as { message?: string }).message).toContain(`${minutes} minutos`);
+    expect(response).toMatchObject({ details: { windowMinutes: minutes } });
+    expect(query.mock.calls[1][1]!.at(-1)).toBe(minutes);
+    expect(findOneBy).toHaveBeenCalledWith(expect.any(Function), { key: 'recent_duplicate_minutes' });
+  });
+  it('lê alterações do intervalo na próxima verificação sem cache ou reinício', async () => {
+    findOneBy.mockResolvedValueOnce({ value: '10' }).mockResolvedValueOnce({ value: '120' });
+    await confirmRecentDuplicates(manager, operation);
+    await confirmRecentDuplicates(manager, operation);
+    expect(query.mock.calls[1][1]!.at(-1)).toBe(10);
+    expect(query.mock.calls[3][1]!.at(-1)).toBe(120);
   });
   it('montagem compara todas as parcelas sem depender da primeira origem ou de dados de apresentação', () => {
     const a = { batchId: uuid, stockLocationId: uuid, quantity: 12 };

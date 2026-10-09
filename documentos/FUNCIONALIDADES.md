@@ -165,7 +165,7 @@ Abaixo dos filtros há dois níveis de seleção rápida: **Todos** ou um estoqu
 
 ## Conferência de possíveis duplicatas
 
-Entradas, saídas, transferências, revisões e novos envios/montagens avisam antes da gravação quando existe uma operação inteira equivalente nos últimos 30 minutos. A confirmação mostra código, responsável, data/hora e estado anteriores, preserva o formulário/fotos e oferece voltar ou **Conferi: continuar mesmo assim**. O aceite não substitui validação de saldo nem idempotência; regras em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#aviso-de-possível-duplicidade-recente).
+Entradas, saídas, transferências, revisões e novos envios/montagens avisam antes da gravação quando existe uma operação inteira equivalente dentro do intervalo configurado (padrão: 30 minutos). A confirmação destaca **Atenção: possível operação duplicada**, com ícone e contraste nos dois temas, mostra código, responsável, data/hora e estado anteriores, preserva o formulário/fotos e oferece voltar ou **Conferi: continuar mesmo assim**. O aceite não substitui validação de saldo nem idempotência; regras em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#aviso-de-possível-duplicidade-recente).
 
 As rotas de criação existentes podem retornar `409/RECENT_DUPLICATE_CONFIRMATION_REQUIRED`, com `details.duplicateKeys` e `details.duplicates`. Reenvio explícito usa `confirmedDuplicateKeys` e a mesma `requestKey`; não foi criado outro fluxo ou endpoint. Confirmações de validade e de duplicidade permanecem independentes.
 
@@ -217,6 +217,8 @@ Lote, fabricação e validade são preservados; não há edição desses campos 
 
 Administradores no modo `ADMIN` acessam **Configurações** para definir o prazo de separação (5 a 1440 minutos, inicialmente 180), os limites de fotos por item dos envios e um ou mais destinos internos cadastrados para a revisão. O formulário de revisão consulta os destinos e monta os campos dinamicamente, mantendo total, distribuído e restante e bloqueando diferenças.
 
+Em **Aviso de operação duplicada**, o administrador geral define o intervalo de verificação entre 1 e 1440 minutos. `GET /settings` retorna `recentDuplicateMinutes`; `PATCH /settings/recent-duplicates` recebe `{ minutes }`, com autorização administrativa, validação inteira e auditoria. A alteração vale para a próxima conferência, sem reinício; o formulário reutiliza rascunhos existentes.
+
 **Preferências** aparece em **Menu e conta** e diretamente na barra lateral do desktop para todos os perfis. Cada conta pode salvar modo claro/escuro e qualquer cor hexadecimal para o fundo geral, ou restaurar o fundo padrão do tema. A alteração acompanha a conta em novos logins e não muda parâmetros operacionais. `GET/PATCH /api/v1/auth/preferences` exigem sessão autenticada; a cor é validada na API e no banco.
 
 No recebimento Expedição → Revisão, **Sim, separar agora** coloca o envio em `EM_SEPARACAO`, exibe o prazo e permite salvar as quantidades de retorno como rascunho. A Expedição acompanha o estado sem ação. A conclusão exige fotos dentro dos limites em cada item retornado, credita somente a quantidade líquida e cria um envio de retorno ligado ao original. O retorno aguarda decisão da Expedição e é marcado como execução PCP não necessária. Se o prazo vencer, o acesso seguinte consolida integralmente o recebimento sem retorno.
@@ -232,6 +234,7 @@ GET   /api/v1/settings/shipment-photos
 PATCH /api/v1/settings/immediate-separation
 PATCH /api/v1/settings/shipment-photos
 PATCH /api/v1/settings/review-destinations
+PATCH /api/v1/settings/recent-duplicates
 PATCH /api/v1/shipments/:id/separation-draft
 POST  /api/v1/shipments/:id/separation-completion
 ```

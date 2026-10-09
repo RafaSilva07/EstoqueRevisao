@@ -33,6 +33,8 @@ describe('conferência de possível duplicidade', () => {
       expect(test.created).not.toHaveBeenCalled(); expect(post).toHaveBeenCalledTimes(1);
       expect(test.host.textContent).toContain('ENT-000001'); expect(test.host.textContent).toContain('Operador A');
       expect(test.host.textContent).toContain('08/10/2026');
+      expect(test.host.querySelector('.notice-duplicate .notice-title')?.textContent).toBe('Atenção: possível operação duplicada');
+      expect(test.current().confirmationTitle('Confirmar')).toBe('Atenção: possível operação duplicada');
       expect(test.current().confirmationLabel('Confirmar')).toBe('Conferi: continuar mesmo assim');
       await act(async () => { await test.current().submit({ quantity: 10 }); });
       expect(post.mock.calls[1][1]).toMatchObject({ requestKey: key, confirmedDuplicateKeys: duplicate.details!.duplicateKeys });

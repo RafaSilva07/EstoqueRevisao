@@ -52,7 +52,7 @@ export function useMovementSubmission(path: string, onCreated: (id: string) => v
     }
   }
   function confirmationTitle(fallback: string) {
-    return conflict?.code === 'RECENT_DUPLICATE_CONFIRMATION_REQUIRED' ? 'Possível movimentação duplicada' : conflict ? 'Mesmo lote com outra validade' : fallback;
+    return conflict?.code === 'RECENT_DUPLICATE_CONFIRMATION_REQUIRED' ? 'Atenção: possível operação duplicada' : conflict ? 'Mesmo lote com outra validade' : fallback;
   }
   function confirmationLabel(fallback: string, expirationLabel = 'Confirmar com validades separadas') {
     return conflict?.code === 'RECENT_DUPLICATE_CONFIRMATION_REQUIRED' ? 'Conferi: continuar mesmo assim' : conflict ? expirationLabel : fallback;

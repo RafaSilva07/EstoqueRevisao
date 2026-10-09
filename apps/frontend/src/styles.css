@@ -305,6 +305,11 @@ dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font-weight: 700; }
 .duplicate-operation-list { margin: .7rem 0; }
 .duplicate-operation-list li { margin-bottom: .5rem; }
 .duplicate-operation-list :is(strong, span, small) { display: block; overflow-wrap: anywhere; }
+.notice.notice-duplicate { border-color: #d6a34d; background: #fff4dd; color: #71460d; }
+.notice-duplicate .notice-title { margin-bottom: .5rem; font-size: 1.05rem; }
+.duplicate-warning-heading { display: flex; align-items: center; gap: .65rem; }
+.duplicate-warning-heading svg { width: 1.6rem; height: 1.6rem; flex: 0 0 auto; }
+:root[data-theme="dark"] .notice.notice-duplicate { border-color: #b1843a; background: #3b3021; color: #ffe0a1; }
 .review-observation { display: grid; gap: .4rem; margin-top: 1rem; }
 .review-items { display: grid; gap: 1rem; margin: 1rem 0; }
 .review-card { display: grid; gap: 1rem; padding: 1rem; }

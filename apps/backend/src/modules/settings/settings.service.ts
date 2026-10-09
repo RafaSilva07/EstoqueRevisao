@@ -7,6 +7,7 @@ import { ReviewLocationRole } from '../stocks/domain/review-location-role.enum';
 import { StockLocationEntity } from '../stocks/entities/stock-location.entity';
 import { ReviewDestinationEntity } from './review-destination.entity';
 import { SystemSettingEntity } from './system-setting.entity';
+import { MAX_RECENT_DUPLICATE_MINUTES, RECENT_DUPLICATE_MINUTES_KEY, recentDuplicateMinutes } from './recent-duplicate-window';
 
 export const IMMEDIATE_SEPARATION_MINUTES = 'immediate_separation_minutes';
 export const SHIPMENT_PHOTO_MINIMUM = 'shipment_photo_minimum';
@@ -17,19 +18,21 @@ export interface ShipmentPhotoLimits { minimum: number; maximum: number }
 export class SettingsService {
   constructor(private readonly dataSource: DataSource, private readonly audit: AuditService) {}
 
-  async getOperational(manager: EntityManager = this.dataSource.manager): Promise<{ immediateSeparationMinutes: number; reviewDestinations: StockLocationEntity[]; shipmentPhotos: ShipmentPhotoLimits }> {
-    const [setting, destinations, shipmentPhotos] = await Promise.all([
+  async getOperational(manager: EntityManager = this.dataSource.manager): Promise<{ immediateSeparationMinutes: number; reviewDestinations: StockLocationEntity[]; shipmentPhotos: ShipmentPhotoLimits; recentDuplicateMinutes: number }> {
+    const [setting, destinations, shipmentPhotos, duplicateMinutes] = await Promise.all([
       manager.findOneBy(SystemSettingEntity, { key: IMMEDIATE_SEPARATION_MINUTES }),
       manager.getRepository(ReviewDestinationEntity).createQueryBuilder('configuration')
         .innerJoinAndSelect('configuration.stockLocation', 'location')
         .where('location.active = true').orderBy('location.name', 'ASC').getMany(),
       this.photoLimits(manager),
+      recentDuplicateMinutes(manager),
     ]);
     if (!setting) throw new ConflictException('A configuracao do prazo de separacao nao foi inicializada.');
     return {
       immediateSeparationMinutes: Number(setting.value),
       reviewDestinations: destinations.map((item) => item.stockLocation),
       shipmentPhotos,
+      recentDuplicateMinutes: duplicateMinutes,
     };
   }
 
@@ -61,6 +64,19 @@ export class SettingsService {
 
   async separationMinutes(manager: EntityManager): Promise<number> {
     return (await this.getOperational(manager)).immediateSeparationMinutes;
+  }
+
+  async updateDuplicateWindow(minutes: number, userId: string, metadata: AuditRequestMetadata): Promise<Awaited<ReturnType<SettingsService['getOperational']>>> {
+    if (!Number.isSafeInteger(minutes) || minutes < 1 || minutes > MAX_RECENT_DUPLICATE_MINUTES) {
+      throw new BadRequestException('Informe um intervalo inteiro entre 1 e 1440 minutos.');
+    }
+    await this.dataSource.transaction(async (manager) => {
+      await manager.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`settings:${RECENT_DUPLICATE_MINUTES_KEY}`]);
+      const before = await recentDuplicateMinutes(manager);
+      await manager.save(Object.assign(new SystemSettingEntity(), { key: RECENT_DUPLICATE_MINUTES_KEY, value: String(minutes), updatedById: userId }));
+      await this.audit.record({ ...metadata, manager, userId, action: 'SETTINGS_DUPLICATE_WINDOW_UPDATE', entityType: 'SYSTEM_SETTING', entityId: RECENT_DUPLICATE_MINUTES_KEY, result: 'SUCCESS', oldValues: { minutes: before }, newValues: { minutes } });
+    });
+    return this.getOperational();
   }
 
   async reviewDestinations(manager: EntityManager): Promise<StockLocationEntity[]> {

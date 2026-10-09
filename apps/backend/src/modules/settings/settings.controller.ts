@@ -4,7 +4,7 @@ import { getAuditRequestMetadata } from '../audit/audit-request-metadata';
 import { AuthenticatedUser } from '../auth/authenticated-user.interface';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { AdminGuard } from '../users/admin.guard';
-import { UpdateReviewDestinationsDto, UpdateSeparationTimeoutDto, UpdateShipmentPhotoLimitsDto } from './settings.dto';
+import { UpdateDuplicateWindowDto, UpdateReviewDestinationsDto, UpdateSeparationTimeoutDto, UpdateShipmentPhotoLimitsDto } from './settings.dto';
 import { SettingsService } from './settings.service';
 
 @Controller('settings')
@@ -19,6 +19,11 @@ export class SettingsController {
 
   @Get() @UseGuards(AdminGuard)
   get(): ReturnType<SettingsService['getOperational']> { return this.settings.getOperational(); }
+
+  @Patch('recent-duplicates') @UseGuards(AdminGuard)
+  duplicateWindow(@Body() dto: UpdateDuplicateWindowDto, @Req() req: Request): ReturnType<SettingsService['updateDuplicateWindow']> {
+    return this.settings.updateDuplicateWindow(dto.minutes, (req.user as AuthenticatedUser).id, getAuditRequestMetadata(req));
+  }
 
   @Patch('immediate-separation') @UseGuards(AdminGuard)
   timeout(@Body() dto: UpdateSeparationTimeoutDto, @Req() req: Request): ReturnType<SettingsService['updateTimeout']> {

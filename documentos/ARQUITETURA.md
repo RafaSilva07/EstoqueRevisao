@@ -193,7 +193,7 @@ As permissões são `pcp.movements.read` e `pcp.movements.execute`, ajustáveis 
 
 ## Configurações e separação imediata
 
-`SettingsModule` mantém apenas os parâmetros necessários: `system_settings` armazena o prazo em minutos e os limites de fotos por item; `review_process_destinations` relaciona locais cadastrados aos destinos atuais. Alterações são transacionais, administrativas e auditadas. `GET /settings/shipment-photos` fornece os limites aos formulários de envio; a atualização exige `AdminGuard`.
+`SettingsModule` mantém apenas os parâmetros necessários: `system_settings` armazena o prazo em minutos, os limites de fotos por item e `recent_duplicate_minutes`; `review_process_destinations` relaciona locais cadastrados aos destinos atuais. Alterações são transacionais, administrativas e auditadas. `GET /settings/shipment-photos` fornece os limites aos formulários de envio; a atualização exige `AdminGuard`. A janela de duplicidade é lida pelo mesmo `EntityManager` de cada operação, sem cache, com padrão 30 enquanto a chave não existir. `PATCH /settings/recent-duplicates` valida 1–1440 minutos e grava chave/responsável junto com `SETTINGS_DUPLICATE_WINDOW_UPDATE`; lock transacional serializa alterações da chave para preservar o antes/depois. Não exige migration: reutiliza a tabela de configurações e cria a chave no primeiro salvamento.
 
 O estado intermediário pertence a `shipments`, pois ainda não existe movimentação efetiva de estoque. Cada envio guarda início/expiração e possui rascunhos por item. A finalização e a expiração bloqueiam a linha do envio; a primeira transição válida calcula o crédito e cria a movimentação. Retornos usam outro `shipment`, com `source_shipment_id`, preservando o fluxo existente de fotos e decisão do destinatário.
 

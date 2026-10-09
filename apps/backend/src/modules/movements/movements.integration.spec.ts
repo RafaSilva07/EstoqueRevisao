@@ -24,6 +24,8 @@ import { MovementItemDistributionEntity } from './entities/movement-item-distrib
 import { MovementEntity } from './entities/movement.entity';
 import { MovementsRepository } from './movements.repository';
 import { MovementsService } from './movements.service';
+import { SettingsService } from '../settings/settings.service';
+import { SystemSettingEntity } from '../settings/system-setting.entity';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const describeWithDatabase = databaseUrl ? describe : describe.skip;
@@ -65,6 +67,7 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
 
   beforeEach(async () => {
     await dataSource.query('TRUNCATE TABLE audit_logs, movement_items, movements, stock_positions CASCADE');
+    await dataSource.getRepository(SystemSettingEntity).delete({ key: 'recent_duplicate_minutes' });
   });
   afterAll(async () => { if (dataSource?.isInitialized) await dataSource.destroy(); });
 
@@ -153,6 +156,35 @@ describeWithDatabase('MovementsService (PostgreSQL)', () => {
     }
     throw new Error('Esperado aviso de duplicidade.');
   }
+
+  it('a configuração amplia e reduz a janela para novas verificações sem alterar operações anteriores', async () => {
+    const first = await create();
+    await dataSource.query("UPDATE movements SET created_at=clock_timestamp()-interval '45 minutes' WHERE id=$1", [first.id]);
+    const settings = new SettingsService(dataSource, new AuditService(new AuditRepository(dataSource.getRepository(AuditLogEntity))));
+    const metadata = { requestId: randomUUID(), ipAddress: null, userAgent: 'jest' };
+    expect((await settings.getOperational()).recentDuplicateMinutes).toBe(30);
+    await settings.updateDuplicateWindow(60, userId, metadata);
+    await expect(create()).rejects.toMatchObject({ response: { details: { windowMinutes: 60 } } });
+    expect(await dataSource.getRepository(MovementEntity).count()).toBe(1);
+    await settings.updateDuplicateWindow(10, userId, metadata);
+    await expect(create()).resolves.toBeDefined();
+    expect(await dataSource.getRepository(MovementEntity).count()).toBe(2);
+    expect(await stockService.getBalance({ productId: productAId, batchId: batchAId, stockLocationId: destinationId })).toBe(20);
+    expect(await dataSource.getRepository(SystemSettingEntity).findOneBy({ key: 'recent_duplicate_minutes' })).toMatchObject({ value: '10', updatedById: userId });
+  });
+
+  it('falha de auditoria reverte integralmente a alteração do intervalo', async () => {
+    const settings = new SettingsService(dataSource, new AuditService(new AuditRepository(dataSource.getRepository(AuditLogEntity))));
+    const metadata = { requestId: randomUUID(), ipAddress: null, userAgent: 'jest' };
+    await settings.updateDuplicateWindow(60, userId, metadata);
+    const spy = jest.spyOn(AuditService.prototype, 'record').mockRejectedValueOnce(new Error('audit failed'));
+    try { await expect(settings.updateDuplicateWindow(120, userId, metadata)).rejects.toThrow('audit failed'); }
+    finally { spy.mockRestore(); }
+    expect((await settings.getOperational()).recentDuplicateMinutes).toBe(60);
+    const entries = await dataSource.getRepository(AuditLogEntity).findBy({ action: 'SETTINGS_DUPLICATE_WINDOW_UPDATE' });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ userId, oldValues: { minutes: 30 }, newValues: { minutes: 60 } });
+  });
 
   it.each(['entrada', 'saída', 'transferência', 'revisão'])('avisa %s idêntica, faz rollback e permite confirmação auditada', async (kind) => {
     await seedStock(productAId, batchAId, 100);

@@ -233,3 +233,7 @@ Produto/lote e distribuição passaram a ocupar a largura inteira do card mobile
 ## Etapa 73 — Aviso de possível duplicidade
 
 Novas operações comuns passam a conferir equivalência operacional recente e exigir confirmação explícita, sem proibir repetições legítimas. Idempotência e transações permanecem; acrescentado somente índice de consulta pela migration `RecentOperationLookup1791504000000`, aplicada ao Supabase de teste. Publicação exclusiva na `develop`, sem alterações na produção. [Relatório da etapa 73](./relatorios/RELATORIO_ETAPA_73_AVISO_DUPLICIDADE.md).
+
+## Etapa 74 — Intervalo configurável de duplicidade
+
+O aviso recebeu título e contraste mais destacados. O administrador geral pode ajustar a janela em minutos pelas Configurações, com persistência, validação e auditoria, substituindo a janela fixa da etapa 73. Padrão preservado em 30 minutos; sem migration. [Relatório da etapa 74](./relatorios/RELATORIO_ETAPA_74_INTERVALO_DUPLICIDADE.md).

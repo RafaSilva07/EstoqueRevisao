@@ -9,11 +9,13 @@ export function SettingsPage() {
   const [locations, setLocations] = useState<StockLocation[]>([]);
   const [minutes, setMinutes] = useState(''); const [selected, setSelected] = useState<string[]>([]);
   const [photoMinimum, setPhotoMinimum] = useState('1'); const [photoMaximum, setPhotoMaximum] = useState('5');
+  const [duplicateMinutes, setDuplicateMinutes] = useState('30');
   const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false);
   const [error, setError] = useState(''); const [success, setSuccess] = useState('');
   const timeoutDraft = useFormDraft('settings:timeout', 'Prazo de separação', { minutes }, (saved) => setMinutes(saved.minutes), { enabled: !loading, busy, reusable: true });
   const destinationsDraft = useFormDraft('settings:destinations', 'Destinos da revisão', { selected }, (saved) => setSelected(saved.selected), { enabled: !loading, busy, reusable: true });
   const photosDraft = useFormDraft('settings:photos', 'Limites de fotos', { photoMinimum, photoMaximum }, (saved) => { setPhotoMinimum(saved.photoMinimum); setPhotoMaximum(saved.photoMaximum); }, { enabled: !loading, busy, reusable: true });
+  const duplicateDraft = useFormDraft('settings:duplicates', 'Intervalo de duplicidade', { duplicateMinutes }, (saved) => setDuplicateMinutes(saved.duplicateMinutes), { enabled: !loading, busy, reusable: true });
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -21,6 +23,7 @@ export function SettingsPage() {
         api.get<OperationalSettings>('/settings'), api.get<Paginated<StockLocation>>('/stocks?limit=100&active=true'),
       ]);
       setSettings(configuration); setMinutes(String(configuration.immediateSeparationMinutes));
+      setDuplicateMinutes(String(configuration.recentDuplicateMinutes ?? 30));
       setPhotoMinimum(String(configuration.shipmentPhotos.minimum)); setPhotoMaximum(String(configuration.shipmentPhotos.maximum));
       setSelected(configuration.reviewDestinations.map((item) => item.id));
       setLocations(locationData.items.filter((item) => item.kind !== 'EXTERNAL' && !item.sector && item.reviewRole !== 'SOURCE'));
@@ -41,6 +44,20 @@ export function SettingsPage() {
     catch (caught) { setError(caught instanceof Error ? caught.message : 'Nao foi possivel salvar os destinos.'); }
     finally { setBusy(false); }
   }
+  async function saveDuplicateWindow(event: FormEvent) {
+    event.preventDefault();
+    const value = Number(duplicateMinutes);
+    if (!Number.isSafeInteger(value) || value < 1 || value > 1440) {
+      setError('Informe um intervalo inteiro entre 1 e 1.440 minutos.'); return;
+    }
+    setBusy(true); setError(''); setSuccess('');
+    try {
+      const configuration = await api.patch<OperationalSettings>('/settings/recent-duplicates', { minutes: value });
+      setSettings(configuration); setDuplicateMinutes(String(configuration.recentDuplicateMinutes));
+      await duplicateDraft.complete(); setSuccess('Intervalo atualizado para as próximas verificações de duplicidade.');
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Não foi possível salvar o intervalo.'); }
+    finally { setBusy(false); }
+  }
   async function savePhotoLimits(event: FormEvent) {
     event.preventDefault();
     const minimum = Number(photoMinimum); const maximum = Number(photoMaximum);
@@ -52,10 +69,14 @@ export function SettingsPage() {
     catch (caught) { setError(caught instanceof Error ? caught.message : 'Não foi possível salvar os limites de fotos.'); }
     finally { setBusy(false); }
   }
-  if ((loading && !settings) || !timeoutDraft.ready || !destinationsDraft.ready || !photosDraft.ready) return <LoadingState label="Carregando configuracoes" />;
+  if ((loading && !settings) || !timeoutDraft.ready || !destinationsDraft.ready || !photosDraft.ready || !duplicateDraft.ready) return <LoadingState label="Carregando configuracoes" />;
   return <><PageHeader eyebrow="Administracao" title="Configuracoes" description="Parametros operacionais aplicados somente a novos processos." />
     {error && <Notice kind="error">{error}</Notice>}{success && <Notice kind="success" onClose={() => setSuccess('')}>{success}</Notice>}
     <div className="settings-grid">
+      <form className="surface form-panel" onSubmit={(event) => void saveDuplicateWindow(event)}><h2>Aviso de operação duplicada</h2><p className="muted">Compara operações idênticas dentro deste intervalo. O aviso permite conferir ou continuar mesmo assim; não bloqueia repetições legítimas.</p>
+        <label>Intervalo de verificação (minutos)<input type="number" inputMode="numeric" min="1" max="1440" step="1" value={duplicateMinutes} onChange={(event) => setDuplicateMinutes(event.target.value)} required /></label>
+        <p className="muted">De 1 a 1.440 minutos (24 horas). Padrão: 30 minutos. Aplicado às próximas verificações, sem reiniciar o sistema.</p>
+        <DraftActions draft={duplicateDraft} /><button disabled={busy || !duplicateDraft.ready}>Salvar intervalo de duplicidade</button></form>
       <form className="surface form-panel" onSubmit={(event) => void savePhotoLimits(event)}><h2>Fotos dos envios</h2><p className="muted">Quantidade permitida por produto em novos envios e retornos da separação. Até 100 fotos por envio.</p>
         <label>Quantidade mínima<input type="number" inputMode="numeric" min="1" max="10" step="1" value={photoMinimum} onChange={(event) => setPhotoMinimum(event.target.value)} required /></label>
         <label>Quantidade máxima<input type="number" inputMode="numeric" min="1" max="10" step="1" value={photoMaximum} onChange={(event) => setPhotoMaximum(event.target.value)} required /></label>

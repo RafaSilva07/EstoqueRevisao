@@ -2,9 +2,15 @@ import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { UpdateReviewDestinationsDto, UpdateSeparationTimeoutDto, UpdateShipmentPhotoLimitsDto } from './settings.dto';
+import { UpdateDuplicateWindowDto, UpdateReviewDestinationsDto, UpdateSeparationTimeoutDto, UpdateShipmentPhotoLimitsDto } from './settings.dto';
 
 describe('DTOs de configuracoes operacionais', () => {
+  it.each([1, 30, 90, 1440])('aceita intervalo de duplicidade de %s minutos', async (minutes) => {
+    expect(await validate(plainToInstance(UpdateDuplicateWindowDto, { minutes }))).toHaveLength(0);
+  });
+  it.each([undefined, null, 0, -1, 1.5, 1441, 'abc'])('rejeita intervalo de duplicidade inválido: %s', async (minutes) => {
+    expect((await validate(plainToInstance(UpdateDuplicateWindowDto, { minutes }))).length).toBeGreaterThan(0);
+  });
   it.each([5, 180, 1440])('aceita prazo valido de %s minutos', async (minutes) => {
     expect(await validate(plainToInstance(UpdateSeparationTimeoutDto, { minutes }))).toHaveLength(0);
   });
