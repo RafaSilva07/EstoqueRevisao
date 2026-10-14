@@ -14,6 +14,7 @@ Este diretório é a fonte principal de contexto para desenvolvimento. Antes de 
 | Decisão sobre separação imediata e configurações capturadas | [ADR_SEPARACAO_CONFIGURACOES.md](./ADR_SEPARACAO_CONFIGURACOES.md) |
 | Limpeza para produção: plano e execução | [scripts/limpeza_teste_para_producao.sql](./scripts/limpeza_teste_para_producao.sql) · [Registro de execução](./relatorios/RELATORIO_ETAPA_60_LIMPEZA_BANCO_PRODUCAO.md) |
 | Carga do catálogo Oderich e pendências da planilha | [Registro da importação](./relatorios/RELATORIO_ETAPA_61_IMPORTACAO_PRODUTOS.md) |
+| Aplicação manual das migrations pendentes de rascunhos/correções | [SQL da etapa 71](./scripts/aplicar_migrations_etapa_71.sql) · [Diagnóstico da produção](./relatorios/RELATORIO_ETAPA_75_MIGRATIONS_PENDENTES_PRODUCAO.md) |
 
 Os quatro documentos acima são canônicos e devem ser atualizados quando uma etapa mudar o comportamento do sistema. Relatórios e ADRs anteriores permanecem em [`arquivo/`](./arquivo/README.md) apenas como evidência histórica; não devem ser usados isoladamente para determinar o comportamento atual.
 

@@ -237,3 +237,7 @@ Novas operações comuns passam a conferir equivalência operacional recente e e
 ## Etapa 74 — Intervalo configurável de duplicidade
 
 O aviso recebeu título e contraste mais destacados. O administrador geral pode ajustar a janela em minutos pelas Configurações, com persistência, validação e auditoria, substituindo a janela fixa da etapa 73. Padrão preservado em 30 minutos; sem migration. [Relatório da etapa 74](./relatorios/RELATORIO_ETAPA_74_INTERVALO_DUPLICIDADE.md).
+
+## Etapa 75 — Pendências de schema em produção
+
+Após a promoção das etapas 73–74, o diagnóstico enviado pelo usuário mostrou as duas migrations da etapa 71 pendentes em produção. Preparado SQL manual fiel às migrations, com transação e registro no TypeORM, sem alteração de código funcional ou execução no Supabase. [Relatório da etapa 75](./relatorios/RELATORIO_ETAPA_75_MIGRATIONS_PENDENTES_PRODUCAO.md).
