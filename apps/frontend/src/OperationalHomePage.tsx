@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { api, Movement, Paginated, UserSession } from './api';
 import { EmptyState, LoadingState, Notice } from './components';
-import { formatDateTime } from './format';
+import { formatDateTime, formatPendingAge } from './format';
 import { MovementDetailModal } from './MovementDetailModal';
 import { ShipmentSummaryModal } from './ShipmentSummaryModal';
 import { SectionMenu } from './Navigation';
@@ -20,6 +20,11 @@ const movementLabels: Record<Movement['type'], string> = {
 
 function PanelHeading({ id, eyebrow, title, action }: { id: string; eyebrow: string; title: string; action?: ReactNode }) {
   return <div className="dashboard-section-heading"><div><span className="eyebrow">{eyebrow}</span><h2 id={id}>{title}</h2></div>{action}</div>;
+}
+
+function OldestPendingAge({ since, now }: { since: string | null; now: number }) {
+  const age = since ? formatPendingAge(since, now) : null;
+  return age && since ? <small className="pending-age">Mais antiga <time dateTime={since} title={formatDateTime(since)}>{age}</time>.</small> : null;
 }
 
 function HomeRecordList({ items, onOpen }: { items: HistoryItem[]; onOpen: (item: HistoryItem) => void }) {
@@ -45,7 +50,10 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
   const [openShipments, setOpenShipments] = useState<HistoryItem[]>([]);
   const [pendingAcceptance, setPendingAcceptance] = useState(0);
   const [inSeparation, setInSeparation] = useState(0);
+  const [oldestAcceptanceAt, setOldestAcceptanceAt] = useState<string | null>(null);
+  const [oldestSeparationAt, setOldestSeparationAt] = useState<string | null>(null);
   const [pendingPcp, setPendingPcp] = useState<HistoryItem[]>([]);
+  const [pendingPcpTotal, setPendingPcpTotal] = useState(0);
   const [recentFinished, setRecentFinished] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -53,6 +61,12 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
 
   const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
   const [selectedShipmentRecordId, setSelectedShipmentRecordId] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -61,8 +75,8 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
       try {
         const shipmentRequests = canReadShipments ? Promise.all([
           api.get<Paginated<HistoryItem>>('/history?scope=OPEN&kind=SHIPMENT&page=1&limit=10'),
-          api.get<Paginated<Shipment>>('/shipments?view=pending&status=AGUARDANDO_RECEBIMENTO&page=1&limit=1'),
-          api.get<Paginated<Shipment>>('/shipments?view=open&status=EM_SEPARACAO&page=1&limit=1'),
+          api.get<Paginated<Shipment>>('/shipments?view=pending&status=AGUARDANDO_RECEBIMENTO&sort=OLDEST&page=1&limit=1'),
+          api.get<Paginated<Shipment>>('/shipments?view=open&status=EM_SEPARACAO&sort=OLDEST&page=1&limit=1'),
         ]) : Promise.resolve(null);
         const movementRequests = canReadMovements || canReadPcp ? Promise.all([
           api.get<Paginated<HistoryItem>>('/history?scope=PENDING_PCP&sort=OLDEST&page=1&limit=5'),
@@ -74,7 +88,11 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
         setOpenShipments(shipmentData?.[0].items ?? []);
         setPendingAcceptance(shipmentData?.[1].meta.total ?? 0);
         setInSeparation(shipmentData?.[2].meta.total ?? 0);
+        setOldestAcceptanceAt(shipmentData?.[1].items[0]?.createdAt ?? null);
+        setOldestSeparationAt(shipmentData?.[2].items[0]?.createdAt ?? null);
         setPendingPcp(movementData?.[0].items ?? []);
+        setPendingPcpTotal(movementData?.[0].meta.total ?? 0);
+        setNow(Date.now());
         setRecentFinished(finishedData?.items ?? []);
         setError('');
       } catch (caught) {
@@ -83,7 +101,7 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
     }
     void load();
     return () => { active = false; };
-  }, [canReadMovements, canReadPcp, canReadShipments]);
+  }, [canReadMovements, canReadPcp, canReadShipments, sector, user.id]);
 
   function openMovement(movement: HistoryItem) {
     if (movement.kind === 'SHIPMENT') {
@@ -92,13 +110,24 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
     } else setSelectedMovement(movement);
   }
 
-  const showAttention = !loading && !error && (pendingAcceptance > 0 || inSeparation > 0);
+  const showPcpAttention = canReadPcp && pendingPcpTotal > 0;
+  const showAttention = !loading && !error && (pendingAcceptance > 0 || inSeparation > 0 || showPcpAttention);
   return <section className="operational-home">
     {showAttention && <section className="home-attention" aria-labelledby="home-attention-title">
       <div className="home-attention-title"><span className="attention-dot" aria-hidden="true" /><div><span className="eyebrow">Atenção necessária</span><h1 id="home-attention-title">Há atividades aguardando ação</h1></div></div>
       <div className="home-attention-grid">
-        {pendingAcceptance > 0 && <button type="button" className="home-attention-card danger" onClick={() => navigate('shipments')}><strong>{pendingAcceptance}</strong><span>{pendingAcceptance === 1 ? 'solicitação aguarda seu aceite' : 'solicitações aguardam seu aceite'}</span><small>Abrir recebimentos →</small></button>}
-        {inSeparation > 0 && <button type="button" className="home-attention-card warning" onClick={() => navigate(sector === 'REVISAO' ? 'shipments' : 'shipment-sent')}><strong>{inSeparation}</strong><span>{inSeparation === 1 ? 'movimentação está em separação' : 'movimentações estão em separação'}</span><small>Acompanhar separações →</small></button>}
+        {pendingAcceptance > 0 && <button type="button" className="home-attention-card danger" onClick={() => navigate('shipments')}><strong>{pendingAcceptance}</strong><span className="home-attention-copy">
+          <span>{pendingAcceptance === 1 ? 'solicitação aguarda seu aceite' : 'solicitações aguardam seu aceite'}</span>
+          <OldestPendingAge since={oldestAcceptanceAt} now={now} /><small>Abrir recebimentos →</small>
+        </span></button>}
+        {inSeparation > 0 && <button type="button" className="home-attention-card warning" onClick={() => navigate(sector === 'REVISAO' ? 'shipments' : 'shipment-sent')}><strong>{inSeparation}</strong><span className="home-attention-copy">
+          <span>{inSeparation === 1 ? 'movimentação está em separação' : 'movimentações estão em separação'}</span>
+          <OldestPendingAge since={oldestSeparationAt} now={now} /><small>Acompanhar separações →</small>
+        </span></button>}
+        {showPcpAttention && <button type="button" className="home-attention-card warning" onClick={() => navigate('pcp')}><strong>{pendingPcpTotal}</strong><span className="home-attention-copy">
+          <span>{pendingPcpTotal === 1 ? 'movimentação aguarda execução no PCP' : 'movimentações aguardam execução no PCP'}</span>
+          <OldestPendingAge since={pendingPcp[0]?.occurredAt ?? null} now={now} /><small>Abrir fila do PCP →</small>
+        </span></button>}
       </div>
     </section>}
 

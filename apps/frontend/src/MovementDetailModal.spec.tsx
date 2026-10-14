@@ -30,6 +30,20 @@ describe('detalhe da movimentação', () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     host = document.createElement('div'); document.body.append(host); root = createRoot(host);
   });
+  it('resolve a observação de retorno antigo pelo recebimento original também no detalhe PCP', () => {
+    const originalId = '4378bb70-bef3-4a00-a046-4e2bfb58db75';
+    const shipmentId = '4378bb70-bef3-4a00-a046-4e2bfb58db76';
+    const originalObservation = `Retorno imediato do recebimento ${originalId}.`;
+    const returned = { ...movement, shipmentId, type: 'SAIDA_EXTERNA', codigoMovimentacao: 'SAI-000321', observation: originalObservation,
+      shipment: { id: shipmentId, codigoMovimentacao: 'SAI-000321', sourceShipmentId: originalId,
+        sourceShipment: { id: originalId, codigoMovimentacao: 'ENT-000123' },
+        createdBy: { username: 'Revisão' }, createdAt: movement.occurredAt, decidedBy: { username: 'Expedição' }, decidedAt: movement.occurredAt },
+      shipmentEvidence: [], auditHistory: [] } as unknown as PcpMovementDetail;
+    act(() => root.render(<MovementDetailModal movementId={returned.id} initialMovement={returned} pcp onClose={() => undefined} />));
+    const notes = host.querySelector('#movement-notes-title')?.closest('section');
+    expect(notes?.textContent).toContain('Retorno imediato do recebimento ENT-000123.');
+    expect(notes?.textContent).not.toContain(originalId); expect(returned.observation).toBe(originalObservation);
+  });
   afterEach(() => { act(() => root.unmount()); host.remove(); });
 
   it('prioriza a rota com todos os destinos reais e deixa a observação por último', () => {

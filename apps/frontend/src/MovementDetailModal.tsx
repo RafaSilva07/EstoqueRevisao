@@ -7,6 +7,7 @@ import { Shipment } from './shipments';
 import { MovementEvidence } from './MovementEvidence';
 import { ReviewEntryAction } from './ReviewEntryAction';
 import { AdministrativeShipmentActions } from './AdministrativeShipmentActions';
+import { formatShipmentObservation } from './shipment-observation';
 
 const typeLabel: Record<Movement['type'], string> = {
   ENTRADA_EXTERNA: 'Entrada externa',
@@ -115,7 +116,7 @@ export function MovementDetailModal({ movementId, initialMovement, onClose, chil
       </section>
       {(movement.observation || movement.pcpExecutionObservation || movement.cancellationReason) && <section className="movement-detail-section movement-notes" aria-labelledby="movement-notes-title">
         <h3 id="movement-notes-title">Observações</h3>
-        {movement.observation && <p>{movement.observation}</p>}
+        {movement.observation && <p>{formatShipmentObservation(movement.observation, linkedShipment ?? { id: movement.shipmentId }, movement.codigoMovimentacao)}</p>}
         {movement.pcpExecutionObservation && <p><strong>PCP:</strong> {movement.pcpExecutionObservation}</p>}
         {movement.cancellationReason && <p><strong>Motivo do cancelamento:</strong> {movement.cancellationReason}</p>}
       </section>}

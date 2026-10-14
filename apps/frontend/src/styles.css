@@ -201,9 +201,11 @@ h3 { color: #24495a; font-size: 1rem; }
 .attention-dot { width: .85rem; height: .85rem; flex: 0 0 auto; border: 3px solid #fff3c9; border-radius: 50%; background: #d47c00; box-shadow: 0 0 0 2px #d47c00; }
 .home-attention-grid { display: grid; gap: .65rem; }
 .home-attention-card { display: grid; min-width: 0; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: .1rem .7rem; border: 1px solid; background: #fff; color: var(--ink); padding: .8rem; text-align: left; }
-.home-attention-card strong { grid-row: 1 / span 2; font-size: 1.7rem; }
+.home-attention-card strong { font-size: 1.7rem; }
 .home-attention-card span { font-weight: 700; }
-.home-attention-card small { color: inherit; }
+.home-attention-card .home-attention-copy { display: grid; min-width: 0; gap: .2rem; }
+.home-attention-card small { color: inherit; font-weight: 400; }
+.home-attention-card .pending-age { font-weight: 650; }
 .home-attention-card.danger { border-color: #e9aeb7; background: #fff3f4; color: #842f3a; }
 .home-attention-card.warning { border-color: #e8c66e; background: #fffaf0; color: #71500d; }
 .home-operation-panel { --panel-accent: #2b7990; --panel-surface: #eaf2f5; min-width: 0; border-color: #d5e4e9; border-top: 3px solid var(--panel-accent); background: var(--panel-surface); padding: 1rem; }

@@ -149,6 +149,8 @@ export class PcpMovementsRepository {
     return this.shipments.createQueryBuilder('shipment')
       .innerJoinAndSelect('shipment.createdBy', 'createdBy')
       .leftJoinAndSelect('shipment.decidedBy', 'decidedBy')
+      .leftJoin('shipment.sourceShipment', 'sourceShipment')
+      .addSelect(['sourceShipment.id', 'sourceShipment.codigoMovimentacao'])
       .where('shipment.id = :shipmentId', { shipmentId }).getOne();
   }
 }

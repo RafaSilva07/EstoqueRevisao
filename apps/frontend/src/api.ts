@@ -210,6 +210,9 @@ export interface PcpMovementDetail extends Movement {
   shipmentEvidence: PcpShipmentEvidence[];
   shipment: null | {
     id: string; status: string; originSector: string; destinationSector: string; createdAt: string; decidedAt: string | null;
+    codigoMovimentacao?: string;
+    sourceShipmentId?: string | null;
+    sourceShipment?: { id: string; codigoMovimentacao: string } | null;
     createdBy: { id: string; username: string }; decidedBy: { id: string; username: string } | null;
   };
 }

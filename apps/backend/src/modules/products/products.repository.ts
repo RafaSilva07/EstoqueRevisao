@@ -21,13 +21,17 @@ export class ProductsRepository {
     if (query.code) builder.andWhere('LOWER(product.code) = LOWER(:code)', { code: query.code });
 
     if (query.search) {
-      const field = query.searchField === 'code'
-        ? 'product.code'
-        : query.searchField === 'name' ? 'product.name' : null;
-      builder.andWhere(
-        field ? `${field} ILIKE :search` : '(product.code ILIKE :search OR product.name ILIKE :search)',
-        { search: `%${query.search}%` },
-      );
+      const terms = [...new Set(query.search.toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().split(/\s+/).filter(Boolean))];
+      const name = "LOWER(regexp_replace(normalize(product.name, NFD), U&'[\\0300-\\036f]', '', 'g'))";
+      terms.forEach((term, index) => {
+        const parameter = `search${index}`;
+        const codeMatch = `LOWER(product.code) LIKE :${parameter}`;
+        const nameMatch = `${name} LIKE :${parameter}`;
+        builder.andWhere(
+          query.searchField === 'code' ? codeMatch : query.searchField === 'name' ? nameMatch : `(${codeMatch} OR ${nameMatch})`,
+          { [parameter]: `%${term.replace(/[\\%_]/g, '\\$&')}%` },
+        );
+      });
     }
     if (query.active !== undefined) {
       builder.andWhere('product.active = :active', { active: query.active });

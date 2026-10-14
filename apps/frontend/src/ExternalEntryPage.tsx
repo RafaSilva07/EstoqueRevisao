@@ -13,7 +13,7 @@ import { useFormDraft } from './useFormDraft';
 interface EntryItem { key: string; product: Product; lot: OperationalLot; quantity: number }
 
 export function ExternalEntryPage({ onCreated, onManageLocations }: { onCreated: (id: string) => void; onManageLocations?: () => void }) {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [product, setProduct] = useState<Product | null>(null);
   const [locations, setLocations] = useState<StockLocation[]>([]);
   const [originLocations, setOriginLocations] = useState<StockLocation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,25 +31,32 @@ export function ExternalEntryPage({ onCreated, onManageLocations }: { onCreated:
   const [confirming, setConfirming] = useState(false);
   const submission = useMovementSubmission('/movements/external-entries', created);
   const [productQuery, setProductQuery] = useState({ code: '', name: '' });
-  const draft = useFormDraft('entry', 'Entrada externa', { originId, destinationId, productId, lot, lotReady, quantity, observation, items, requestKey: submission.requestKey, productQuery }, (saved) => {
-    setProductQuery(saved.productQuery); setOriginId(saved.originId); setDestinationId(saved.destinationId); setProductId(saved.productId); setLot(saved.lot); setLotReady(saved.lotReady); setQuantity(saved.quantity); setObservation(saved.observation); setItems(saved.items); submission.setRequestKey(saved.requestKey);
+  const draft = useFormDraft('entry', 'Entrada externa', { originId, destinationId, productId, product, lot, lotReady, quantity, observation, items, requestKey: submission.requestKey, productQuery }, (saved) => {
+    setProduct(saved.product ?? null); setProductQuery(saved.productQuery); setOriginId(saved.originId); setDestinationId(saved.destinationId); setProductId(saved.productId); setLot(saved.lot); setLotReady(saved.lotReady); setQuantity(saved.quantity); setObservation(saved.observation); setItems(saved.items); submission.setRequestKey(saved.requestKey);
   }, { enabled: !loading, busy: submission.busy });
   async function created(id: string) { await draft.complete(); onCreated(id); }
   useEffect(() => {
     let active = true;
     void Promise.all([
-      api.get<Paginated<Product>>('/products?limit=100&active=true'),
       api.get<Paginated<StockLocation>>('/stocks?limit=100&active=true'),
       api.get<Paginated<StockLocation>>('/stocks?kind=EXTERNAL&limit=100&active=true'),
-    ]).then(([p, l, origins]) => { if (active) { setProducts(p.items); setLocations(l.items); setOriginLocations(origins.items); } })
+    ]).then(([l, origins]) => { if (active) { setLocations(l.items); setOriginLocations(origins.items); } })
       .catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'Erro ao carregar produtos.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
-  const product = products.find((item) => item.id === productId);
+  // Older drafts stored only the product ID; resolve that selection independently of catalog pages.
+  useEffect(() => {
+    if (!draft.ready || !productId || product?.id === productId) return;
+    let active = true;
+    void api.get<Product>(`/products/${productId}`)
+      .then((selected) => { if (active) setProduct(selected); })
+      .catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível recuperar o produto.'); });
+    return () => { active = false; };
+  }, [draft.ready, productId, product?.id]);
   const locationName = (id: string) => originLocations.find((item) => item.id === id)?.name ?? locations.find((item) => item.id === id)?.name;
   function resetLot() { setLot(emptyLot); setLotReady(false); setLotKey((key) => key + 1); }
-  function resetItem() { setProductQuery({ code: '', name: '' }); setAdding(false); setError(''); setProductId(''); resetLot(); setQuantity(''); }
+  function resetItem() { setProductQuery({ code: '', name: '' }); setAdding(false); setError(''); setProduct(null); setProductId(''); resetLot(); setQuantity(''); }
   function closeItem() { draft.close(() => { setAdding(false); setError(''); }); }
 
   function addItem(event: FormEvent) {
@@ -77,7 +84,7 @@ export function ExternalEntryPage({ onCreated, onManageLocations }: { onCreated:
     {adding && <Modal labelledBy="add-product-title" onClose={closeItem}><div className="panel-heading item-list-heading"><h2 id="add-product-title">Adicionar produto</h2><button type="button" className="secondary" onClick={closeItem}>Cancelar</button></div>
       <DraftActions draft={draft} />
       {error && <Notice kind="error">{error}</Notice>}<form className="form-grid" onSubmit={addItem}>
-      <ProductAutocomplete draftQuery={productQuery} onQueryChange={setProductQuery} availableProducts={products} initialProduct={product} onChange={(selected) => { setProductId(selected?.id ?? ''); resetLot(); }} />
+      <ProductAutocomplete draftQuery={productQuery} onQueryChange={setProductQuery} initialProduct={product} onChange={(selected) => { setProduct(selected); setProductId(selected?.id ?? ''); resetLot(); }} />
       {product && <OperationalLotFields initiallyResolved={lotReady} key={productId + ':' + lotKey} product={product} value={lot} onChange={setLot} onReady={setLotReady} />}
       <label>Quantidade {product ? '(' + product.defaultUnit + ')' : ''} *<input type="number" inputMode="numeric" min="1" step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} required /></label>
       <div className="form-actions"><button disabled={!product || !lotReady}>Adicionar item</button></div>

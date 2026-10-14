@@ -155,7 +155,7 @@ export function ProductAutocomplete({
     if (!event.currentTarget.contains(event.relatedTarget)) setField(null);
   }}>
     <legend>{legend}</legend>
-    <p className="muted">Digite no código ou na descrição e escolha uma sugestão. Ao selecionar, o outro campo será preenchido automaticamente.</p>
+    <p className="muted">Pesquise pelo código ou por palavras do nome, em qualquer ordem, e escolha uma sugestão. O outro campo será preenchido automaticamente.</p>
     <div className="form-grid">
       <label>Código{required && ' *'}<span className="autocomplete-control">
         <input value={shownCode} required={required} autoComplete="off" aria-autocomplete="list" aria-controls={listId} aria-expanded={field === 'code'} role="combobox"

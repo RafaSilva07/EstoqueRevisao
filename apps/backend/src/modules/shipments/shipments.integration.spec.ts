@@ -273,6 +273,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     expect(await balance()).toBe(10);
     const movement = await db.getRepository(MovementEntity).findOneByOrFail({ shipmentId: shipment.id });
     expect(movement.type).toBe('ENTRADA_EXTERNA'); expect(movement.destinationLocationId).toBe(sourceId);
+    expect(movement.observation).toBe(`Envio ${shipment.codigoMovimentacao} confirmado pelo destinatário.`);
     expect(shipment.items[0].codigoRegistro).toBe(`${shipment.codigoMovimentacao}-A`);
     const linkedCode = (await db.query<Array<{ codigo_registro: string }>>(
       'SELECT codigo_registro FROM movement_items WHERE movement_id=$1', [movement.id]))[0].codigo_registro;
@@ -350,6 +351,15 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
     const derived = await db.getRepository(ShipmentEntity).findOneByOrFail({ sourceShipmentId: shipment.id });
     const detail = await service.get(derived.id, users.REVISAO);
     expect(detail.items[0].additionalPhotos).toMatchObject([{ ordinal: 2, mimeType: 'image/jpeg' }]);
+    expect(derived.observation).toBe(`Retorno imediato do recebimento ${shipment.codigoMovimentacao}.`);
+    expect(detail.sourceShipment).toMatchObject({ id: shipment.id, codigoMovimentacao: shipment.codigoMovimentacao });
+    await decide(derived.id, 'EXPEDICAO');
+    const movement = await db.getRepository(MovementEntity).findOneByOrFail({ shipmentId: derived.id });
+    const pcp = new PcpMovementsService(new PcpMovementsRepository(db.getRepository(MovementEntity), db.getRepository(MovementItemEntity), db.getRepository(AuditLogEntity), db.getRepository(ShipmentItemEntity), db.getRepository(ShipmentEntity)), new MovementsRepository(db.getRepository(MovementEntity)), db, audit);
+    const pcpDetail = await pcp.get(movement.id);
+    expect(pcpDetail.observation).toBe(`Retorno imediato do recebimento ${shipment.codigoMovimentacao}.`);
+    expect(pcpDetail.shipment).toMatchObject({ codigoMovimentacao: derived.codigoMovimentacao,
+      sourceShipment: { id: shipment.id, codigoMovimentacao: shipment.codigoMovimentacao } });
   });
   it('preserva observações do envio e de cada produto no histórico', async () => {
     const shipment = await createShipment({

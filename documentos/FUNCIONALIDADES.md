@@ -67,6 +67,8 @@ Todos os perfis podem cadastrar, editar, excluir por inativação e reativar pro
 
 A listagem de produtos usa a paginação existente de `GET /api/v1/products`: navegação **Anterior/Próxima**, página atual, total de produtos encontrados e seleção de 20, 50 ou 100 produtos por página. A busca por código/nome é aplicada no backend e volta à primeira página ao mudar, assim como a quantidade por página. Cadastro, edição e inativação mantêm os filtros e atualizam a consulta; se a página deixar de existir, a tela retorna à última página disponível. Carregamento, lista vazia e erro com nova tentativa seguem os componentes existentes.
 
+A pesquisa dos seletores de produtos e do catálogo aceita palavras/trechos em qualquer parte do nome e em qualquer ordem, sem diferenciar maiúsculas ou acentos. Todas as palavras informadas devem corresponder ao produto: `panama verde` encontra `MILHO VERDE PANAMÁ` e `sel petito` encontra `SEL LEG PETITOSA`. Código e descrição continuam preenchidos juntos após selecionar uma sugestão. A entrada manual pesquisa o catálogo pela API ao digitar, sem ficar restrita aos primeiros 100 produtos; listas de posições disponíveis mantêm seu escopo operacional.
+
 ## Envios entre setores
 
 A Revisão acessa **Envios e recebimentos** pela Home ou menu; Produção/Expedição recebem uma interface restrita ao próprio setor. A tela operacional separa **Para receber** de **Meus envios em aberto**; concluídos, recusados e cancelados são encontrados no **Histórico** unificado. O início destaca pendências e decisões recentes dos próprios envios; a indicação é atualizada a cada 30 segundos, sem interromper formulários/decisões abertos.
@@ -83,6 +85,8 @@ Em **Revisão → Expedição**, a opção **Montar fardos/caixas** usa o mesmo 
 No relatório de movimentações, a saída mantém a unidade/quantidade debitada do estoque como origem e informa separadamente o FD/CX resultante, com quantidade e unidade próprias; filtros por produto encontram tanto a unidade consumida quanto a embalagem montada.
 
 Em todos os sentidos de envio, cada produto pode receber uma observação opcional e o envio pode receber uma observação geral. Os textos são conferidos antes do envio, ficam disponíveis ao destinatário e no histórico e não podem ser editados após a criação. A observação geral também acompanha a movimentação gerada quando o recebimento é confirmado.
+
+Observações automáticas de confirmação e retorno imediato identificam o envio/recebimento pelo código público do grupo (ex.: `ENT-000123`), não pelo UUID interno. Resumos e detalhes, inclusive no PCP, também apresentam esse código em mensagens automáticas antigas quando o vínculo original está disponível, sem regravar o histórico nem alterar textos livres do usuário.
 
 Cada produto do envio aceita fotos conforme mínimo e máximo definidos em **Configurações** (inicialmente 1 a 5, até 100 por envio). O operador pode capturar pela câmera ou escolher várias imagens, conferir e remover cada uma antes do envio. A conferência é bloqueada se algum produto estiver fora dos limites. A captura é reduzida para até aproximadamente 1600 px e enviada como JPEG; o backend também aceita PNG/WebP de até 5 MB e aplica a validação definitiva. Retornos da separação imediata usam os mesmos limites por item retornado.
 
@@ -308,6 +312,8 @@ Todos os cards das listas da Home abrem um resumo sem navegação imediata. Reut
 `codigoMovimentacao` identifica o grupo desde a criação do envio e permanece igual durante todo o ciclo. Cada item recebe `codigoRegistro` (`-A`, `-B`, …, `-AA`) e conserva-o no recebimento. Histórico, `GET /movements` e PCP buscam grupo ou filho; `view=RECORD|GROUP` controla a paginação. Transferências não recebem código público nem usam UUID como substituto público.
 
 A Home exibe, antes dos atalhos, um ponto de atenção quando o setor ativo possui solicitações aguardando seu aceite ou envios em separação. Os totais vêm das consultas de envios, com escopo do setor e atualização ao entrar ou alternar o modo operacional.
+
+Cada aviso informa também a idade da movimentação mais antiga da respectiva fila, em minutos, horas ou dias completos de 24 horas. Aceite e separação usam a criação do envio; no modo PCP, o aviso mostra o total de registros pendentes e a data operacional do registro mais antigo. As consultas existentes são ordenadas por mais antiga antes de paginar; o relógio visual se atualiza a cada minuto sem novas consultas. Ao alternar o setor, totais e datas são recarregados para o contexto selecionado.
 
 Abaixo dos menus e botões ficam, conforme as permissões: envios abertos dos quais o setor participa; movimentações concluídas no estoque aguardando PCP; e uma lista única das últimas operações **finalizadas**. A última lista usa o mesmo estado do Histórico e só inclui confirmação/efetivação sem ação restante do PCP. Recusas e cancelamentos ficam em **Encerradas**, não em finalizadas. A apresentação é mobile-first em cards clicáveis e não recalcula estados no navegador.
 

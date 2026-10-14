@@ -36,6 +36,7 @@ async function click(text: string) {
 describe('Resumo operacional da Home', () => {
   beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-14T15:00:00-03:00'));
     host = document.createElement('div'); document.body.append(host); root = createRoot(host);
     vi.spyOn(api, 'get').mockImplementation(async (path) => { await Promise.resolve();
       if (path === '/shipments/shipment-1') return shipment;
@@ -49,7 +50,62 @@ describe('Resumo operacional da Home', () => {
       return result([movement]);
     });
   });
-  afterEach(async () => { await Promise.resolve(); await act(async () => { root.unmount(); await Promise.resolve(); }); host.remove(); vi.restoreAllMocks(); vi.clearAllMocks(); });
+  afterEach(async () => { await Promise.resolve(); await act(async () => { root.unmount(); await Promise.resolve(); }); host.remove(); vi.restoreAllMocks(); vi.clearAllMocks(); vi.useRealTimers(); });
+  it('mostra a mais antiga de cada fila inteira, com dias ou horas e total da API', async () => {
+    const get = vi.spyOn(api, 'get').mockImplementation(async (path) => {
+      await Promise.resolve();
+      if (path.startsWith('/shipments?view=pending')) return { ...result([{ ...shipment, createdAt: '2026-10-10T18:00:00Z' }]), meta: { total: 121 } };
+      if (path.startsWith('/shipments?view=open')) return result([{ ...shipment, createdAt: '2026-10-14T16:00:00Z' }]);
+      if (path.startsWith('/history?scope=OPEN')) return result([{ ...open, occurredAt: '2026-10-14T17:00:00Z' }]);
+      return result([]);
+    });
+    await act(async () => { root.render(<OperationalHomePage user={user} navigate={navigate} onOpenRecord={onOpenRecord} />); await Promise.resolve(); });
+    const attention = host.querySelector('#home-attention-title')?.closest('section');
+    expect(attention?.querySelector('.danger')?.textContent).toContain('121');
+    expect(attention?.querySelector('.danger')?.textContent).toContain('Mais antiga há 4 dias');
+    expect(attention?.querySelector('.warning')?.textContent).toContain('Mais antiga há 2 horas');
+    expect(attention?.querySelector('time')?.dateTime).toBe('2026-10-10T18:00:00Z');
+    expect(get.mock.calls.filter(([path]) => path.startsWith('/shipments?')).every(([path]) => path.includes('sort=OLDEST') && path.includes('limit=1'))).toBe(true);
+    await click('Abrir recebimentos'); expect(navigate).toHaveBeenCalledWith('shipments');
+  });
+  it('inclui a idade e o total completo de registros pendentes no aviso PCP', async () => {
+    const get = vi.spyOn(api, 'get').mockImplementation(async (path) => { await Promise.resolve(); return path.startsWith('/history?scope=PENDING_PCP')
+      ? { ...result([{ ...pending, occurredAt: '2026-10-09T18:00:00Z' }]), meta: { total: 25 } } : result([]); });
+    await act(async () => { root.render(<OperationalHomePage user={{ ...user, sector: 'PCP', permissions: ['pcp.movements.read'] }} navigate={navigate} onOpenRecord={onOpenRecord} />); await Promise.resolve(); });
+    const attention = host.querySelector('#home-attention-title')?.closest('section');
+    expect(attention?.textContent).toContain('25'); expect(attention?.textContent).toContain('movimentações aguardam execução no PCP');
+    expect(attention?.textContent).toContain('Mais antiga há 5 dias');
+    expect(get.mock.calls.some(([path]) => path.startsWith('/shipments'))).toBe(false);
+    await click('Abrir fila do PCP'); expect(navigate).toHaveBeenCalledWith('pcp');
+  });
+  it('omite avisos quando não há pendências', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue(result([]));
+    await act(async () => { root.render(<OperationalHomePage user={user} navigate={navigate} onOpenRecord={onOpenRecord} />); await Promise.resolve(); });
+    expect(host.querySelector('.home-attention')).toBeNull();
+  });
+  it('recarrega os avisos ao alternar entre setores com as mesmas permissões', async () => {
+    let production = false;
+    const get = vi.spyOn(api, 'get').mockImplementation(async (path) => { await Promise.resolve(); return path.startsWith('/shipments?view=pending')
+      ? result([{ ...shipment, createdAt: production ? '2026-10-11T18:00:00Z' : '2026-10-13T18:00:00Z' }]) : result([]); });
+    const props = { navigate, onOpenRecord };
+    await act(async () => { root.render(<OperationalHomePage {...props} user={{ ...user, sector: 'EXPEDICAO', permissions: ['shipments.read'] }} />); await Promise.resolve(); });
+    expect(host.querySelector('.home-attention')?.textContent).toContain('Mais antiga há 1 dia');
+    production = true;
+    await act(async () => { root.render(<OperationalHomePage {...props} user={{ ...user, sector: 'PRODUCAO', permissions: ['shipments.read'] }} />); await Promise.resolve(); });
+    expect(host.querySelector('.home-attention')?.textContent).toContain('Mais antiga há 3 dias');
+    expect(get.mock.calls.filter(([path]) => path.startsWith('/shipments?view=pending'))).toHaveLength(2);
+  });
+  it('atualiza o tempo decorrido na Home aberta sem repetir consultas ao banco', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-14T15:00:00-03:00'));
+    const get = vi.spyOn(api, 'get').mockImplementation(async (path) => { await Promise.resolve(); return path.startsWith('/shipments?view=pending')
+      ? result([{ ...shipment, createdAt: '2026-10-14T14:00:30-03:00' }]) : result([]); });
+    await act(async () => { root.render(<OperationalHomePage user={user} navigate={navigate} onOpenRecord={onOpenRecord} />); await Promise.resolve(); });
+    expect(host.querySelector('.home-attention')?.textContent).toContain('Mais antiga há 59 minutos');
+    const requests = get.mock.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(host.querySelector('.home-attention')?.textContent).toContain('Mais antiga há 1 hora');
+    expect(get.mock.calls).toHaveLength(requests);
+  });
   it('exibe código e abre resumo ao clicar, navegando somente pela ação', async () => { await Promise.resolve();
     await act(async () => { root.render(<OperationalHomePage user={user} navigate={navigate} onOpenRecord={onOpenRecord} />); await Promise.resolve(); });
     expect(host.textContent).toContain('ENT-000153');

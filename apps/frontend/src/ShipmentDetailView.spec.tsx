@@ -18,6 +18,16 @@ const shipment = {
 } as unknown as Shipment;
 
 describe('detalhe compartilhado do envio', () => {
+  it('mostra o código público do recebimento original nas observações de retornos antigos', () => {
+    const id = '4378bb70-bef3-4a00-a046-4e2bfb58db75';
+    const observation = `Retorno imediato do recebimento ${id}.`;
+    const returned = { ...shipment, codigoMovimentacao: 'SAI-000321', shipmentKind: 'RETORNO_IMEDIATO' as const, observation,
+      sourceShipmentId: id, sourceShipment: { id, codigoMovimentacao: 'ENT-000123' } };
+    const html = renderToStaticMarkup(<ShipmentDetailView shipment={returned} titleId="shipment-title" onClose={() => undefined} onOpenShipment={() => undefined} />);
+    expect(html).toContain('Retorno imediato do recebimento ENT-000123.');
+    expect(html).toContain('Ver recebimento original'); expect(html).not.toContain(id);
+    expect(returned.observation).toBe(observation);
+  });
   it('usa a hierarquia visual do detalhe de movimentação e preserva status, rota e responsáveis', () => {
     const html = renderToStaticMarkup(<ShipmentDetailView shipment={shipment} titleId="shipment-title" onClose={() => undefined} />);
     expect(html).toContain('Detalhes do envio');

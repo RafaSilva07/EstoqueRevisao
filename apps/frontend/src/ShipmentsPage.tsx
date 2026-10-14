@@ -13,6 +13,7 @@ import { ShipmentItems } from './ShipmentItems';
 import { ShipmentDetailView } from './ShipmentDetailView';
 import { DraftActions } from './FormDrafts';
 import { useFormDraft } from './useFormDraft';
+import { formatShipmentObservation } from './shipment-observation';
 
 function ShipmentDecision({ shipment, refuse, onClose, onDone }: { shipment: Shipment; refuse: boolean; onClose: () => void; onDone: () => void }) {
   const [reason, setReason] = useState('');
@@ -27,7 +28,7 @@ function ShipmentDecision({ shipment, refuse, onClose, onDone }: { shipment: Shi
     <h2 id="shipment-decision-title">{refuse ? 'Recusar envio' : 'Confirmar recebimento'}</h2>
     <DraftActions draft={draft} />
     {shipment.loadingStatus && <p><strong>Carregamento:</strong> {shipment.loadingStatus === 'CARREGADO' ? `Carregado · placa ${shipment.vehiclePlate}` : 'Não carregado'}</p>}
-    {shipment.observation && <p><strong>Observação geral:</strong> {shipment.observation}</p>}
+    {shipment.observation && <p><strong>Observação geral:</strong> {formatShipmentObservation(shipment.observation, shipment)}</p>}
     <ShipmentItems shipment={shipment} />
     <p>{refuse ? shipment.originSector === 'REVISAO' ? 'O saldo em trânsito voltará às posições originais da Revisão.' : 'Nenhum saldo será adicionado à Revisão.' : shipment.destinationSector === 'REVISAO' ? 'Os itens serão adicionados a A Revisar.' : 'A saída será concluída. O saldo reservado não será descontado novamente.'}</p>
     <form onSubmit={(event) => { event.preventDefault(); void submission.submit(refuse ? { reason } : { immediateSeparation }); }}>

@@ -4,6 +4,7 @@ import { ShipmentItems } from './ShipmentItems';
 import { ShipmentStockOutcome } from './ShipmentStockOutcome';
 import { Shipment, sectorLabel, shipmentStatusLabel } from './shipments';
 import { AdministrativeShipmentActions } from './AdministrativeShipmentActions';
+import { formatShipmentObservation } from './shipment-observation';
 
 export function ShipmentDetailView({ shipment, titleId, recordId, onSelectRecord, onViewGroup, onClose, onOpenShipment, onOpenMovement, audit, actions }: {
   shipment: Shipment;
@@ -88,13 +89,13 @@ export function ShipmentDetailView({ shipment, titleId, recordId, onSelectRecord
 
     {(shipment.observation || shipment.refusalReason || shipment.cancellationReason) && <section className="movement-detail-section movement-notes" aria-labelledby="shipment-notes-title">
       <h3 id="shipment-notes-title">Observações</h3>
-      {shipment.observation && <p>{shipment.observation}</p>}
+      {shipment.observation && <p>{formatShipmentObservation(shipment.observation, shipment)}</p>}
       {(shipment.cancellationReason || shipment.refusalReason) && <p><strong>{shipment.status === 'CANCELADO' ? 'Motivo do cancelamento:' : 'Motivo da recusa:'}</strong> {shipment.cancellationReason ?? shipment.refusalReason}</p>}
     </section>}
 
     {(shipment.sourceShipmentId || shipment.derivedShipments?.length) && onOpenShipment && <section className="movement-detail-section shipment-related" aria-labelledby="shipment-related-title">
       <h3 id="shipment-related-title">Envios vinculados</h3>
-      {shipment.sourceShipmentId && <button type="button" className="secondary" onClick={() => onOpenShipment(shipment.sourceShipmentId!)}>Ver recebimento original · {shipment.sourceShipment?.codigoMovimentacao ?? shipment.sourceShipmentId}</button>}
+      {shipment.sourceShipmentId && <button type="button" className="secondary" onClick={() => onOpenShipment(shipment.sourceShipmentId!)}>Ver recebimento original{shipment.sourceShipment?.codigoMovimentacao ? ` · ${shipment.sourceShipment.codigoMovimentacao}` : ''}</button>}
       {shipment.derivedShipments?.map((derived) => <button type="button" className="secondary" key={derived.id} onClick={() => onOpenShipment(derived.id)}>Ver retorno · {shipmentStatusLabel[derived.status]}</button>)}
     </section>}
 

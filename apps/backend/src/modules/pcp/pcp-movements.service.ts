@@ -93,6 +93,8 @@ export class PcpMovementsService {
       auditHistory,
       shipment: shipment ? {
         id: shipment.id, status: shipment.status, originSector: shipment.originSector, destinationSector: shipment.destinationSector,
+        codigoMovimentacao: shipment.codigoMovimentacao, sourceShipmentId: shipment.sourceShipmentId,
+        sourceShipment: shipment.sourceShipment ? { id: shipment.sourceShipment.id, codigoMovimentacao: shipment.sourceShipment.codigoMovimentacao } : null,
         createdBy: shipment.createdBy, createdAt: shipment.createdAt, decidedBy: shipment.decidedBy, decidedAt: shipment.decidedAt,
       } : null,
       shipmentEvidence: relevantEvidence.map((item) => ({

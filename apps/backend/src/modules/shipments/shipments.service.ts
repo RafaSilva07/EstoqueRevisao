@@ -628,7 +628,7 @@ export class ShipmentsService {
           const derived = Object.assign(new ShipmentEntity(), {
             requestKey: crypto.randomUUID(), originSector: 'REVISAO', destinationSector: 'EXPEDICAO',
             createdById: user.id, originLocationId: null, destinationLocationId: shipment.originLocationId!,
-            observation: `Retorno imediato do recebimento ${shipment.id}.`, shipmentKind: 'RETORNO_IMEDIATO', sourceShipmentId: shipment.id,
+            observation: `Retorno imediato do recebimento ${shipment.codigoMovimentacao}.`, shipmentKind: 'RETORNO_IMEDIATO', sourceShipmentId: shipment.id,
           });
           await this.saveNewShipment(derived, manager);
           const byId = new Map(shipment.items.map((item) => [item.id, item]));
@@ -796,7 +796,7 @@ export class ShipmentsService {
         responsibleUserId: shipment.decidedById, occurredAt: shipment.decidedAt,
         status: MovementStatus.Effective,
         requiresPcpExecution: shipment.shipmentKind !== 'RETORNO_IMEDIATO',
-        observation: shipment.observation ?? `Envio ${shipment.id} confirmado pelo destinatário.`,
+        observation: shipment.observation ?? `Envio ${shipment.codigoMovimentacao} confirmado pelo destinatário.`,
       });
       await this.movements.save(movement, manager);
       await this.movements.saveItems(items.map((item) => Object.assign(new MovementItemEntity(), {

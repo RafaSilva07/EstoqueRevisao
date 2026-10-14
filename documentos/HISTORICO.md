@@ -241,3 +241,11 @@ O aviso recebeu título e contraste mais destacados. O administrador geral pode 
 ## Etapa 75 — Pendências de schema em produção
 
 Após a promoção das etapas 73–74, o diagnóstico enviado pelo usuário mostrou as duas migrations da etapa 71 pendentes em produção. Preparado SQL manual fiel às migrations, com transação e registro no TypeORM, sem alteração de código funcional ou execução no Supabase. [Relatório da etapa 75](./relatorios/RELATORIO_ETAPA_75_MIGRATIONS_PENDENTES_PRODUCAO.md).
+
+## Etapa 76 — Idade das pendências e pesquisa livre de produtos
+
+Avisos da Home passaram a informar a movimentação mais antiga de cada fila, incluindo PCP no modo correspondente. Busca por produtos aceita palavras em qualquer ordem e sem acentos na API e nas listas disponíveis; entrada manual deixou de limitar a seleção à primeira página do catálogo. Sem migration. [Relatório da etapa 76](./relatorios/RELATORIO_ETAPA_76_PENDENCIAS_BUSCA_PRODUTOS.md).
+
+## Etapa 77 — Referências legíveis nas observações
+
+Mensagens automáticas de confirmação/retorno passaram a gravar o código público do envio. A exibição reconhece mensagens antigas e usa os vínculos existentes para mostrar o código correto, inclusive no PCP, sem modificar registros imutáveis ou observações livres. Acrescentada cobertura da pesquisa `sel petito` para as cinco variantes do exemplo. Sem migration. [Relatório da etapa 77](./relatorios/RELATORIO_ETAPA_77_OBSERVACOES_CODIGOS_PUBLICOS.md).
