@@ -6,7 +6,7 @@ import { MovementDetailModal } from './MovementDetailModal';
 import { ShipmentSummaryModal } from './ShipmentSummaryModal';
 import { SectionMenu } from './Navigation';
 import { Page } from './navigation-model';
-import { Shipment, shipmentStatusLabel } from './shipments';
+import { sectorLabel, Shipment, shipmentStatusLabel } from './shipments';
 import { HistoryItem } from './HistoryPage';
 import { HistoryRecordRow } from './HistoryRecordRow';
 import { ReviewDistributionMatrix } from './MovementRecordRow';
@@ -47,9 +47,11 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
   const canReadShipments = sector !== 'PCP' && user.permissions.includes('shipments.read');
   const canReadMovements = user.permissions.includes('movements.read');
   const canReadPcp = sector === 'PCP' && user.permissions.includes('pcp.movements.read');
+  const canResumeSeparation = sector === 'REVISAO' && canReadShipments && user.permissions.includes('shipments.decide');
   const [openShipments, setOpenShipments] = useState<HistoryItem[]>([]);
   const [pendingAcceptance, setPendingAcceptance] = useState(0);
   const [inSeparation, setInSeparation] = useState(0);
+  const [separations, setSeparations] = useState<Shipment[]>([]);
   const [oldestAcceptanceAt, setOldestAcceptanceAt] = useState<string | null>(null);
   const [oldestSeparationAt, setOldestSeparationAt] = useState<string | null>(null);
   const [pendingPcp, setPendingPcp] = useState<HistoryItem[]>([]);
@@ -76,7 +78,7 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
         const shipmentRequests = canReadShipments ? Promise.all([
           api.get<Paginated<HistoryItem>>('/history?scope=OPEN&kind=SHIPMENT&page=1&limit=10'),
           api.get<Paginated<Shipment>>('/shipments?view=pending&status=AGUARDANDO_RECEBIMENTO&sort=OLDEST&page=1&limit=1'),
-          api.get<Paginated<Shipment>>('/shipments?view=open&status=EM_SEPARACAO&sort=OLDEST&page=1&limit=1'),
+          api.get<Paginated<Shipment>>(`/shipments?view=open&status=EM_SEPARACAO&sort=OLDEST&page=1&limit=${canResumeSeparation ? 3 : 1}`),
         ]) : Promise.resolve(null);
         const movementRequests = canReadMovements || canReadPcp ? Promise.all([
           api.get<Paginated<HistoryItem>>('/history?scope=PENDING_PCP&sort=OLDEST&page=1&limit=5'),
@@ -88,6 +90,7 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
         setOpenShipments(shipmentData?.[0].items ?? []);
         setPendingAcceptance(shipmentData?.[1].meta.total ?? 0);
         setInSeparation(shipmentData?.[2].meta.total ?? 0);
+        setSeparations(shipmentData?.[2].items ?? []);
         setOldestAcceptanceAt(shipmentData?.[1].items[0]?.createdAt ?? null);
         setOldestSeparationAt(shipmentData?.[2].items[0]?.createdAt ?? null);
         setPendingPcp(movementData?.[0].items ?? []);
@@ -101,7 +104,7 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
     }
     void load();
     return () => { active = false; };
-  }, [canReadMovements, canReadPcp, canReadShipments, sector, user.id]);
+  }, [canReadMovements, canReadPcp, canReadShipments, canResumeSeparation, sector, user.id]);
 
   function openMovement(movement: HistoryItem) {
     if (movement.kind === 'SHIPMENT') {
@@ -112,17 +115,18 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
 
   const showPcpAttention = canReadPcp && pendingPcpTotal > 0;
   const showAttention = !loading && !error && (pendingAcceptance > 0 || inSeparation > 0 || showPcpAttention);
+  const visibleOpenShipments = canResumeSeparation ? openShipments.filter((item) => item.status !== 'EM_SEPARACAO') : openShipments;
   return <section className="operational-home">
     {showAttention && <section className="home-attention" aria-labelledby="home-attention-title">
-      <div className="home-attention-title"><span className="attention-dot" aria-hidden="true" /><div><span className="eyebrow">Atenção necessária</span><h1 id="home-attention-title">Há atividades aguardando ação</h1></div></div>
+      <div className="home-attention-title"><span className="attention-dot" aria-hidden="true" /><div><span className="eyebrow">Atenção necessária</span><h2 id="home-attention-title">Há atividades aguardando ação</h2></div></div>
       <div className="home-attention-grid">
         {pendingAcceptance > 0 && <button type="button" className="home-attention-card danger" onClick={() => navigate('shipments')}><strong>{pendingAcceptance}</strong><span className="home-attention-copy">
           <span>{pendingAcceptance === 1 ? 'solicitação aguarda seu aceite' : 'solicitações aguardam seu aceite'}</span>
           <OldestPendingAge since={oldestAcceptanceAt} now={now} /><small>Abrir recebimentos →</small>
         </span></button>}
-        {inSeparation > 0 && <button type="button" className="home-attention-card warning" onClick={() => navigate(sector === 'REVISAO' ? 'shipments' : 'shipment-sent')}><strong>{inSeparation}</strong><span className="home-attention-copy">
+        {inSeparation > 0 && <button type="button" className="home-attention-card warning" onClick={() => navigate(canResumeSeparation ? 'shipment-separation' : sector === 'REVISAO' ? 'shipments' : 'shipment-sent')}><strong>{inSeparation}</strong><span className="home-attention-copy">
           <span>{inSeparation === 1 ? 'movimentação está em separação' : 'movimentações estão em separação'}</span>
-          <OldestPendingAge since={oldestSeparationAt} now={now} /><small>Acompanhar separações →</small>
+          <OldestPendingAge since={oldestSeparationAt} now={now} /><small>{canResumeSeparation ? 'Continuar separações →' : 'Acompanhar separações →'}</small>
         </span></button>}
         {showPcpAttention && <button type="button" className="home-attention-card warning" onClick={() => navigate('pcp')}><strong>{pendingPcpTotal}</strong><span className="home-attention-copy">
           <span>{pendingPcpTotal === 1 ? 'movimentação aguarda execução no PCP' : 'movimentações aguardam execução no PCP'}</span>
@@ -135,9 +139,19 @@ export function OperationalHomePage({ user, navigate, onOpenRecord }: Operationa
     {loading && <LoadingState label="Carregando resumo operacional..." />}
     {error && <Notice kind="error">{error}</Notice>}
 
+    {!loading && !error && canResumeSeparation && inSeparation > 0 && <section className="surface home-separations" aria-labelledby="home-separations-title">
+      <PanelHeading id="home-separations-title" eyebrow="Continue de onde parou" title="Separações para finalizar" action={<button type="button" className="text-button" onClick={() => navigate('shipment-separation')}>Ver todas ({inSeparation})</button>} />
+      <p className="muted">Recebimentos já aceitos. Informe o que retornará à Expedição para concluir.</p>
+      <ul className="home-separation-list">{separations.map((shipment) => <li key={shipment.id}>
+        <div><strong>{shipment.codigoMovimentacao}</strong><span>{sectorLabel[shipment.originSector]} → Revisão · {shipment.items.length} {shipment.items.length === 1 ? 'produto' : 'produtos'}</span></div>
+        {shipment.separationExpiresAt && <small>Concluir até <time dateTime={shipment.separationExpiresAt}>{formatDateTime(shipment.separationExpiresAt)}</time></small>}
+        <button type="button" aria-label={`Continuar separação ${shipment.codigoMovimentacao}`} onClick={() => onOpenRecord('shipment-separation', shipment.id)}>Continuar separação</button>
+      </li>)}</ul>
+    </section>}
+
     {!loading && !error && canReadShipments && <section className="surface dashboard-section home-operation-panel home-operation-panel--open" aria-labelledby="open-shipments-title">
       <PanelHeading id="open-shipments-title" eyebrow="Prioridade" title="Envios em aberto" action={<button className="text-button" onClick={() => navigate('shipments')}>Ver envios</button>} />
-      {openShipments.length === 0 ? <EmptyState title="Nenhuma movimentação em aberto" description="Não há envios aguardando aceite, recebimento ou separação neste setor." /> : <HomeRecordList items={openShipments} onOpen={openMovement} />}
+      {visibleOpenShipments.length === 0 ? <EmptyState title="Nenhum envio aguardando recebimento" description={canResumeSeparation ? 'As separações em andamento ficam na seção acima.' : 'Não há envios aguardando aceite, recebimento ou separação neste setor.'} /> : <HomeRecordList items={visibleOpenShipments} onOpen={openMovement} />}
     </section>}
 
     {!loading && !error && (canReadMovements || canReadPcp) && <section className="surface dashboard-section home-operation-panel home-operation-panel--pcp" aria-labelledby="pending-pcp-title">

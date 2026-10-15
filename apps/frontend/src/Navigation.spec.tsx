@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { UserSession } from './api';
 import { NavigationTrail, SectionMenu } from './Navigation';
-import { homeActions, menuActions, parentPage } from './navigation-model';
+import { homeActions, homeWorkflowActions, menuActions, parentPage } from './navigation-model';
 import { ShipmentsPage } from './ShipmentsPage';
 import { PcpPage } from './PcpPage';
 
@@ -16,8 +16,9 @@ describe('Navegação simplificada', () => {
       expect(homeActions(external).map((a) => a.page)).toEqual(['shipments', 'history', 'products']);
       expect(parentPage('shipment-new', external)).toBe('shipments');
       const html = renderToStaticMarkup(<SectionMenu page="home" user={external} navigate={noop} />);
-      expect(html).toContain('Envios e recebimentos');
-      expect(html).toContain('Histórico');
+      expect(html).toContain('Enviar produtos');
+      expect(html).toContain('Receber produtos');
+      expect(html).not.toContain('Revisar produtos');
     }
     const pcp = { ...user, sector: 'PCP' as const };
     expect(homeActions(pcp).map((a) => a.page)).toEqual(['inventory', 'history', 'products', 'pcp']);
@@ -33,10 +34,20 @@ describe('Navegação simplificada', () => {
     expect(menuActions('more', { ...user, roles: ['REVISAO'] }).some((a) => a.page === 'preferences')).toBe(true);
     expect(parentPage('preferences')).toBe('more');
   });
-  it('mostra somente áreas na Home, sem operações, métricas ou tabelas', () => {
+  it('deixa somente as três ações principais na Home e oferece as demais no menu', () => {
     const html = renderToStaticMarkup(<SectionMenu page="home" user={user} navigate={noop} />);
-    for (const title of ['O que você quer fazer?', 'Movimentar produtos', 'Estoque e validades', 'Envios e recebimentos', 'Histórico', 'Produtos']) expect(html).toContain(title);
-    for (const text of ['Realizar entrada', '<table', 'PCP', 'Gerenciar usuários']) expect(html).not.toContain(text);
+    expect(homeWorkflowActions(user).primary.map((action) => action.page)).toEqual(['shipments', 'new-review', 'shipment-new']);
+    expect(homeWorkflowActions(user).secondary.map((action) => action.page)).toEqual(['new-transfer', 'inventory', 'products']);
+    for (const title of ['Receber, revisar e enviar', 'Receber produtos', 'Revisar produtos', 'Enviar produtos']) expect(html).toContain(title);
+    const menu = renderToStaticMarkup(<SectionMenu page="more" user={user} navigate={noop} />);
+    for (const title of ['Transferência interna', 'Ver estoque', 'Produtos']) { expect(html).not.toContain(`>${title}<`); expect(menu).toContain(title); }
+    expect(html).not.toContain('Outras opções');
+    for (const text of ['Movimentar produtos', 'Envios e recebimentos', 'Histórico', 'Gerenciar usuários']) expect(html).not.toContain(text);
+    const readOnly = { ...user, permissions: ['shipments.read', 'stock-positions.read'] };
+    expect(homeWorkflowActions(readOnly).primary).toEqual([]);
+    expect(homeWorkflowActions(readOnly).secondary.map((action) => action.page)).toEqual(['inventory', 'shipments']);
+    expect(homeWorkflowActions({ ...user, sector: 'PCP' }).primary.map((action) => action.page)).toEqual(['pcp']);
+    expect(parentPage('shipment-separation', user)).toBe('shipments');
   });
   it('preserva as fronteiras dos setores mesmo com permissões de administrador', () => {
     for (const sector of ['PRODUCAO', 'EXPEDICAO'] as const) {

@@ -201,6 +201,8 @@ O estado intermediário pertence a `shipments`, pois ainda não existe movimenta
 
 ## Frontend
 
+`navigationGroups` compõe os destinos a partir das permissões e dos setores já usados pelos menus operacionais. Desktop, painel lateral mobile e página Menu compartilham a mesma lista e destaque do destino atual. A barra inferior usa atalhos curtos por setor. O painel mobile reutiliza o modal acessível; a navegação permanece no fluxo central com proteção de rascunhos e só fecha o menu após autorizar a saída.
+
 `ProductAutocomplete` compartilha a busca por palavras com listas locais de produtos disponíveis e a consulta paginada do catálogo. A API de produtos aplica todos os termos com parâmetros SQL e normalização Unicode NFD, preservando filtros de ativo/unidade, ordenação e paginação. Não utiliza extensão adicional nem altera o nome cadastrado. A entrada manual mantém o produto selecionado no rascunho e resolve por ID os rascunhos anteriores que não guardavam esse objeto, sem carregar o catálogo completo.
 
 `AccountFormDrafts1791331200000` cria `form_drafts`, com chave única usuário/modo/formulário, payload JSONB, versão otimista e timestamps. RLS impede acesso direto por papéis públicos do Supabase; leitura/escrita ocorre pela API autenticada, com autorização por formulário e escopo da conta. Advisory lock serializa gravação/limpeza por conta e modo; descarte mantém uma versão vazia para rejeitar clientes obsoletos. Fotos usam o Storage privado existente e são referenciadas em `form_drafts.photos`; somente a própria conta pode recuperá-las. Fotos inalteradas são reutilizadas sem reupload; substituição/descarte executa limpeza compensatória. Como nas evidências, falha abrupta de Storage pode deixar objeto órfão para manutenção futura.

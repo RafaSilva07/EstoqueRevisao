@@ -65,7 +65,8 @@ describe('Resumo operacional da Home', () => {
     expect(attention?.querySelector('.danger')?.textContent).toContain('Mais antiga há 4 dias');
     expect(attention?.querySelector('.warning')?.textContent).toContain('Mais antiga há 2 horas');
     expect(attention?.querySelector('time')?.dateTime).toBe('2026-10-10T18:00:00Z');
-    expect(get.mock.calls.filter(([path]) => path.startsWith('/shipments?')).every(([path]) => path.includes('sort=OLDEST') && path.includes('limit=1'))).toBe(true);
+    expect(get.mock.calls.filter(([path]) => path.startsWith('/shipments?')).every(([path]) => path.includes('sort=OLDEST'))).toBe(true);
+    expect(get.mock.calls.some(([path]) => path.includes('status=EM_SEPARACAO') && path.includes('limit=3'))).toBe(true);
     await click('Abrir recebimentos'); expect(navigate).toHaveBeenCalledWith('shipments');
   });
   it('inclui a idade e o total completo de registros pendentes no aviso PCP', async () => {
@@ -82,6 +83,30 @@ describe('Resumo operacional da Home', () => {
     vi.spyOn(api, 'get').mockResolvedValue(result([]));
     await act(async () => { root.render(<OperationalHomePage user={user} navigate={navigate} onOpenRecord={onOpenRecord} />); await Promise.resolve(); });
     expect(host.querySelector('.home-attention')).toBeNull();
+  });
+  it('abre as ações principais sem menus intermediários', async () => {
+    const operator = { ...user, permissions: [...user.permissions, 'shipments.create', 'movements.review', 'movements.transfer', 'stock-positions.read'] };
+    await act(async () => { root.render(<OperationalHomePage user={operator} navigate={navigate} onOpenRecord={onOpenRecord} />); await Promise.resolve(); });
+    const actions = Array.from(host.querySelectorAll<HTMLButtonElement>('.home-primary-actions button'));
+    expect(actions.map((button) => button.querySelector('strong')?.textContent)).toEqual(['Receber produtos', 'Revisar produtos', 'Enviar produtos']);
+    for (const button of actions) act(() => button.click());
+    expect(navigate.mock.calls.slice(-3)).toEqual([['shipments'], ['new-review'], ['shipment-new']]);
+  });
+  it('mantém as separações acessíveis pela Home sem duplicá-las na lista de envios', async () => {
+    vi.spyOn(api, 'get').mockImplementation(async (path) => {
+      await Promise.resolve();
+      if (path.includes('status=EM_SEPARACAO')) return { ...result([{ ...shipment, status: 'EM_SEPARACAO', separationExpiresAt: '2026-10-14T19:00:00Z' }]), meta: { total: 8 } };
+      if (path.startsWith('/history?scope=OPEN')) return result([{ ...open, status: 'EM_SEPARACAO' }]);
+      return result([]);
+    });
+    await act(async () => { root.render(<OperationalHomePage user={user} navigate={navigate} onOpenRecord={onOpenRecord} />); await Promise.resolve(); });
+    const panel = host.querySelector('.home-separations')!;
+    expect(panel.textContent).toContain('ENT-000152'); expect(panel.textContent).toContain('Ver todas (8)');
+    expect(panel.querySelector('time')?.dateTime).toBe('2026-10-14T19:00:00Z');
+    expect(host.querySelector('.home-operation-panel--open')?.textContent).not.toContain('ENT-000152');
+    act(() => panel.querySelector<HTMLButtonElement>('[aria-label="Continuar separação ENT-000152"]')!.click());
+    expect(onOpenRecord).toHaveBeenCalledWith('shipment-separation', 'shipment-1');
+    await click('Continuar separações'); expect(navigate).toHaveBeenCalledWith('shipment-separation');
   });
   it('recarrega os avisos ao alternar entre setores com as mesmas permissões', async () => {
     let production = false;

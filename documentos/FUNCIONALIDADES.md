@@ -4,7 +4,9 @@ Este documento descreve o comportamento disponível hoje. As regras completas e 
 
 ## Navegação simplificada e Revisão operacional
 
-Na branch `feat/navegacao-simplificada`, a Home e o menu lateral mostram destinos diretos conforme o perfil: **Movimentar produtos**, **Envios e recebimentos**, **Estoque e validades**, **Histórico**, **Produtos** e, no PCP, **Fila do PCP**. Ações administrativas e relatórios de totais ficam em **Menu e conta**. Os menus intermediários de estoque, histórico, solicitações e PCP não aparecem mais.
+A Home prioriza ações diretas conforme o perfil. Na Revisão, **Receber produtos**, **Revisar produtos** e **Enviar produtos** abrem os fluxos existentes; Produção/Expedição priorizam envio e recebimento e PCP prioriza sua fila. Transferência, estoque, produtos e entrada/saída direta autorizadas ficam no menu completo, fora da Home. O menu é organizado em **Dia a dia**, **Consultas**, **Cadastros**, **Administração** e **Minha conta**, exibindo apenas grupos e destinos permitidos.
+
+No celular, o botão no topo e **Menu** na barra inferior abrem o mesmo painel lateral, com rótulos, descrições curtas, opção de fechar e acesso à saída da conta. A barra inferior oferece **Início**, **Receber/Envios** ou **Fila PCP**, **Histórico** e **Menu**, conforme o acesso. No desktop, o menu permanece recolhido em ícones, podendo ser expandido para mostrar nomes e grupos. Escolher um destino preserva a confirmação de saída de formulários com rascunho.
 
 O preset inicial `Revisão operacional` (`REVISAO`) oferece solicitações, revisão, transferência, consultas e gestão de produtos, sem ADMIN. O admin geral pode ajustar as funcionalidades do preset ou de cada usuário, incluindo entrada/saída direta e estorno no setor Revisão. Usuários existentes mantêm sua base até atualização explícita.
 
@@ -227,6 +229,8 @@ Em **Aviso de operação duplicada**, o administrador geral define o intervalo d
 
 No recebimento Expedição → Revisão, **Sim, separar agora** coloca o envio em `EM_SEPARACAO`, exibe o prazo e permite salvar as quantidades de retorno como rascunho. A Expedição acompanha o estado sem ação. A conclusão exige fotos dentro dos limites em cada item retornado, credita somente a quantidade líquida e cria um envio de retorno ligado ao original. O retorno aguarda decisão da Expedição e é marcado como execução PCP não necessária. Se o prazo vencer, o acesso seguinte consolida integralmente o recebimento sem retorno.
 
+Ao confirmar **Receber e iniciar separação**, a tela de separação abre imediatamente com o estado atualizado da API. **Continuar depois** fecha com a proteção de rascunho existente; **Salvar e sair** também guarda as quantidades no servidor. A aba **Separações em andamento** reúne os recebimentos desse estado, paginados, e **Continuar separação** abre diretamente o preenchimento. Quem só consulta conserva a visualização dos envios, sem ações de separação.
+
 No histórico da Revisão, a separação concluída com retorno aparece em dois cards vinculados ao envio original: a **entrada líquida efetivada no estoque** e o envio de retorno. Os detalhes mostram itens e quantidades e permitem consultar o original. O próprio envio original não vira um terceiro card nesse recorte. Retorno integral é identificado sem inventar uma entrada de saldo zero.
 
 Endpoints envolvidos:
@@ -316,6 +320,8 @@ A Home exibe, antes dos atalhos, um ponto de atenção quando o setor ativo poss
 Cada aviso informa também a idade da movimentação mais antiga da respectiva fila, em minutos, horas ou dias completos de 24 horas. Aceite e separação usam a criação do envio; no modo PCP, o aviso mostra o total de registros pendentes e a data operacional do registro mais antigo. As consultas existentes são ordenadas por mais antiga antes de paginar; o relógio visual se atualiza a cada minuto sem novas consultas. Ao alternar o setor, totais e datas são recarregados para o contexto selecionado.
 
 Abaixo dos menus e botões ficam, conforme as permissões: envios abertos dos quais o setor participa; movimentações concluídas no estoque aguardando PCP; e uma lista única das últimas operações **finalizadas**. A última lista usa o mesmo estado do Histórico e só inclui confirmação/efetivação sem ação restante do PCP. Recusas e cancelamentos ficam em **Encerradas**, não em finalizadas. A apresentação é mobile-first em cards clicáveis e não recalcula estados no navegador.
+
+Na Revisão com permissão de aceite, **Separações para finalizar** aparece antes dessas listas, com até três recebimentos mais antigos, código público, origem, quantidade de itens e prazo. Cada um abre diretamente a separação; **Ver todas** e o aviso do topo levam à aba dedicada. Esses recebimentos não se repetem na lista de envios abertos da Home. O painel reutiliza a consulta de separações já utilizada pelo aviso.
 
 ## Experiência de uso
 

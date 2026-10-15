@@ -249,3 +249,7 @@ Avisos da Home passaram a informar a movimentação mais antiga de cada fila, in
 ## Etapa 77 — Referências legíveis nas observações
 
 Mensagens automáticas de confirmação/retorno passaram a gravar o código público do envio. A exibição reconhece mensagens antigas e usa os vínculos existentes para mostrar o código correto, inclusive no PCP, sem modificar registros imutáveis ou observações livres. Acrescentada cobertura da pesquisa `sel petito` para as cinco variantes do exemplo. Sem migration. [Relatório da etapa 77](./relatorios/RELATORIO_ETAPA_77_OBSERVACOES_CODIGOS_PUBLICOS.md).
+
+## Etapa 78 — Home por ações e retomada de separação
+
+Na branch `feature/refatoracao-telas`, a Home passou a priorizar ações operacionais diretas; as opções secundárias foram movidas para um menu compartilhado e organizado por grupos, com painel lateral e atalhos curtos no celular. Receber com separação abre o preenchimento imediatamente; a Home e a aba dedicada permitem retomar sem procurar no histórico. Ajustes somente de frontend, mantidos locais para avaliação, sem migration. [Relatório da etapa 78](./relatorios/RELATORIO_ETAPA_78_HOME_ACOES_SEPARACAO.md).
