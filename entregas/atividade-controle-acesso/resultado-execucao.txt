@@ -1,0 +1,52 @@
+ATIVIDADE PRATICA - CONTROLE DE ACESSO
+Funcionalidade: gestao de usuarios. Controle existente: AdminGuard + @UseGuards(AdminGuard).
+Execucao: 23/10/2026, 17:48:46 (America/Sao_Paulo)
+HTTP local e guards reais; identidades simuladas e servicos dubles; sem banco de dados.
+
+apps\backend\src\modules\auth\admin-operations.spec.ts
+PASS GET /products/audit-history exige ADMIN além das permissões (123 ms)
+PASS GET /users/permissions exige ADMIN além das permissões (61 ms)
+PASS PATCH /users/roles/REVISAO/permissions exige ADMIN além das permissões (384 ms)
+PASS GET /users exige ADMIN além das permissões (10 ms)
+PASS GET /users/roles exige ADMIN além das permissões (8 ms)
+PASS POST /users exige ADMIN além das permissões (11 ms)
+PASS PATCH /users/00000000-0000-4000-8000-000000000001 exige ADMIN além das permissões (11 ms)
+PASS DELETE /users/00000000-0000-4000-8000-000000000001 exige ADMIN além das permissões (28 ms)
+PASS mantém /movements/internal-transfers para Revisão operacional (3 ms)
+PASS mantém /movements/reviews para Revisão operacional (3 ms)
+PASS mantém /movements/resolve-lot para Revisão operacional (3 ms)
+PASS permite inativar produtos em todos os perfis sem exigir ADMIN (11 ms)
+PASS preserva a restrição do modo operacional mesmo para ADMIN (11 ms)
+PASS delega POST /movements/external-entries somente com a permissão específica (5 ms)
+PASS delega POST /movements/external-exits somente com a permissão específica (7 ms)
+PASS delega POST /movements/00000000-0000-4000-8000-000000000001/cancellation somente com a permissão específica (6 ms)
+PASS delega PATCH /product-conversions/00000000-0000-4000-8000-000000000001/status somente com a permissão específica (4 ms)
+PASS delega PATCH /stocks/00000000-0000-4000-8000-000000000001/status somente com a permissão específica (5 ms)
+PASS delega PATCH /products/00000000-0000-4000-8000-000000000001/status somente com a permissão específica (5 ms)
+
+apps\backend\src\modules\users\users.spec.ts
+PASS nega acesso sem ADMIN: undefined (1 ms)
+PASS nega acesso sem ADMIN: [] (1 ms)
+PASS nega acesso sem ADMIN: [ 'PRODUCAO' ] (0 ms)
+PASS nega acesso sem ADMIN: [ 'EXPEDICAO' ] (0 ms)
+PASS nega acesso sem ADMIN: [ 'ADMIN_REVISAO_EXPEDICAO' ] (0 ms)
+PASS nega acesso sem ADMIN: [ 'ADMIN_PRODUCAO_PCP' ] (0 ms)
+PASS permite ADMIN sem alternância operacional explícita (0 ms)
+PASS libera ações administrativas somente no modo ADMIN ou sem alternância explícita (1 ms)
+PASS valida login, senha, setor e perfis e rejeita null em edições (9 ms)
+PASS exige confirmação explícita de propagação e versão válida ao salvar preset (1 ms)
+
+Test Suites: 2 passed, 2 total
+Tests: 29 passed, 29 total
+Failed: 0; Skipped: 0
+Time: 21.653 s
+
+Recorte da funcionalidade: 7 rotas /users com 403 para perfis sem ADMIN e 2xx para ADMIN.
+A suite HTTP completa inclui tambem outras operacoes; todos os resultados estao acima.
+
+SHA-256 apps/backend/src/modules/users/admin.guard.ts: bcab78ea058cbe0f95afdfb2f6f351220ca014fd3024d331804826f20957d7ff
+SHA-256 apps/backend/src/modules/users/users.controller.ts: 431e3961f636bc09171c5639b29f98a824885b8543f1716d89f510649f06286c
+SHA-256 apps/backend/src/modules/users/users.spec.ts: b1fde885498b2a97be4ecab8cc162ae98e975e3788b990f6fc7e58ad4ae252a9
+SHA-256 apps/backend/src/modules/auth/admin-operations.spec.ts: 3ce718ed3fdf4077c3cf1cc8c35a298831949e78f5d3ae9024fe46de16fc9043
+
+Fonte: resultado-jest.json exportado pelo Jest. Nenhum teste ou controle de producao foi alterado.

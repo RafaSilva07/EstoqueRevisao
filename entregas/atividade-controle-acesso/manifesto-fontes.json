@@ -1,0 +1,22 @@
+[
+  {
+    "source": "apps/backend/src/modules/users/admin.guard.ts",
+    "snapshot": "codigo-fonte/admin.guard.ts",
+    "sha256": "bcab78ea058cbe0f95afdfb2f6f351220ca014fd3024d331804826f20957d7ff"
+  },
+  {
+    "source": "apps/backend/src/modules/users/users.controller.ts",
+    "snapshot": "codigo-fonte/users.controller.ts",
+    "sha256": "431e3961f636bc09171c5639b29f98a824885b8543f1716d89f510649f06286c"
+  },
+  {
+    "source": "apps/backend/src/modules/users/users.spec.ts",
+    "snapshot": "codigo-fonte/users.spec.ts",
+    "sha256": "b1fde885498b2a97be4ecab8cc162ae98e975e3788b990f6fc7e58ad4ae252a9"
+  },
+  {
+    "source": "apps/backend/src/modules/auth/admin-operations.spec.ts",
+    "snapshot": "codigo-fonte/admin-operations.spec.ts",
+    "sha256": "3ce718ed3fdf4077c3cf1cc8c35a298831949e78f5d3ae9024fe46de16fc9043"
+  }
+]

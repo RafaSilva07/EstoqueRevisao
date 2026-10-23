@@ -48,3 +48,7 @@ docker compose config --quiet
 ```
 
 Use um banco separado e descartável em `TEST_DATABASE_URL` para executar os testes de integração PostgreSQL.
+
+A entrega da Atividade 17 (Opção B — persistência) está em [`entregas/RESPOSTA.md`](./entregas/RESPOSTA.md), com código, print e execução reproduzível por `.\entregas\executar.ps1`.
+
+A atividade de controle de acesso à gestão de usuários está em [`entregas/atividade-controle-acesso/RESPOSTA.md`](./entregas/atividade-controle-acesso/RESPOSTA.md), com o controle já existente, o cenário de risco e as evidências de testes.

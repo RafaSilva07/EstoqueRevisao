@@ -7,6 +7,7 @@
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "test": "jest --runInBand --passWithNoTests",
+    "test:atividade": "jest --config jest.persistence-activity.config.cjs --runInBand --verbose --json --outputFile=../../entregas/resultado-jest.json",
     "test:watch": "jest --watch",
     "migration:run": "node scripts/run-typeorm-with-retry.cjs migration:run -d src/database/data-source.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/database/data-source.ts",

@@ -13,6 +13,8 @@ export default tseslint.config(
       '**/*.d.ts',
       '**/*.tsbuildinfo',
       'tmp/**',
+      'entregas/codigo-fonte/**',
+      'entregas/atividade-controle-acesso/codigo-fonte/**',
     ],
   },
   eslint.configs.recommended,

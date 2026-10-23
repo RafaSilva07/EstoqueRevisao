@@ -21,6 +21,7 @@
     "db:setup": "npm run db:migration:run",
     "lint": "eslint . --max-warnings=0",
     "test": "npm run test --workspaces --if-present",
+    "test:atividade": "npm run test:atividade --workspace @estoque-revisao/backend",
     "db:migration:run": "npm run migration:run --workspace @estoque-revisao/backend",
     "db:migration:revert": "npm run migration:revert --workspace @estoque-revisao/backend",
     "db:migration:show": "npm run migration:show --workspace @estoque-revisao/backend",

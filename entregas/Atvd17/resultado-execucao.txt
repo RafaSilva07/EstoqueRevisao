@@ -1,0 +1,17 @@
+ATIVIDADE - OPCAO B: CAMADA DE PERSISTENCIA
+NestJS + TypeORM + Jest + PostgreSQL real
+Execucao: 23/10/2026, 17:34:12 (America/Sao_Paulo)
+Comando: npm run test:atividade
+Arquivo: apps/backend/src/modules/products/products-persistence.integration.spec.ts
+
+PASS salva uma entidade e recupera os dados efetivamente persistidos no PostgreSQL (126 ms)
+PASS valida a consulta personalizada por nome sem acentos, fora de ordem e somente ativos (57 ms)
+PASS retorna lista vazia e total zero quando nenhum registro corresponde a busca (23 ms)
+
+Test Suites: 1 passed, 1 total
+Tests: 3 passed, 3 total
+Failed: 0; Skipped: 0
+Time: 172.353 s
+SHA-256 do codigo-fonte: 8c59386baa566c36c27582631cd7bf0be3539a7db4d0afa2952ed97cb6fc3fa5
+
+Fonte dos resultados: resultado-jest.json, exportado pelo Jest.
