@@ -54,6 +54,8 @@ import { PermissionPresets1791244800000 } from './migrations/1791244800000-permi
 import { AccountFormDrafts1791331200000 } from './migrations/1791331200000-account-form-drafts';
 import { AdministrativeShipmentCorrections1791417600000 } from './migrations/1791417600000-administrative-shipment-corrections';
 import { RecentOperationLookup1791504000000 } from './migrations/1791504000000-recent-operation-lookup';
+import { SystemLogEntity } from '../modules/system-logs/entities/system-log.entity';
+import { SystemLogsMonitoring1791590400000 } from './migrations/1791590400000-system-logs-monitoring';
 
 export const databaseEntities = [
   ShipmentEntity,
@@ -76,6 +78,7 @@ export const databaseEntities = [
   MovementEntity,
   MovementItemEntity,
   MovementItemDistributionEntity,
+  SystemLogEntity,
 ];
 
 export const databaseMigrations = [
@@ -113,6 +116,7 @@ export const databaseMigrations = [
   AccountFormDrafts1791331200000,
   AdministrativeShipmentCorrections1791417600000,
   RecentOperationLookup1791504000000,
+  SystemLogsMonitoring1791590400000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {

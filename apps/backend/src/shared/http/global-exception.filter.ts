@@ -4,9 +4,11 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
+  Optional,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AppLogger } from '../logging/app-logger.service';
+import { SystemLogsService } from '../../modules/system-logs/system-logs.service';
 
 interface ErrorPayload {
   code: string;
@@ -28,7 +30,10 @@ const DATABASE_CONNECTION_ERROR_CODES = new Set([
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
-  constructor(private readonly logger: AppLogger) {
+  constructor(
+    private readonly logger: AppLogger,
+    @Optional() private readonly systemLogsService?: SystemLogsService,
+  ) {
     this.logger.setContext(GlobalExceptionFilter.name);
   }
 
@@ -45,6 +50,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         : HttpStatus.INTERNAL_SERVER_ERROR;
     const error = this.toErrorPayload(exception, status);
 
+    const eventId = (request as unknown as { requestId?: string }).requestId || new Date().getTime().toString();
+
     if (status >= 500) {
       this.logger.error({
         event: 'unhandled_exception',
@@ -52,6 +59,47 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         method: request.method,
         path: request.path,
       });
+
+      if (this.systemLogsService) {
+        this.systemLogsService.createLog({
+          level: databaseUnavailable ? 'FATAL' : 'ERROR',
+          errorCode: error.code,
+          eventId,
+          description: error.message,
+          context: GlobalExceptionFilter.name,
+          details: {
+            method: request.method,
+            path: request.path,
+            statusCode: status,
+            databaseUnavailable,
+            exceptionName: (exception as Error)?.name,
+          },
+        }).catch(() => undefined);
+      }
+    } else if (status >= 400) {
+      // Falhas esperadas (4xx) - Registradas estruturadamente com criticidade WARN
+      this.logger.warn({
+        event: 'client_handled_exception',
+        errorCode: error.code,
+        method: request.method,
+        path: request.path,
+        message: error.message,
+      });
+
+      if (this.systemLogsService) {
+        this.systemLogsService.warn({
+          errorCode: error.code,
+          eventId,
+          description: error.message,
+          context: GlobalExceptionFilter.name,
+          details: {
+            method: request.method,
+            path: request.path,
+            statusCode: status,
+            errorDetails: error.details,
+          },
+        }).catch(() => undefined);
+      }
     }
 
     response.status(status).json({

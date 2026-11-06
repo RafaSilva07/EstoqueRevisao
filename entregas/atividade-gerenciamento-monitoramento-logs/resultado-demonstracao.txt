@@ -1,0 +1,38 @@
+======================================================================
+EVIDÊNCIA DE EXECUÇÃO: GERENCIAMENTO E MONITORAMENTO DE LOGS
+Projeto: EstoqueRevisao
+Branch: atividade/gerenciamento-monitoramento-logs
+Data/Hora: 2026-11-06T21:10:20.135Z
+======================================================================
+
+[RESULTADO DOS TESTES AUTOMATIZADOS (JEST)]
+
+> @estoque-revisao/backend@0.1.0 test
+> jest --runInBand --passWithNoTests system-logs products-failure --verbose
+
+{"timestamp":"2026-11-06T21:10:36.936Z","level":"WARN","errorCode":"PRODUCT_NOT_FOUND","eventId":"req-uuid-1234","description":"Produto com identificador solicitado nao foi localizado.","context":"ProductsController","environment":"development","details":{"productId":"prod-456","password":"[REDACTED]","token":"[REDACTED]","authorization":"[REDACTED]"}}
+{"timestamp":"2026-11-06T21:10:36.937Z","level":"INFO","errorCode":null,"eventId":"07b2b130-89fa-438a-bf5b-357ec4370a95","description":"Servico inicializado com sucesso","context":"Bootstrap","environment":"development","details":null}
+{"timestamp":"2026-11-06T21:10:36.937Z","level":"WARN","errorCode":"PRODUCT_CODE_ALREADY_EXISTS","eventId":"bc1a6001-bcd7-4abe-8645-6c945a7910dc","description":"Tentativa de cadastro com codigo duplicado","context":"ProductsService","environment":"development","details":null}
+{"timestamp":"2026-11-06T10:00:00.000Z","level":"INFO","errorCode":null,"eventId":"ev-1","description":"Usuario admin efetuou login no sistema","context":"AuthService","environment":"development","details":null}
+{"timestamp":"2026-11-06T11:00:00.000Z","level":"WARN","errorCode":"PRODUCT_NOT_FOUND","eventId":"ev-2","description":"Produto solicitado nao encontrado no catalogo","context":"ProductsController","environment":"development","details":null}
+{"timestamp":"2026-11-06T12:00:00.000Z","level":"WARN","errorCode":"PRODUCT_CODE_ALREADY_EXISTS","eventId":"ev-3","description":"Ja existe um produto com o codigo PRD-001","context":"ProductsController","environment":"development","details":null}
+{"timestamp":"2026-11-06T10:00:00.000Z","level":"INFO","errorCode":null,"eventId":"ev-1","description":"Usuario admin efetuou login no sistema","context":"AuthService","environment":"development","details":null}
+{"timestamp":"2026-11-06T11:00:00.000Z","level":"WARN","errorCode":"PRODUCT_NOT_FOUND","eventId":"ev-2","description":"Produto solicitado nao encontrado no catalogo","context":"ProductsController","environment":"development","details":null}
+{"timestamp":"2026-11-06T12:00:00.000Z","level":"WARN","errorCode":"PRODUCT_CODE_ALREADY_EXISTS","eventId":"ev-3","description":"Ja existe um produto com o codigo PRD-001","context":"ProductsController","environment":"development","details":null}
+{"timestamp":"2026-11-06T10:00:00.000Z","level":"INFO","errorCode":null,"eventId":"ev-1","description":"Usuario admin efetuou login no sistema","context":"AuthService","environment":"development","details":null}
+{"timestamp":"2026-11-06T11:00:00.000Z","level":"WARN","errorCode":"PRODUCT_NOT_FOUND","eventId":"ev-2","description":"Produto solicitado nao encontrado no catalogo","context":"ProductsController","environment":"development","details":null}
+{"timestamp":"2026-11-06T12:00:00.000Z","level":"WARN","errorCode":"PRODUCT_CODE_ALREADY_EXISTS","eventId":"ev-3","description":"Ja existe um produto com o codigo PRD-001","context":"ProductsController","environment":"development","details":null}
+{"timestamp":"2026-11-06T10:00:00.000Z","level":"INFO","errorCode":null,"eventId":"ev-1","description":"Usuario admin efetuou login no sistema","context":"AuthService","environment":"development","details":null}
+{"timestamp":"2026-11-06T11:00:00.000Z","level":"WARN","errorCode":"PRODUCT_NOT_FOUND","eventId":"ev-2","description":"Produto solicitado nao encontrado no catalogo","context":"ProductsController","environment":"development","details":null}
+{"timestamp":"2026-11-06T12:00:00.000Z","level":"WARN","errorCode":"PRODUCT_CODE_ALREADY_EXISTS","eventId":"ev-3","description":"Ja existe um produto com o codigo PRD-001","context":"ProductsController","environment":"development","details":null}
+{"timestamp":"2026-11-06T10:00:00.000Z","level":"INFO","errorCode":null,"eventId":"ev-1","description":"Usuario admin efetuou login no sistema","context":"AuthService","environment":"development","details":null}
+{"timestamp":"2026-11-06T11:00:00.000Z","level":"WARN","errorCode":"PRODUCT_NOT_FOUND","eventId":"ev-2","description":"Produto solicitado nao encontrado no catalogo","context":"ProductsController","environment":"development","details":null}
+{"timestamp":"2026-11-06T12:00:00.000Z","level":"WARN","errorCode":"PRODUCT_CODE_ALREADY_EXISTS","eventId":"ev-3","description":"Ja existe um produto com o codigo PRD-001","context":"ProductsController","environment":"development","details":null}
+{"timestamp":"2026-11-06T10:00:00.000Z","level":"INFO","errorCode":null,"eventId":"ev-1","description":"Usuario admin efetuou login no sistema","context":"AuthService","environment":"development","details":null}
+{"timestamp":"2026-11-06T11:00:00.000Z","level":"WARN","errorCode":"PRODUCT_NOT_FOUND","eventId":"ev-2","description":"Produto solicitado nao encontrado no catalogo","context":"ProductsController","environment":"development","details":null}
+{"timestamp":"2026-11-06T12:00:00.000Z","level":"WARN","errorCode":"PRODUCT_CODE_ALREADY_EXISTS","eventId":"ev-3","description":"Ja existe um produto com o codigo PRD-001","context":"ProductsController","environment":"development","details":null}
+{"timestamp":"2026-11-06T21:10:36.941Z","level":"WARN","errorCode":"PRODUCT_NOT_FOUND","eventId":"a4ceb851-1ea5-4d50-8dbf-a2e558fd4260","description":"Outro produto nao encontrado","context":"ProductsController","environment":"development","details":null}
+{"timestamp":"2026-11-06T21:10:36.941Z","level":"INFO","errorCode":null,"eventId":"bd03fd84-3e73-4ef5-b424-702c2bd347d1","description":"Operacao normal","context":"App","environment":"development","details":null}
+{"timestamp":"2026-11-06T21:10:36.941Z","level":"WARN","errorCode":"WARN_1","eventId":"14d4b519-4e5e-462a-b9da-5a1fcb99d80f","description":"Alerta menor","context":"App","environment":"development","details":null}
+
+

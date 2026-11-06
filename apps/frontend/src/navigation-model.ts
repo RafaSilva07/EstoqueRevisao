@@ -1,6 +1,6 @@
 import { UserSession } from './api';
 
-export type Page = 'home' | 'operations' | 'pcp' | 'pcp-all' | 'pcp-executed' | 'users' | 'settings' | 'preferences' | 'online-users' | 'shipments' | 'shipment-new' | 'shipment-sent' | 'shipment-separation' | 'new-entry' | 'new-exit' | 'new-transfer' | 'new-review' | 'movements' | 'history' | 'inventory' | 'reports' | 'reports-reviews' | 'products' | 'stocks' | 'more';
+export type Page = 'home' | 'operations' | 'pcp' | 'pcp-all' | 'pcp-executed' | 'users' | 'settings' | 'preferences' | 'online-users' | 'shipments' | 'shipment-new' | 'shipment-sent' | 'shipment-separation' | 'new-entry' | 'new-exit' | 'new-transfer' | 'new-review' | 'movements' | 'history' | 'inventory' | 'reports' | 'reports-reviews' | 'products' | 'stocks' | 'more' | 'logs';
 export type MenuAction = { page: Page; title: string; description: string };
 export type NavigationGroup = { title: string; actions: MenuAction[] };
 
@@ -14,6 +14,7 @@ export const pageTitles: Record<Page, string> = {
   'new-review': 'Realizar revisão', movements: 'Movimentações', history: 'Histórico', inventory: 'Estoque e validades',
   reports: 'Relatório de movimentações', 'reports-reviews': 'Relatório de revisões',
   products: 'Produtos', stocks: 'Estoques e locais', more: 'Menu',
+  logs: 'Logs e Monitoramento',
 };
 
 export function parentPage(page: Page, user?: UserSession): Page {
@@ -23,7 +24,7 @@ export function parentPage(page: Page, user?: UserSession): Page {
   if (page === 'movements' || page === 'reports' || page === 'reports-reviews') return 'history';
   if (page === 'pcp-all' || page === 'pcp-executed') return 'pcp';
   if (page === 'stocks') return 'more';
-  if (page === 'users' || page === 'settings' || page === 'preferences' || page === 'online-users') return 'more';
+  if (page === 'users' || page === 'settings' || page === 'preferences' || page === 'online-users' || page === 'logs') return 'more';
   return 'home';
 }
 
@@ -73,7 +74,7 @@ export function navigationGroups(user: UserSession, showOnlineUsers = false): Na
     { title: 'Dia a dia', actions: daily },
     { title: 'Consultas', actions: queries },
     { title: 'Cadastros', actions: [...workflow.secondary.filter((action) => action.page === 'products'), ...more.filter((action) => action.page === 'stocks')] },
-    { title: 'Administração', actions: [...more.filter((action) => action.page === 'users' || action.page === 'settings'), ...(showOnlineUsers ? [{ page: 'online-users' as const, title: 'Usuários online', description: 'Veja quem está ativo em cada setor.' }] : [])] },
+    { title: 'Administração', actions: [...more.filter((action) => action.page === 'users' || action.page === 'settings' || action.page === 'logs'), ...(showOnlineUsers ? [{ page: 'online-users' as const, title: 'Usuários online', description: 'Veja quem está ativo em cada setor.' }] : [])] },
     { title: 'Minha conta', actions: more.filter((action) => action.page === 'preferences') },
   ].filter((group) => group.actions.length > 0);
 }
@@ -117,6 +118,7 @@ export function menuActions(page: Page, user: UserSession): MenuAction[] {
     add(review && can('stocks.read'), 'stocks', 'Cadastrar e consultar locais de estoque.');
     add(admin, 'users', 'Administrar contas e perfis.');
     add(admin, 'settings', 'Definir prazo e destinos da revisão.');
+    add(admin, 'logs', 'Monitoramento e gerenciamento de logs.');
   } else if (page === 'operations') {
     add(review && can('movements.external-entry'), 'new-entry', 'Receber de uma origem externa.');
     add(review && can('movements.external-exit'), 'new-exit', 'Enviar para um destino externo.');

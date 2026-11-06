@@ -23,6 +23,7 @@ import { RequestContextMiddleware } from './shared/logging/request-context.middl
 import { SettingsModule } from './modules/settings/settings.module';
 import { HistoryModule } from './modules/history/history.module';
 import { FormDraftsModule } from './modules/form-drafts/form-drafts.module';
+import { SystemLogsModule } from './modules/system-logs/system-logs.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { FormDraftsModule } from './modules/form-drafts/form-drafts.module';
     HealthModule,
     HistoryModule,
     FormDraftsModule,
+    SystemLogsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

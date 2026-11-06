@@ -28,6 +28,7 @@ function SidebarIcon({ page }: { page: Page }) {
     case 'reports':
     case 'reports-reviews': shape = <><path d="M14 3H5v18h14V8l-5-5v5h5M8 12h8M8 16h8" /></>; break;
     case 'settings': shape = <><circle cx="12" cy="12" r="4" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2m10 10 2 2M5 19l2-2M17 7l2-2" /></>; break;
+    case 'logs': shape = <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M7 8h10M7 12h10M7 16h6" /></>; break;
     case 'more': shape = <path d="M4 6h16M4 12h16M4 18h16" />; break;
     case 'preferences': shape = <><path d="M12 3a9 9 0 1 0 0 18h1.5a2 2 0 0 0 1.5-3.3 1.8 1.8 0 0 1 1.3-3h1.2A3.5 3.5 0 0 0 21 11.2 9 9 0 0 0 12 3Z" /><circle cx="7.5" cy="11" r=".7" /><circle cx="10" cy="7.5" r=".7" /><circle cx="15" cy="7.5" r=".7" /></>; break;
     default: shape = <><circle cx="12" cy="12" r="9" /><circle cx="7" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="17" cy="12" r="1" /></>;

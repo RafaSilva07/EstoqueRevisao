@@ -1,6 +1,20 @@
 import { AdminGuard } from '../users/admin.guard';
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  ConflictException,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { Request } from 'express';
+import { Public } from '../auth/decorators/public.decorator';
 import { StatusDto } from '../../shared/dto/status.dto';
 import { PaginatedResult } from '../../shared/pagination/paginated-result.interface';
 import { getAuditRequestMetadata } from '../audit/audit-request-metadata';
@@ -35,6 +49,52 @@ export class ProductsController {
   @UseGuards(AdminGuard)
   auditHistory(@Query() query: ProductAuditQueryDto): Promise<PaginatedResult<ProductAuditEntry>> {
     return this.productsService.auditHistory(query);
+  }
+
+  @Public()
+  @Get('products/simulate/expected-not-found')
+  simulateExpectedNotFound(): never {
+    throw new NotFoundException({
+      code: 'PRODUCT_NOT_FOUND',
+      message: 'Falha esperada simulada: O produto com o identificador solicitado nao foi localizado no catalogo.',
+    });
+  }
+
+  @Public()
+  @Get('products/simulate/expected-conflict')
+  simulateExpectedConflict(): never {
+    throw new ConflictException({
+      code: 'PRODUCT_CODE_ALREADY_EXISTS',
+      message: 'Falha esperada simulada: Conflito de dados - Ja existe um produto cadastrado com este codigo.',
+    });
+  }
+
+  @Public()
+  @Get('products/simulate/unexpected-database')
+  simulateUnexpectedDatabase(): never {
+    const dbError = new Error('Falha inesperada simulada de conectividade com o banco PostgreSQL');
+    (dbError as unknown as { code: string }).code = 'ECONNREFUSED';
+    throw dbError;
+  }
+
+  @Public()
+  @Get('products/simulate/unexpected-crash')
+  simulateUnexpectedCrash(): never {
+    throw new Error('Falha inesperada simulada no processamento interno de catalogo.');
+  }
+
+  @Public()
+  @Post('products/simulate-failure')
+  simulateFailure(@Body() body: { type: 'conflict' | 'not-found' | 'database' | 'crash' }): never {
+    if (body.type === 'not-found') {
+      this.simulateExpectedNotFound();
+    } else if (body.type === 'conflict') {
+      this.simulateExpectedConflict();
+    } else if (body.type === 'database') {
+      this.simulateUnexpectedDatabase();
+    } else {
+      this.simulateUnexpectedCrash();
+    }
   }
 
   @Get('products/:id')
