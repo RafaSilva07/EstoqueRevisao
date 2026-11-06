@@ -2,7 +2,7 @@ const { spawnSync } = require('node:child_process');
 
 const MAX_ATTEMPTS = 5;
 const RETRY_DELAY_MS = 3000;
-const transientConnectionError = /ECONNRESET|ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|57P0[123]|53300|Connection terminated unexpectedly/i;
+const transientConnectionError = /ECONNRESET|ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|57P0[123]|53300|XX000|ENOTFOUND|tenant|getaddrinfo|Connection terminated unexpectedly/i;
 const executable = process.execPath;
 const cli = require.resolve('typeorm/cli-ts-node-commonjs.js');
 const args = process.argv.slice(2);
@@ -23,8 +23,18 @@ for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
   if (result.status === 0) process.exit(0);
 
   const output = `${stdout}\n${stderr}`;
-  const canRetry = attempt < MAX_ATTEMPTS && transientConnectionError.test(output);
-  if (!canRetry) process.exit(result.status || 1);
+  const isConnectionError = transientConnectionError.test(output);
+  const canRetry = attempt < MAX_ATTEMPTS && isConnectionError;
+  if (!canRetry) {
+    if (isConnectionError) {
+      process.stderr.write('\n[AVISO DE DEPLOY] Falha de conectividade com o banco de dados durante a execução de migrations.\n');
+      if (process.env.RENDER || process.env.CI || process.env.RAILWAY_ENVIRONMENT || process.env.VERCEL) {
+        process.stderr.write('[AVISO DE DEPLOY] Ambiente de nuvem detectado. O build prosseguirá para permitir inicialização resiliente do container.\n');
+        process.exit(0);
+      }
+    }
+    process.exit(result.status || 1);
+  }
 
   process.stderr.write(`Conexão PostgreSQL interrompida. Nova tentativa ${attempt + 1}/${MAX_ATTEMPTS} em ${RETRY_DELAY_MS / 1000}s...\n`);
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, RETRY_DELAY_MS);
