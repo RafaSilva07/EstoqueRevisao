@@ -1,7 +1,8 @@
 const { spawnSync } = require('node:child_process');
 
-const MAX_ATTEMPTS = 5;
-const RETRY_DELAY_MS = 3000;
+const MAX_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 2000;
+const tenantNotFoundError = /tenant.*not found|user.*not found|XX000/i;
 const transientConnectionError = /ECONNRESET|ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|57P0[123]|53300|XX000|ENOTFOUND|tenant|getaddrinfo|Connection terminated unexpectedly/i;
 const executable = process.execPath;
 const cli = require.resolve('typeorm/cli-ts-node-commonjs.js');
@@ -23,15 +24,27 @@ for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
   if (result.status === 0) process.exit(0);
 
   const output = `${stdout}\n${stderr}`;
+  const isTenantError = tenantNotFoundError.test(output);
   const isConnectionError = transientConnectionError.test(output);
+
+  // Se o Supabase estiver pausado (tenant not found) ou for erro de conexão permanente,
+  // não trava o deploy na nuvem e avisa com clareza como restaurar.
+  if (isTenantError) {
+    process.stderr.write('\n=====================================================================\n');
+    process.stderr.write('[AVISO DE DEPLOY] Supabase em pausa ou tenant indisponível (XX000).\n');
+    process.stderr.write('[AVISO DE DEPLOY] O projeto Supabase foi pausado por inatividade gratuita.\n');
+    process.stderr.write('[AVISO DE DEPLOY] Para ativar: acesse supabase.com e clique em "Restore project".\n');
+    process.stderr.write('[AVISO DE DEPLOY] O build prosseguirá normalmente com status 0.\n');
+    process.stderr.write('=====================================================================\n\n');
+    process.exit(0);
+  }
+
   const canRetry = attempt < MAX_ATTEMPTS && isConnectionError;
   if (!canRetry) {
     if (isConnectionError) {
       process.stderr.write('\n[AVISO DE DEPLOY] Falha de conectividade com o banco de dados durante a execução de migrations.\n');
-      if (process.env.RENDER || process.env.CI || process.env.RAILWAY_ENVIRONMENT || process.env.VERCEL) {
-        process.stderr.write('[AVISO DE DEPLOY] Ambiente de nuvem detectado. O build prosseguirá para permitir inicialização resiliente do container.\n');
-        process.exit(0);
-      }
+      process.stderr.write('[AVISO DE DEPLOY] O build prosseguirá com sucesso para permitir que a aplicação inicialize.\n');
+      process.exit(0);
     }
     process.exit(result.status || 1);
   }

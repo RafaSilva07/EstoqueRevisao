@@ -134,8 +134,8 @@ export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModule
     migrations: databaseMigrations,
     synchronize: false,
     migrationsRun: false,
-    retryAttempts: 10,
-    retryDelay: 3000,
+    retryAttempts: 3,
+    retryDelay: 1500,
     extra: {
       max: 5,
       connectionTimeoutMillis: 15000,
