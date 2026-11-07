@@ -21,7 +21,10 @@ for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
   process.stderr.write(stderr);
   if (result.error) process.stderr.write(`${result.error.message}\n`);
 
-  if (result.status === 0) process.exit(0);
+  if (result.status === 0) {
+    process.stdout.write('\n[DEPLOY] Migrations executadas com sucesso no PostgreSQL.\n');
+    process.exit(0);
+  }
 
   const output = `${stdout}\n${stderr}`;
   const isTenantError = tenantNotFoundError.test(output);
