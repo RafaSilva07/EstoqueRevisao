@@ -1,7 +1,7 @@
 import { BadRequestException, CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
-import { ANY_PERMISSIONS_KEY, OPERATIONAL_SECTOR_HEADER, REQUIRED_PERMISSIONS_KEY } from '../auth.constants';
+import { ANY_PERMISSIONS_KEY, IS_PUBLIC_KEY, OPERATIONAL_SECTOR_HEADER, REQUIRED_PERMISSIONS_KEY } from '../auth.constants';
 import { AuthenticatedUser } from '../authenticated-user.interface';
 import { allowedOperationalModes, allOperationalModes } from '../operational-modes';
 import { permissionAllowedInMode } from '../permission-scopes';
@@ -11,6 +11,12 @@ export class PermissionsGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPublic === true) return true;
+
     const required = this.reflector.getAllAndOverride<string[]>(REQUIRED_PERMISSIONS_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -25,7 +31,9 @@ export class PermissionsGuard implements CanActivate {
       if (typeof requestedSector !== 'string' || !allOperationalModes.includes(requestedSector as typeof allOperationalModes[number])) {
         throw new BadRequestException('Modo operacional inválido.');
       }
-      if (!user || !allowedOperationalModes(user.roles).includes(requestedSector)) {
+      const allowed = allowedOperationalModes(user?.roles ?? []);
+      const isCurrentSector = user?.sector === requestedSector;
+      if (!user || (!allowed.includes(requestedSector) && !isCurrentSector)) {
         throw new ForbiddenException('Este perfil não pode acessar o modo operacional solicitado.');
       }
       operationalMode = requestedSector;

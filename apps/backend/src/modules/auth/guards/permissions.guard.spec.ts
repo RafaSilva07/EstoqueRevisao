@@ -65,4 +65,21 @@ describe('Permissões por setor', () => {
     expect(() => check('PRODUCAO', ['movements.create'], permissions, ['ADMIN_PRODUCAO_PCP'], 'REVISAO')).toThrow(ForbiddenException);
     expect(() => check('PRODUCAO', ['shipments.create'], permissions, ['ADMIN_PRODUCAO_PCP'], 'ADMIN')).toThrow(ForbiddenException);
   });
+
+  it('permite rotas publicas mesmo se cabecalho de setor operacional for enviado', () => {
+    const reflector = {
+      getAllAndOverride: (key: string) => (key === 'isPublic' ? true : []),
+    } as unknown as Reflector;
+    const context = {
+      getHandler: () => null,
+      getClass: () => null,
+      switchToHttp: () => ({
+        getRequest: () => ({
+          headers: { 'x-operational-sector': 'QUALQUER_SETOR' },
+          user: undefined,
+        }),
+      }),
+    } as unknown as ExecutionContext;
+    expect(new PermissionsGuard(reflector).canActivate(context)).toBe(true);
+  });
 });
