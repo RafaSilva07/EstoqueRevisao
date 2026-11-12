@@ -203,7 +203,7 @@ describe('rascunhos dos formulários', () => {
     await act(async () => { root.render(<StrictMode><App /></StrictMode>); await Promise.resolve(); });
     await until(() => Boolean(host.querySelector('[aria-label="Modo operacional"]')));
     await act(async () => { const mode = host.querySelector<HTMLSelectElement>('[aria-label="Modo operacional"]')!; mode.value = 'EXPEDICAO'; mode.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
-    await act(async () => { host.querySelector<HTMLButtonElement>('.sidebar [aria-label="Envios e recebimentos"]')!.click(); await Promise.resolve(); });
+    await act(async () => { host.querySelector<HTMLButtonElement>('.sidebar button[aria-label*="Envios"]')!.click(); await Promise.resolve(); });
     await until(() => host.textContent?.includes('Novo envio para Revisão') ?? false);
     await click('Novo envio para Revisão');
     await until(() => Boolean(host.querySelector('.draft-toolbar')));
@@ -232,7 +232,7 @@ describe('rascunhos dos formulários', () => {
     const saved = await formDraftStore.read('administrator:EXPEDICAO:shipment:EXPEDICAO');
     expect(saved?.value).toEqual(expect.objectContaining({ items: [expect.objectContaining({ product, quantity: 10, lot: { code: 'CICINV', manufacturingDate: '2026-09-09', expirationDate: '2029-09-09' } })] }));
     expect(submit.mock.calls.some(([path]) => path === '/shipments')).toBe(false);
-    if (exit !== 'Voltar') await act(async () => { host.querySelector<HTMLButtonElement>('.sidebar [aria-label="Envios e recebimentos"]')!.click(); await Promise.resolve(); });
+    if (exit !== 'Voltar') await act(async () => { host.querySelector<HTMLButtonElement>('.sidebar button[aria-label*="Envios"]')!.click(); await Promise.resolve(); });
     await until(() => host.textContent?.includes('Envios e recebimentos') ?? false);
     await click('Novo envio para Revisão');
     await until(() => host.textContent?.includes('Produtos (1)') ?? false);
