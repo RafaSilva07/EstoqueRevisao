@@ -10,51 +10,123 @@ def build_pdf(output_path: str) -> None:
     doc = SimpleDocTemplate(
         output_path,
         pagesize=A4,
-        leftMargin=1.8 * cm,
-        rightMargin=1.8 * cm,
-        topMargin=1.6 * cm,
-        bottomMargin=1.6 * cm,
+        leftMargin=1.7 * cm,
+        rightMargin=1.7 * cm,
+        topMargin=1.25 * cm,
+        bottomMargin=1.25 * cm,
     )
 
     styles = getSampleStyleSheet()
     navy = colors.HexColor('#0f172a')
     accent = colors.HexColor('#0369a1')
-    muted = colors.HexColor('#475569')
     light_bg = colors.HexColor('#f1f5f9')
     border = colors.HexColor('#cbd5e1')
+    text_dark = colors.HexColor('#1e293b')
 
-    title_style = ParagraphStyle('TitleCustom', parent=styles['Title'], fontSize=17, textColor=navy, spaceAfter=4, alignment=0)
-    subtitle_style = ParagraphStyle('SubtitleCustom', parent=styles['Normal'], fontSize=10, textColor=accent, spaceAfter=10, fontName='Helvetica-Bold')
-    h2_style = ParagraphStyle('H2Custom', parent=styles['Heading2'], fontSize=12, textColor=navy, spaceBefore=10, spaceAfter=5)
-    body_style = ParagraphStyle('BodyCustom', parent=styles['Normal'], fontSize=9.5, leading=13.5, textColor=colors.HexColor('#1e293b'), spaceAfter=5)
-    bullet_style = ParagraphStyle('BulletCustom', parent=body_style, leftIndent=12, bulletIndent=4, spaceAfter=3.5)
+    title_style = ParagraphStyle(
+        'TitleCustom',
+        parent=styles['Title'],
+        fontName='Helvetica-Bold',
+        fontSize=17,
+        leading=22,
+        textColor=navy,
+        spaceAfter=4,
+        alignment=0,
+    )
+    subtitle_style = ParagraphStyle(
+        'SubtitleCustom',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=9.5,
+        leading=13,
+        textColor=accent,
+        spaceAfter=10,
+    )
+    h2_style = ParagraphStyle(
+        'H2Custom',
+        parent=styles['Heading2'],
+        fontName='Helvetica-Bold',
+        fontSize=11,
+        leading=15,
+        textColor=navy,
+        spaceBefore=7,
+        spaceAfter=3.5,
+    )
+    body_style = ParagraphStyle(
+        'BodyCustom',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=9.2,
+        leading=13.2,
+        textColor=text_dark,
+        spaceAfter=4.5,
+    )
+    bullet_style = ParagraphStyle(
+        'BulletCustom',
+        parent=body_style,
+        leftIndent=14,
+        bulletIndent=4,
+        spaceAfter=3,
+    )
+    cell_style = ParagraphStyle(
+        'CellCustom',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=8.5,
+        leading=12,
+        textColor=text_dark,
+    )
+    cell_bold_style = ParagraphStyle(
+        'CellBoldCustom',
+        parent=cell_style,
+        fontName='Helvetica-Bold',
+        textColor=navy,
+    )
+    header_cell_style = ParagraphStyle(
+        'HeaderCellCustom',
+        parent=cell_style,
+        fontName='Helvetica-Bold',
+        textColor=colors.white,
+    )
 
     story = []
 
     story.append(Paragraph('Relatório de Governança e Qualidade dos Dados', title_style))
-    story.append(Paragraph('Sistema EstoqueRevisao • Proposta Implementada: Painel de Qualidade dos Dados (Data Quality Monitor)', subtitle_style))
-    story.append(HRFlowable(width='100%', thickness=1.2, color=accent, spaceAfter=8))
+    story.append(Paragraph(
+        'Sistema EstoqueRevisao • Proposta Implementada: Painel de Qualidade dos Dados (Data Quality Monitor)',
+        subtitle_style,
+    ))
+    story.append(HRFlowable(width='100%', thickness=1.2, color=accent, spaceAfter=10))
 
     meta_table = Table(
         [
-            ['Projeto:', 'EstoqueRevisao (Gestão de Estoque e Revisão)', 'Branch:', 'develop (Ambiente de Teste)'],
-            ['Funcionalidade:', 'Painel de Governança e Qualidade dos Dados', 'Data:', '19/11/2026'],
+            [
+                Paragraph('Projeto:', cell_bold_style),
+                Paragraph('EstoqueRevisao (Gestão de Estoque e Revisão)', cell_style),
+                Paragraph('Branch:', cell_bold_style),
+                Paragraph('develop (Ambiente de Teste)', cell_style),
+            ],
+            [
+                Paragraph('Funcionalidade:', cell_bold_style),
+                Paragraph('Painel de Governança e Qualidade dos Dados', cell_style),
+                Paragraph('Data:', cell_bold_style),
+                Paragraph('19/11/2026', cell_style),
+            ],
         ],
-        colWidths=[2.8 * cm, 7.2 * cm, 2.0 * cm, 5.4 * cm],
+        colWidths=[3.1 * cm, 7.3 * cm, 1.8 * cm, 5.4 * cm],
     )
     meta_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), light_bg),
-        ('TEXTCOLOR', (0, 0), (-1, -1), navy),
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('BOX', (0, 0), (-1, -1), 0.6, border),
         ('INNERGRID', (0, 0), (-1, -1), 0.4, border),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
         ('TOPPADDING', (0, 0), (-1, -1), 5),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
     ]))
     story.append(meta_table)
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 10))
 
     story.append(Paragraph('1. Visão Geral da Proposta', h2_style))
     story.append(Paragraph(
@@ -72,27 +144,37 @@ def build_pdf(output_path: str) -> None:
         body_style,
     ))
 
-    dim_data = [
-        ['Dimensão', 'Regra Verificada', 'Severidade', 'Impacto'],
+    raw_rows = [
+        ['Dimensão', 'Regra Verificada', 'Severidade', 'Impacto na Governança'],
         ['Completude Cadastral', 'Produtos ativos sem peso unitário ou sem validade padrão', 'Média / Baixa', 'Garante cálculos logísticos e controle de validade'],
         ['Validade de Lotes', 'Lotes vencidos ou a vencer (<= 30 dias) com saldo em estoque', 'Alta / Média', 'Previne expedição de material impróprio (FEFO)'],
         ['Consistência de Saldos', 'Posições de estoque com quantidade negativa', 'Alta', 'Protege a integridade física e contábil'],
-        ['Tempestividade', 'Separações expiradas ou remessas pendentes > 72h', 'Alta / Baixa', 'Evita gargalos operacionais entre setores'],
+        ['Tempestividade', 'Separações expiradas ou remessas pendentes há mais de 72h', 'Alta / Baixa', 'Evita gargalos operacionais entre setores'],
     ]
-    dim_table = Table(dim_data, colWidths=[3.5 * cm, 6.2 * cm, 2.5 * cm, 5.2 * cm])
+
+    dim_data = []
+    for idx, row in enumerate(raw_rows):
+        style_to_use = header_cell_style if idx == 0 else cell_style
+        dim_data.append([
+            Paragraph(row[0], header_cell_style if idx == 0 else cell_bold_style),
+            Paragraph(row[1], style_to_use),
+            Paragraph(row[2], style_to_use),
+            Paragraph(row[3], style_to_use),
+        ])
+
+    dim_table = Table(dim_data, colWidths=[3.4 * cm, 6.2 * cm, 2.4 * cm, 5.4 * cm], repeatRows=1)
     dim_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), navy),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8.2),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, light_bg]),
         ('GRID', (0, 0), (-1, -1), 0.5, border),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
     ]))
     story.append(dim_table)
-    story.append(Spacer(1, 6))
+    story.append(Spacer(1, 8))
 
     story.append(Paragraph('3. Qual Problema a Funcionalidade Resolve', h2_style))
     story.append(Paragraph(
