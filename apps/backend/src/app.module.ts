@@ -24,6 +24,7 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { HistoryModule } from './modules/history/history.module';
 import { FormDraftsModule } from './modules/form-drafts/form-drafts.module';
 import { SystemLogsModule } from './modules/system-logs/system-logs.module';
+import { DataQualityModule } from './modules/data-quality/data-quality.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { SystemLogsModule } from './modules/system-logs/system-logs.module';
     HistoryModule,
     FormDraftsModule,
     SystemLogsModule,
+    DataQualityModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

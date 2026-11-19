@@ -23,6 +23,7 @@ import { Sector } from './shipments';
 import { UsersPage } from './UsersPage';
 import { SettingsPage } from './SettingsPage';
 import { LogsMonitoringPage } from './LogsMonitoringPage';
+import { DataQualityPage } from './DataQualityPage';
 import { PreferencesPage } from './PreferencesPage';
 import { OnlineUsersPage, PcpOnlineNotice } from './OnlinePresence';
 import { isPresenceAdmin } from './online-presence';
@@ -364,6 +365,7 @@ function AppSession() {
       {page === 'users' && adminMode && <UsersPage currentUserId={user.id} onOwnUpdate={logout} />}
       {page === 'settings' && adminMode && <SettingsPage />}
       {page === 'logs' && adminMode && <LogsMonitoringPage />}
+      {page === 'data-quality' && adminMode && <DataQualityPage />}
       {page === 'preferences' && <PreferencesPage value={preferences} onSaved={setPreferences} />}
       {page === 'online-users' && presenceAdmin && <OnlineUsersPage users={presence.onlineUsers} loading={presence.loading} error={presence.error} onRetry={presence.refresh} />}
       {activeSector !== 'PCP' && ['shipments', 'shipment-new', 'shipment-sent', 'shipment-separation'].includes(page) && can('shipments.read') && <ShipmentsPage key={`${activeSector}:${page}`} user={activeUser} initialId={selectedRecordId} initialView={page === 'shipment-sent' ? 'sent' : page === 'shipment-separation' ? 'separation' : 'pending'} initialCreating={page === 'shipment-new'} onHistory={() => go('history')} />}
