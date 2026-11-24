@@ -71,6 +71,8 @@ npm run db:user:create
 
 `db:setup` executa todas as migrations diretamente no `DATABASE_URL` do Supabase. As migrations também cadastram os perfis, permissões e locais iniciais necessários ao sistema; não há outro seed para executar.
 
+Com `NODE_ENV=production`, o backend aplica as migrations pendentes em uma transação antes de aceitar requisições. O histórico fica em `schema_migrations`, compartilhado com o comando manual. A conexão do deploy precisa ter permissão para atualizar o esquema.
+
 Execute `db:user:create` somente para criar um novo usuário. Se o identificador já existir, utilize esse usuário ou altere `BOOTSTRAP_USERNAME`.
 
 ## 5. Iniciar backend e frontend

@@ -134,6 +134,7 @@ export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModule
     ),
     entities: databaseEntities,
     migrations: databaseMigrations,
+    migrationsTableName: 'schema_migrations',
     synchronize: false,
     migrationsRun: false,
     retryAttempts: 3,
