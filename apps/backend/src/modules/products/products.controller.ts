@@ -14,7 +14,6 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
-import { Public } from '../auth/decorators/public.decorator';
 import { StatusDto } from '../../shared/dto/status.dto';
 import { PaginatedResult } from '../../shared/pagination/paginated-result.interface';
 import { getAuditRequestMetadata } from '../audit/audit-request-metadata';
@@ -51,8 +50,8 @@ export class ProductsController {
     return this.productsService.auditHistory(query);
   }
 
-  @Public()
   @Get('products/simulate/expected-not-found')
+  @UseGuards(AdminGuard)
   simulateExpectedNotFound(): never {
     throw new NotFoundException({
       code: 'PRODUCT_NOT_FOUND',
@@ -60,8 +59,8 @@ export class ProductsController {
     });
   }
 
-  @Public()
   @Get('products/simulate/expected-conflict')
+  @UseGuards(AdminGuard)
   simulateExpectedConflict(): never {
     throw new ConflictException({
       code: 'PRODUCT_CODE_ALREADY_EXISTS',
@@ -69,22 +68,22 @@ export class ProductsController {
     });
   }
 
-  @Public()
   @Get('products/simulate/unexpected-database')
+  @UseGuards(AdminGuard)
   simulateUnexpectedDatabase(): never {
     const dbError = new Error('Falha inesperada simulada de conectividade com o banco PostgreSQL');
     (dbError as unknown as { code: string }).code = 'ECONNREFUSED';
     throw dbError;
   }
 
-  @Public()
   @Get('products/simulate/unexpected-crash')
+  @UseGuards(AdminGuard)
   simulateUnexpectedCrash(): never {
     throw new Error('Falha inesperada simulada no processamento interno de catalogo.');
   }
 
-  @Public()
   @Post('products/simulate-failure')
+  @UseGuards(AdminGuard)
   simulateFailure(@Body() body: { type: 'conflict' | 'not-found' | 'database' | 'crash' }): never {
     if (body.type === 'not-found') {
       this.simulateExpectedNotFound();

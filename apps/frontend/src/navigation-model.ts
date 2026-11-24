@@ -75,7 +75,8 @@ export function navigationGroups(user: UserSession, showOnlineUsers = false): Na
     { title: 'Dia a dia', actions: daily },
     { title: 'Consultas', actions: queries },
     { title: 'Cadastros', actions: [...workflow.secondary.filter((action) => action.page === 'products'), ...more.filter((action) => action.page === 'stocks')] },
-    { title: 'Administração', actions: [...more.filter((action) => action.page === 'users' || action.page === 'settings' || action.page === 'logs' || action.page === 'data-quality'), ...(showOnlineUsers ? [{ page: 'online-users' as const, title: 'Usuários online', description: 'Veja quem está ativo em cada setor.' }] : [])] },
+    { title: 'Administração', actions: [...more.filter((action) => action.page === 'users' || action.page === 'settings'), ...(showOnlineUsers ? [{ page: 'online-users' as const, title: 'Usuários online', description: 'Veja quem está ativo em cada setor.' }] : [])] },
+    { title: 'Ferramentas técnicas', actions: more.filter((action) => action.page === 'logs' || action.page === 'data-quality') },
     { title: 'Minha conta', actions: more.filter((action) => action.page === 'preferences') },
   ].filter((group) => group.actions.length > 0);
 }
@@ -119,8 +120,8 @@ export function menuActions(page: Page, user: UserSession): MenuAction[] {
     add(review && can('stocks.read'), 'stocks', 'Cadastrar e consultar locais de estoque.');
     add(admin, 'users', 'Administrar contas e perfis.');
     add(admin, 'settings', 'Definir prazo e destinos da revisão.');
-    add(admin, 'logs', 'Monitoramento e gerenciamento de logs.');
-    add(admin, 'data-quality', 'Auditoria de governança, completude e integridade dos dados.');
+    add(admin, 'logs', 'Consulte eventos, métricas, alertas e simule falhas.');
+    add(admin, 'data-quality', 'Verifique o cadastro, lotes, saldos e prazos operacionais.');
   } else if (page === 'operations') {
     add(review && can('movements.external-entry'), 'new-entry', 'Receber de uma origem externa.');
     add(review && can('movements.external-exit'), 'new-exit', 'Enviar para um destino externo.');

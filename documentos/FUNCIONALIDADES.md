@@ -29,7 +29,7 @@ API autenticada: `GET/POST/DELETE /api/v1/form-drafts/:key?mode=...` e `GET /api
 | `POST` | `/api/v1/presence/heartbeat` | Atualiza a presença da sessão e do modo operacional ativo. |
 | `GET` | `/api/v1/presence/pcp` | Lista outros usuários online no modo PCP para aviso operacional. |
 | `GET` | `/api/v1/presence` | Lista usuários online para administradores. |
-| `GET` | `/api/v1/health` | Verifica API e PostgreSQL; é público. |
+| `GET` | `/api/v1/health` | Verifica API, PostgreSQL e a proteção da tabela de logs. A rota é pública. |
 
 O frontend possui login, restauração da sessão pelo cookie HttpOnly e navegação condicionada às permissões.
 
@@ -42,6 +42,13 @@ A interface usa transições curtas em botões, cartões, campos, filtros e diá
 Usuários `ADMIN` possuem no cabeçalho o seletor **Modo operacional**: Admin, Revisão, Produção, Expedição e PCP. O login inicia em **Admin**, com acesso completo e contexto físico da Revisão. Nos demais modos, interface e API limitam as permissões ao setor escolhido. Gestão de usuários, presets e configurações gerais continua exclusiva do modo Admin. A identidade real do administrador permanece no histórico e na auditoria.
 
 Administradores de área usam o mesmo seletor limitado a **Revisão + Expedição** ou **Produção + PCP**, conforme o perfil atribuído pelo admin geral. Iniciam no setor cadastrado, podem operar nos dois modos com as permissões já existentes e não acessam o modo Admin nem a gestão de usuários.
+
+## Ferramentas técnicas
+
+O menu **Ferramentas técnicas** aparece apenas para o perfil `ADMIN` no modo **Admin geral**. A API aplica a mesma restrição.
+
+- **Logs e Monitoramento** — listagem, filtros e detalhes de eventos, métricas, alertas, erros recorrentes e simulações de falha.
+- **Qualidade dos Dados** — relatório com verificações de cadastro, validade de lotes, consistência de saldos e prazos operacionais.
 
 ## Gerenciar usuários (ADMIN)
 

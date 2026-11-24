@@ -56,6 +56,7 @@ import { AdministrativeShipmentCorrections1791417600000 } from './migrations/179
 import { RecentOperationLookup1791504000000 } from './migrations/1791504000000-recent-operation-lookup';
 import { SystemLogEntity } from '../modules/system-logs/entities/system-log.entity';
 import { SystemLogsMonitoring1791590400000 } from './migrations/1791590400000-system-logs-monitoring';
+import { RestrictSystemLogs1791676800000 } from './migrations/1791676800000-restrict-system-logs';
 
 export const databaseEntities = [
   ShipmentEntity,
@@ -117,6 +118,7 @@ export const databaseMigrations = [
   AdministrativeShipmentCorrections1791417600000,
   RecentOperationLookup1791504000000,
   SystemLogsMonitoring1791590400000,
+  RestrictSystemLogs1791676800000,
 ];
 
 export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModuleOptions {

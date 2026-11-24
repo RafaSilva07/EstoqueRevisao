@@ -5,25 +5,25 @@ import {
   Param,
   ParseUUIDPipe,
   Query,
+  UseGuards,
 } from '@nestjs/common';
-import { Public } from '../auth/decorators/public.decorator';
 import { PaginatedResult } from '../../shared/pagination/paginated-result.interface';
+import { AdminGuard } from '../users/admin.guard';
 import { SystemLogEntity } from './entities/system-log.entity';
 import { SystemLogsService } from './system-logs.service';
 import { SystemLogQueryDto } from './dto/system-log-query.dto';
 import { SystemLogMetricsDto } from './dto/system-log-metrics.dto';
 
 @Controller('logs')
+@UseGuards(AdminGuard)
 export class SystemLogsController {
   constructor(private readonly logsService: SystemLogsService) {}
 
-  @Public()
   @Get()
   list(@Query() query: SystemLogQueryDto): Promise<PaginatedResult<SystemLogEntity>> {
     return this.logsService.queryLogs(query);
   }
 
-  @Public()
   @Get('metrics')
   metrics(
     @Query('windowMinutes') windowMinutes?: number,
@@ -34,7 +34,6 @@ export class SystemLogsController {
     return this.logsService.getMetrics(wm, th);
   }
 
-  @Public()
   @Get('stats/count-by-error')
   countByError(
     @Query('periodStart') periodStart?: string,
@@ -43,7 +42,6 @@ export class SystemLogsController {
     return this.logsService.getCountByErrorCode(date);
   }
 
-  @Public()
   @Get(':id')
   async getById(@Param('id', new ParseUUIDPipe()) id: string): Promise<SystemLogEntity> {
     const log = await this.logsService.getLogById(id);

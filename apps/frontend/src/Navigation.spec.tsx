@@ -2,7 +2,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { UserSession } from './api';
 import { NavigationTrail, SectionMenu } from './Navigation';
-import { homeActions, homeWorkflowActions, menuActions, parentPage } from './navigation-model';
+import { homeActions, homeWorkflowActions, menuActions, navigationGroups, parentPage } from './navigation-model';
+import { userForOperationalMode } from './operational-mode';
 import { ShipmentsPage } from './ShipmentsPage';
 import { PcpPage } from './PcpPage';
 
@@ -10,6 +11,16 @@ const user: UserSession = { id: 'u', username: 'Operador', sector: 'REVISAO', ro
 const noop = () => undefined;
 
 describe('Navegação simplificada', () => {
+  it('mostra ferramentas técnicas apenas no modo Admin geral', () => {
+    const admin = { ...user, roles: ['ADMIN'] };
+    const tools = (session: UserSession) => navigationGroups(session).find((group) => group.title === 'Ferramentas técnicas');
+    expect(tools(userForOperationalMode(admin, 'ADMIN'))?.actions.map((action) => action.page)).toEqual(['logs', 'data-quality']);
+    expect(tools(userForOperationalMode(admin, 'REVISAO'))).toBeUndefined();
+    for (const role of ['REVISAO', 'ADMIN_REVISAO_EXPEDICAO', 'ADMIN_PRODUCAO_PCP']) {
+      expect(tools({ ...user, roles: [role] })).toBeUndefined();
+    }
+  });
+
   it('mostra destinos claros na Home de cada setor', () => {
     for (const sector of ['PRODUCAO', 'EXPEDICAO'] as const) {
       const external = { ...user, sector };

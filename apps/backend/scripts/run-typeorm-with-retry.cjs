@@ -2,7 +2,6 @@ const { spawnSync } = require('node:child_process');
 
 const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 2000;
-const tenantNotFoundError = /tenant.*not found|user.*not found|XX000/i;
 const transientConnectionError = /ECONNRESET|ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|57P0[123]|53300|XX000|ENOTFOUND|tenant|getaddrinfo|Connection terminated unexpectedly/i;
 const executable = process.execPath;
 const cli = require.resolve('typeorm/cli-ts-node-commonjs.js');
@@ -22,32 +21,16 @@ for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
   if (result.error) process.stderr.write(`${result.error.message}\n`);
 
   if (result.status === 0) {
-    process.stdout.write('\n[DEPLOY] Migrations executadas com sucesso no PostgreSQL.\n');
+    process.stdout.write('\n[DEPLOY] Comando de migrations concluído no PostgreSQL.\n');
     process.exit(0);
   }
 
   const output = `${stdout}\n${stderr}`;
-  const isTenantError = tenantNotFoundError.test(output);
   const isConnectionError = transientConnectionError.test(output);
-
-  // Se o Supabase estiver pausado (tenant not found) ou for erro de conexão permanente,
-  // não trava o deploy na nuvem e avisa com clareza como restaurar.
-  if (isTenantError) {
-    process.stderr.write('\n=====================================================================\n');
-    process.stderr.write('[AVISO DE DEPLOY] Supabase em pausa ou tenant indisponível (XX000).\n');
-    process.stderr.write('[AVISO DE DEPLOY] O projeto Supabase foi pausado por inatividade gratuita.\n');
-    process.stderr.write('[AVISO DE DEPLOY] Para ativar: acesse supabase.com e clique em "Restore project".\n');
-    process.stderr.write('[AVISO DE DEPLOY] O build prosseguirá normalmente com status 0.\n');
-    process.stderr.write('=====================================================================\n\n');
-    process.exit(0);
-  }
-
   const canRetry = attempt < MAX_ATTEMPTS && isConnectionError;
   if (!canRetry) {
     if (isConnectionError) {
-      process.stderr.write('\n[AVISO DE DEPLOY] Falha de conectividade com o banco de dados durante a execução de migrations.\n');
-      process.stderr.write('[AVISO DE DEPLOY] O build prosseguirá com sucesso para permitir que a aplicação inicialize.\n');
-      process.exit(0);
+      process.stderr.write('\n[DEPLOY] Falha de conexão com o PostgreSQL. Verifique se o projeto está ativo e se a conexão está correta.\n');
     }
     process.exit(result.status || 1);
   }

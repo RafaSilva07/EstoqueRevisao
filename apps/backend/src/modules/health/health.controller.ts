@@ -15,12 +15,21 @@ export class HealthController {
   @Public()
   @Get()
   async check(): Promise<HealthResponse> {
+    let schema: Array<{ logsProtected: boolean }>;
     try {
-      await this.dataSource.query('SELECT 1');
+      schema = await this.dataSource.query<Array<{ logsProtected: boolean }>>(
+        "SELECT relrowsecurity AS \"logsProtected\" FROM pg_class WHERE oid = to_regclass('system_logs')",
+      );
     } catch {
       throw new ServiceUnavailableException({
         code: 'DATABASE_UNAVAILABLE',
         message: 'O banco de dados esta indisponivel.',
+      });
+    }
+    if (!schema[0]?.logsProtected) {
+      throw new ServiceUnavailableException({
+        code: 'DATABASE_SCHEMA_NOT_READY',
+        message: 'O banco de dados precisa ser atualizado.',
       });
     }
 
