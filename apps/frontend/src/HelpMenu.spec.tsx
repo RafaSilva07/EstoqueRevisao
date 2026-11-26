@@ -114,6 +114,15 @@ describe('menu de ajuda', () => {
     const clientHeight = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function(this: HTMLElement) {
       return this.getAttribute('role') === 'dialog' ? 444 : 0;
     });
+    const scrollHeight = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function(this: HTMLElement) {
+      return this.getAttribute('role') === 'dialog' ? 1000 : 0;
+    });
+    const offsetHeight = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function(this: HTMLElement) {
+      return this.matches('.tour-coach') ? 120 : 0;
+    });
+    const offsetWidth = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function(this: HTMLElement) {
+      return this.matches('.tour-coach') ? 288 : 0;
+    });
     let scrollTop = 0;
     const clientRect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function(this: HTMLElement) {
       if (this.getAttribute('role') === 'dialog') return new DOMRect(8, 8, 304, 444);
@@ -150,22 +159,31 @@ describe('menu de ajuda', () => {
       expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Abra o cadastro');
       clickCoach('Acompanhar operação');
 
-      act(() => root.render(<>
-        <HelpMenu user={reviewer} mode="REVISAO" page="products" navigate={vi.fn()} />
-        <main id="main-content" />
-        <div className="dialog-backdrop">
-          <section role="dialog" aria-labelledby="product-form-title" tabIndex={-1}>
-            <h2 id="product-form-title">Novo produto</h2>
-            <form data-tour="product-form" onSubmit={save}>
-              <input data-tour="product-code" required />
-              <input data-tour="product-name" defaultValue="Rascunho" />
-              <button type="submit" data-tour="product-save">Salvar produto</button>
-            </form>
-          </section>
-        </div>
-      </>));
+      const open = vi.fn(() => renderProduct(true));
+      function renderProduct(showForm: boolean) {
+        root.render(<>
+          <HelpMenu user={reviewer} mode="REVISAO" page="products" navigate={vi.fn()} />
+          <main id="main-content"><button data-tour="product-new" onClick={open}>+ Novo produto</button></main>
+          {showForm && <div className="dialog-backdrop">
+            <section role="dialog" aria-labelledby="product-form-title" tabIndex={-1}>
+              <h2 id="product-form-title">Novo produto</h2>
+              <form data-tour="product-form" onSubmit={save}>
+                <input data-tour="product-code" required />
+                <input data-tour="product-name" defaultValue="Rascunho" />
+                <button type="submit" data-tour="product-save">Salvar produto</button>
+              </form>
+            </section>
+          </div>}
+        </>);
+      }
+      act(() => renderProduct(false));
       await act(async () => { await Promise.resolve(); vi.advanceTimersByTime(16); });
+      expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Abra o cadastro');
+      expect(open).not.toHaveBeenCalled();
+      clickCoach('Próximo passo');
+      expect(open).toHaveBeenCalledTimes(1);
       expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Informe o código');
+      expect(host.querySelector('[data-tour="product-code"]')?.hasAttribute('data-tour-highlight')).toBe(true);
       const dialog = host.querySelector<HTMLElement>('[role="dialog"]')!;
       const coach = dialog.querySelector<HTMLElement>('.tour-coach')!;
       const manualScroll = (offset: number) => {
@@ -182,14 +200,17 @@ describe('menu de ajuda', () => {
       expect(coach.style.top).toBe('152px');
       manualScroll(180);
       expect(coach.style.top).toBe('152px');
-      expect(coach.style.visibility).toBe('hidden');
+      expect(coach.inert).toBe(false);
+      manualScroll(290);
+      expect(coach.inert).toBe(true);
+      expect(coach.style.visibility).toBe('visible');
       manualScroll(0);
       expect(coach.dataset.anchorSide).toBe('below');
       expect(coach.style.visibility).toBe('visible');
       expect(scroll).not.toHaveBeenCalled();
       clickCoach('Próximo passo');
       expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Informe a descrição');
-      expect(scroll).toHaveBeenCalledExactlyOnceWith({ top: 144, behavior: 'instant' });
+      expect(scroll).toHaveBeenCalledExactlyOnceWith({ top: 288.72, behavior: 'instant' });
       expect(document.querySelector('.tour-coach-stage')?.textContent).toBe('Prévia · Etapa 3 de 10');
       expect(coach.dataset.anchorSide).toBe('below');
       expect(coach.style.top).toBe('402px');
@@ -197,9 +218,11 @@ describe('menu de ajuda', () => {
       expect(coach.style.top).toBe('402px');
       expect(coach.dataset.anchorSide).toBe('below');
       manualScroll(400);
-      expect(coach.style.visibility).toBe('hidden');
-      manualScroll(144);
-      expect(coach.style.visibility).toBe('visible');
+      expect(coach.inert).toBe(false);
+      manualScroll(550);
+      expect(coach.inert).toBe(true);
+      manualScroll(289);
+      expect(coach.inert).toBe(false);
       act(() => {
         document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       });
@@ -229,6 +252,9 @@ describe('menu de ajuda', () => {
       clientRect.mockRestore();
       clientWidth.mockRestore();
       clientHeight.mockRestore();
+      scrollHeight.mockRestore();
+      offsetHeight.mockRestore();
+      offsetWidth.mockRestore();
       vi.useRealTimers();
     }
   });

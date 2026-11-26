@@ -26,7 +26,7 @@ describe('modal no celular', () => {
     try {
       act(() => root.render(<Modal labelledBy="form-title" onClose={() => undefined}>
         <h2 id="form-title">Formulário</h2><button>Voltar</button><button>Salvar</button>
-        <aside style={{ visibility: 'hidden' }}><button>Fechar tour</button></aside>
+        <aside inert><button>Fechar tour</button></aside>
       </Modal>));
       const [first, last] = host.querySelectorAll('button');
       const backwards = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });

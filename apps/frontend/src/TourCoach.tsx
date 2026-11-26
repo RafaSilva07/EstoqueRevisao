@@ -11,6 +11,7 @@ type Placement = {
   popup: HTMLElement | null;
   previewIndex: number | null;
   editingOther: boolean;
+  context?: string;
 };
 type ViewBounds = { left: number; top: number; right: number; bottom: number };
 type AnchorSide = 'above' | 'below' | 'left' | 'right';
@@ -33,7 +34,7 @@ function topDialog() {
 }
 
 function focusable(element: HTMLElement) {
-  return element.matches(tabStops) && element.tabIndex >= 0;
+  return element.matches(tabStops) && element.tabIndex >= 0 && !element.closest('[inert]');
 }
 
 function anchorBox(anchor: HTMLElement) {
@@ -100,15 +101,29 @@ function scrollArea(anchor: HTMLElement, dialog: HTMLElement | null, bounds: Vie
   return area;
 }
 
-function reveal(anchor: HTMLElement, dialog: HTMLElement | null, area: ViewBounds, bounds: ViewBounds, cardWidth: number, cardHeight: number) {
-  const rect = anchor.getBoundingClientRect();
-  const center = (area.top + area.bottom) / 2;
-  const sideRoom = Math.max(rect.left - bounds.left, bounds.right - rect.right);
-  // For a short, narrow viewport, leave room for the actions below the field.
-  const latest = Math.max(area.top + rect.height / 2, bounds.bottom - anchorGap - cardHeight - rect.height / 2);
-  const target = sideRoom >= cardWidth + anchorGap ? center : Math.min(center, latest);
-  const top = rect.top + rect.height / 2 - target;
-  if (Math.abs(top) > 1) (dialog ?? window).scrollBy({ top, behavior: 'instant' });
+function reveal(anchor: HTMLElement, dialog: HTMLElement | null, view: ViewBounds, reducedMotion: boolean) {
+  const top = anchor.getBoundingClientRect().top;
+  const root = document.scrollingElement;
+  const behavior = reducedMotion ? 'instant' : 'smooth';
+  let shift = 0;
+  function scroll(container: HTMLElement, area: ViewBounds) {
+    if (typeof container.scrollBy !== 'function') return;
+    const available = container.scrollHeight - container.clientHeight;
+    if (available <= 0) return;
+    const target = area.top + clamp((area.bottom - area.top) * .12, 16, 64);
+    const delta = clamp(top + shift - target, -container.scrollTop, available - container.scrollTop);
+    if (Math.abs(delta) <= 1) return;
+    container.scrollBy({ top: delta, behavior });
+    shift -= delta;
+  }
+  for (let parent = anchor.parentElement; parent && parent !== root; parent = parent.parentElement) {
+    const style = getComputedStyle(parent);
+    if (style.position === 'sticky') return reducedMotion ? 0 : shift;
+    if (parent === dialog || /^(auto|scroll)$/.test(style.overflowY)) scroll(parent, intersection(view, clientBox(parent)));
+    if (parent === dialog) break;
+  }
+  if (!dialog && root instanceof HTMLElement) scroll(root, view);
+  return reducedMotion ? 0 : shift;
 }
 
 function anchoredPosition(box: ViewBounds, obstacles: ViewBounds[], bounds: ViewBounds, width: number, height: number, minHeight: number, preferBelow: boolean) {
@@ -135,7 +150,7 @@ function anchoredPosition(box: ViewBounds, obstacles: ViewBounds[], bounds: View
 function samePlacement(previous: Placement | null, next: Placement | null) {
   if (!previous || !next) return previous === next;
   return previous.anchor === next.anchor && previous.dialog === next.dialog && previous.popup === next.popup
-    && previous.previewIndex === next.previewIndex && previous.editingOther === next.editingOther
+    && previous.previewIndex === next.previewIndex && previous.editingOther === next.editingOther && previous.context === next.context
     && previous.hint.target === next.hint.target && previous.hint.title === next.hint.title
     && previous.hint.instruction === next.hint.instruction && previous.hint.canContinue === next.hint.canContinue
     && previous.hint.complete === next.hint.complete;
@@ -162,10 +177,12 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
   const initialFocus = useRef(true);
   const focusAfterPause = useRef(false);
   const focusAfterResume = useRef(false);
+  const focusAfterAdvance = useRef(false);
   const nextButton = useRef<HTMLButtonElement>(null);
   const focusOperation = useRef(false);
   const manual = useRef(new WeakSet<HTMLElement>());
   const refresh = useRef<() => void>(() => undefined);
+  const refreshPosition = useRef<() => void>(() => undefined);
   const staleResults = useRef<Partial<Record<string, { element: HTMLElement; message: string }>> | null>(null);
   const revealPending = useRef(false);
   const previousHint = useRef<{ title: string; previewIndex: number | null; anchor: HTMLElement | null; panel: HTMLElement; paused: boolean } | null>(null);
@@ -213,11 +230,19 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
         target: 'status', title: 'Aguarde a tela da operação',
         instruction: 'Quando os controles da operação estiverem disponíveis, o tour volta a acompanhá-los. Use Próximo passo para consultar as etapas agora.',
       };
-      const anchor = find(memo.target) ?? preview?.related?.map(find).find(Boolean) ?? (memo.target === 'status' && dialog
-        ? document.getElementById(dialog.getAttribute('aria-labelledby') ?? '') : null);
+      const heading = dialog ? document.getElementById(dialogTitle ?? '') : main.querySelector<HTMLElement>('.page-header h1, h1');
+      let anchor = find(memo.target) ?? preview?.related?.map(find).find(Boolean) ?? undefined;
+      let context: string | undefined;
+      if (preview && !anchor) {
+        const prerequisite = preview.prerequisite;
+        anchor = prerequisite ? find(prerequisite.target) : undefined;
+        context = anchor ? prerequisite?.message : 'O controle desta etapa ainda não está disponível. Você pode continuar a prévia.';
+        anchor ??= heading ?? undefined;
+      }
+      if (memo.target === 'status' && !anchor) anchor = heading ?? undefined;
       const editingOther = active instanceof HTMLElement && active !== anchor && active.matches('input, textarea, select, [role="combobox"]');
       const popup = anchor?.getAttribute('aria-expanded') === 'true' ? document.getElementById(anchor.getAttribute('aria-controls') ?? '') : null;
-      const next = { hint: memo, anchor: anchor ?? null, dialog, popup, previewIndex, editingOther };
+      const next = { hint: memo, anchor: anchor ?? null, dialog, popup, previewIndex, editingOther, context };
       setPlacement((previous) => samePlacement(previous, next) ? previous : next);
     };
     function schedule() { if (!frame) frame = requestAnimationFrame(scan); }
@@ -229,7 +254,12 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       schedule();
     }
     refresh.current = schedule;
-    const observer = new MutationObserver(schedule);
+    const observer = new MutationObserver((records) => {
+      schedule();
+      if (records.some(({ type, target }) => type === 'childList' && target instanceof Element && !target.closest('.tour-coach'))) {
+        refreshPosition.current();
+      }
+    });
     observer.observe(document.getElementById('root') ?? main.parentElement ?? main, {
       subtree: true, childList: true, characterData: true, attributes: true,
       attributeFilter: ['data-tour', 'data-tour-ready', 'data-tour-choice', 'data-tour-options', 'disabled', 'aria-invalid', 'aria-expanded', 'aria-pressed', 'hidden'],
@@ -275,6 +305,11 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       if (reducedMotion.matches) motion.current?.cancel();
     }
 
+    function availableRoom() {
+      const view = viewport(dialog);
+      return dialog && control ? intersection(view, clientBox(dialog)) : view;
+    }
+
     function place(left: number, top: number, attached: boolean) {
       if (!panel) return;
       let x = left;
@@ -290,27 +325,30 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       panel.toggleAttribute('data-attached', attached);
       panel.style.left = `${x}px`;
       panel.style.top = `${y}px`;
+      panel.style.visibility = 'visible';
+      const room = availableRoom();
+      panel.inert = attached && !visibleBox({ left, top, right: left + panel.offsetWidth, bottom: top + panel.offsetHeight }, room);
+      const next = nextButton.current;
+      if (focusAfterAdvance.current && next && !panel.inert && visibleBox(next.getBoundingClientRect(), room)) {
+        focusAfterAdvance.current = false;
+        next.focus({ preventScroll: true });
+      }
       positionHistory.current = { panel, left, top };
     }
 
     function followScroll() {
-      if (!panel || !control || !attachment) return;
+      if (!panel || !control?.isConnected || !attachment) return;
       // Keep the side and gap from the current layout as the control scrolls.
       const rect = anchorBox(control);
-      const area = scrollArea(control, dialog, viewport(dialog));
-      const visible = visibleBox(control.getBoundingClientRect(), area);
       const left = rect.left + attachment.left;
       const top = rect.top + attachment.top;
-      const previous = positionHistory.current;
-      if (!visible || previous?.left !== left || previous.top !== top) motion.current?.cancel();
       place(left, top, true);
-      panel.style.visibility = visible ? 'visible' : 'hidden';
     }
 
     function position(transition = false, centerAnchor = false) {
       if (!panel || !content) return;
       const view = viewport(dialog);
-      const room = dialog && control ? intersection(view, clientBox(dialog)) : view;
+      const room = availableRoom();
       const bounds = { left: room.left + 8, top: room.top + 8, right: room.right - 8, bottom: room.bottom - 8 };
       const width = Math.min(352, bounds.right - bounds.left);
       const availableHeight = Math.min(320, bounds.bottom - bounds.top);
@@ -319,15 +357,17 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       panel.style.width = `${width}px`;
       panel.toggleAttribute('data-compact', bounds.bottom - bounds.top < 480);
       const detail = details.current;
-      const chromeHeight = content.scrollHeight - (detail?.offsetHeight ?? 0) + content.offsetHeight - content.clientHeight;
-      const desiredHeight = Math.min(availableHeight, chromeHeight + (detail?.scrollHeight ?? 0));
-      const usableHeight = Math.min(desiredHeight, chromeHeight + 64);
+      function measure(body: HTMLDivElement) {
+        const chrome = body.scrollHeight - (detail?.offsetHeight ?? 0) + body.offsetHeight - body.clientHeight;
+        const desired = Math.min(availableHeight, chrome + (detail?.scrollHeight ?? 0));
+        return { chrome, desired, usable: Math.min(desired, chrome + 64) };
+      }
+      let size = measure(content);
       const area = control ? scrollArea(control, dialog, view) : room;
-      if (control && centerAnchor) reveal(control, dialog, area, bounds, width, usableHeight);
-      const anchorRect = control?.getBoundingClientRect();
-      const visibleAnchor = anchorRect && visibleBox(anchorRect, area);
-      if (control && !visibleAnchor && attachment) { followScroll(); return; }
-      const rect = control ? anchorBox(control) : null;
+      // Fit at the scroll destination and keep that offset from the live control.
+      const shift = control && centerAnchor ? reveal(control, dialog, view, reducedMotion.matches) : 0;
+      const anchorRect = control ? anchorBox(control) : null;
+      const rect = anchorRect && { left: anchorRect.left, right: anchorRect.right, top: anchorRect.top + shift, bottom: anchorRect.bottom + shift };
       const active = document.activeElement;
       const focused = placement?.editingOther && active instanceof HTMLElement && (!dialog || dialog.contains(active))
         ? visibleBox(active.getBoundingClientRect(), area) : null;
@@ -341,13 +381,24 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       const box = rect ?? focused;
       if (box) {
         const avoid = [box, ...(popupRect ? [popupRect] : []), ...(rect && focused ? [focused] : [])];
-        const preferBelow = Boolean(control?.matches('input, select, textarea'));
-        const best = anchoredPosition(box, avoid, bounds, width, desiredHeight, usableHeight, preferBelow)
-          ?? anchoredPosition(box, [box], bounds, width, desiredHeight, 1, preferBelow);
+        const preferBelow = Boolean(control);
+        const fit = () => anchoredPosition(box, avoid, bounds, width, size.desired, size.usable, preferBelow)
+          ?? anchoredPosition(box, [box], bounds, width, size.desired, 1, preferBelow);
+        let best = fit();
+        if ((!best || best.maxHeight < size.usable) && !panel.hasAttribute('data-compact')) {
+          panel.setAttribute('data-compact', '');
+          size = measure(content);
+          best = fit();
+        }
         if (best) {
           ({ left, top, side } = best);
-          maxHeight = Math.min(availableHeight, Math.max(Math.min(desiredHeight, chromeHeight + 24), best.maxHeight));
+          maxHeight = Math.min(availableHeight, Math.max(Math.min(size.desired, size.chrome + 16), best.maxHeight));
           alignEnd = side === 'above';
+        } else if (rect) {
+          left = rect.left;
+          alignEnd = (rect.top + rect.bottom) / 2 > (bounds.top + bounds.bottom) / 2;
+          side = alignEnd ? 'above' : 'below';
+          top = alignEnd ? rect.top - anchorGap : rect.bottom + anchorGap;
         } else {
           left = box.left;
           alignEnd = (box.top + box.bottom) / 2 < (bounds.top + bounds.bottom) / 2;
@@ -357,9 +408,10 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
 
       panel.style.maxHeight = `${maxHeight}px`;
       const height = panel.offsetHeight;
-      left = clamp(left, bounds.left, bounds.right - width);
-      top = clamp(alignEnd ? top - height : top, bounds.top, bounds.bottom - height);
-      if (rect && side && !popupRect && !focused && !visibleBox(rect, { left, top, right: left + width, bottom: top + height })) {
+      if (side !== 'left' && side !== 'right') left = clamp(left, bounds.left, bounds.right - width);
+      if (alignEnd) top -= height;
+      if (!rect || side === 'left' || side === 'right') top = clamp(top, bounds.top, bounds.bottom - height);
+      if (rect && side) {
         const horizontal = side === 'above' || side === 'below';
         const offset = horizontal
           ? clamp((rect.left + rect.right) / 2 - left, 16, width - 16)
@@ -370,19 +422,12 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
         delete panel.dataset.anchorSide;
       }
 
-      const moved = previous?.panel !== panel || previous.left !== left || previous.top !== top;
-      const origin = previous?.panel === panel && motion.current?.playState === 'running'
-        ? panel.getBoundingClientRect() : previous;
       attachment = rect ? { left: left - rect.left, top: top - rect.top } : null;
-      place(left, top, Boolean(attachment));
-      panel.style.visibility = !control || visibleAnchor ? 'visible' : 'hidden';
-      if (moved || transition) {
+      place(left, top - shift, Boolean(attachment));
+      if (transition) {
         motion.current?.cancel();
-        if (transition && panel.style.visibility === 'visible' && !reducedMotion.matches && typeof panel.animate === 'function') {
-          const startLeft = clamp(origin?.left ?? left, bounds.left, bounds.right - width);
-          const startTop = clamp(origin?.top ?? top + 6, bounds.top, bounds.bottom - height);
-          const offset = `translate(${startLeft - left}px, ${startTop - top}px)`;
-          motion.current = panel.animate([{ transform: offset, opacity: origin ? 0.92 : 0 }, { transform: 'none', opacity: 1 }], {
+        if (!reducedMotion.matches && typeof panel.animate === 'function') {
+          motion.current = panel.animate([{ opacity: .35 }, { opacity: 1 }], {
             duration: 240, easing: 'cubic-bezier(.2,.75,.25,1)',
           });
         }
@@ -412,7 +457,7 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       }
     }
     if (stepChanged && details.current) details.current.scrollTop = 0;
-    const shouldReveal = follow || (revealPending.current && !placement.editingOther);
+    const shouldReveal = follow || (revealPending.current && (!placement.editingOther || focusAfterAdvance.current));
     if (shouldReveal) revealPending.current = false;
     position(stepChanged, shouldReveal);
     if (initialFocus.current && !paused && panel.style.visibility === 'visible') {
@@ -445,6 +490,7 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
         scheduleLayout();
       }
     });
+    refreshPosition.current = schedule;
     observed.forEach((element) => resize.observe(element));
     document.addEventListener('scroll', schedule, true);
     window.addEventListener('resize', scheduleLayout);
@@ -453,6 +499,7 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
     reducedMotion.addEventListener('change', onMotionChange);
     return () => {
       cancelAnimationFrame(frame);
+      refreshPosition.current = () => undefined;
       resize.disconnect();
       document.removeEventListener('scroll', schedule, true);
       window.removeEventListener('resize', scheduleLayout);
@@ -469,7 +516,7 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
   }, [hidden, id, paused, placement]);
 
   if (!placement || hidden) return null;
-  const { anchor, dialog, hint, previewIndex: displayedStep } = placement;
+  const { anchor, context, dialog, hint, previewIndex: displayedStep } = placement;
   function wrapTab(event: React.KeyboardEvent<HTMLElement>) {
     // Portal events reach HelpMenu, so wrap the physical modal's tab order here.
     if (event.key !== 'Tab' || event.shiftKey || !dialog
@@ -479,12 +526,21 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
   }
 
   function advance() {
-    if (displayedStep === steps.length - 1) { onEnd(); return; }
+    if (complete) { onEnd(); return; }
     nextButton.current?.focus({ preventScroll: true });
-    if (displayedStep !== null) { setPreviewIndex(displayedStep + 1); return; }
-    if (hint.complete) { onEnd(); return; }
-    const current = steps.findIndex((step) => step.target === hint.target || step.related?.includes(hint.target));
-    setPreviewIndex(Math.min(current + 1, steps.length - 1));
+    const nextIndex = Math.min(stepIndex + 1, steps.length - 1);
+    const next = steps[nextIndex];
+    const opener = next.opensWith;
+    const scope = dialog ?? document.getElementById('main-content');
+    const targetExists = [...scope?.querySelectorAll<HTMLElement>(`[data-tour="${next.target}"]`) ?? []].some(shown);
+    const prerequisite = opener?.checked && scope?.querySelector<HTMLInputElement>(`input[data-tour="${opener.checked}"]`);
+    focusAfterAdvance.current = true;
+    // These buttons only open the next screen. Previewing never confirms an operation.
+    if (opener && !targetExists && anchor instanceof HTMLButtonElement && !anchor.disabled && anchor.dataset.tour === opener.target
+      && (!opener.checked || (prerequisite && prerequisite.checked))) {
+      anchor.click();
+    }
+    setPreviewIndex(nextIndex);
   }
 
   function pause() {
@@ -531,7 +587,7 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
               </div>}
               <h2>{hint.title}</h2>
               <p id={id} className="tour-coach-instruction">{hint.instruction}</p>
-              {displayedStep !== null && !anchor && <p className="tour-coach-context">Controle indisponível nesta tela</p>}
+              {context && <p className="tour-coach-context">{context}</p>}
             </div>
           </div>
           <footer className="tour-coach-actions" data-preview={displayedStep !== null}>

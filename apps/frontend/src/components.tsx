@@ -96,7 +96,7 @@ export function Modal({ children, labelledBy, busy = false, className = '', onCl
       if (event.key === 'Escape') { event.stopPropagation(); if (!busy) onClose(); }
       if (event.key !== 'Tab') return;
       const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]'))
-        .filter((node) => node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden');
+        .filter((node) => !node.closest('[inert]') && node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden');
       const first = controls[0];
       const last = controls[controls.length - 1];
       if (!first) { event.preventDefault(); return; }
