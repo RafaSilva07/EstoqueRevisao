@@ -35,11 +35,11 @@ function ShipmentDecision({ shipment, refuse, onClose, onDone }: { shipment: Shi
     <ShipmentItems shipment={shipment} />
     <p>{refuse ? shipment.originSector === 'REVISAO' ? 'O saldo em trânsito voltará às posições originais da Revisão.' : 'Nenhum saldo será adicionado à Revisão.' : canSeparate && immediateSeparation ? 'A separação abrirá após confirmar. O saldo da Revisão será consolidado ao concluir ou ao vencer o prazo.' : shipment.destinationSector === 'REVISAO' ? 'Os itens serão adicionados a A Revisar.' : 'A saída será concluída. O saldo reservado não será descontado novamente.'}</p>
     <form onSubmit={(event) => { event.preventDefault(); void submission.submit(refuse ? { reason } : { immediateSeparation }); }}>
-      {refuse && <label>Motivo da recusa *<textarea required maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} rows={3} disabled={submission.busy} /></label>}
-      {canSeparate && <fieldset className="settings-options"><legend>A separação dos produtos bons será feita agora?</legend><label className="check-row"><input type="radio" name="separation" checked={!immediateSeparation} onChange={() => setImmediateSeparation(false)} />Não, receber todo o volume</label><label className="check-row"><input type="radio" name="separation" checked={immediateSeparation} onChange={() => setImmediateSeparation(true)} />Sim, separar agora</label></fieldset>}
+      {refuse && <label>Motivo da recusa *<textarea data-tour="receipt-reason" required maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} rows={3} disabled={submission.busy} /></label>}
+      {canSeparate && <fieldset className="settings-options"><legend>A separação dos produtos bons será feita agora?</legend><label className="check-row"><input data-tour="receipt-separation" type="radio" name="separation" checked={!immediateSeparation} onChange={() => setImmediateSeparation(false)} />Não, receber todo o volume</label><label className="check-row"><input type="radio" name="separation" checked={immediateSeparation} data-tour="receipt-separation" onChange={() => setImmediateSeparation(true)} />Sim, separar agora</label></fieldset>}
       {submission.conflict && <Notice kind="info">{submission.conflict.message}</Notice>}
       {submission.error && <Notice kind="error">{submission.error}</Notice>}
-      <div className="dialog-actions"><button type="button" className="secondary" disabled={submission.busy} onClick={close}>Voltar</button><button disabled={!draft.ready || submission.busy || (refuse && !reason.trim())}>{submission.busy ? 'Processando…' : refuse ? 'Confirmar recusa' : submission.conflict ? 'Aceitar validade diferente e receber' : canSeparate && immediateSeparation ? 'Receber e iniciar separação' : 'Confirmar recebimento'}</button></div>
+      <div className="dialog-actions"><button type="button" className="secondary" disabled={submission.busy} onClick={close}>Voltar</button><button data-tour={refuse ? "receipt-refuse-submit" : "receipt-submit"} data-tour-choice={submission.conflict ? "conflict" : immediateSeparation ? "separate" : undefined} disabled={!draft.ready || submission.busy || (refuse && !reason.trim())}>{submission.busy ? 'Processando…' : refuse ? 'Confirmar recusa' : submission.conflict ? 'Aceitar validade diferente e receber' : canSeparate && immediateSeparation ? 'Receber e iniciar separação' : 'Confirmar recebimento'}</button></div>
     </form>
   </Modal>;
 }
@@ -70,7 +70,7 @@ export function ShipmentsPage({ user, initialView = 'pending', initialCreating =
   const [data, setData] = useState<Paginated<Shipment> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [success, setSuccess] = useState<{ message: string; tourTarget?: 'shipment-result' | 'receipt-result' }>();
   const [creating, setCreating] = useState(initialCreating && user.permissions.includes('shipments.create'));
   const [selected, setSelected] = useState<Shipment | null>(null);
   const detailRequestVersion = useRef(0);
@@ -131,24 +131,25 @@ export function ShipmentsPage({ user, initialView = 'pending', initialCreating =
   }, [load, selected, creating]);
   function openShipment(shipment: Shipment, resume = false) {
     setSelected(shipment);
+    if (resume) setSuccess(undefined);
     setDecision(resume && canSeparate && shipment.destinationSector === 'REVISAO' && shipment.status === 'EM_SEPARACAO' ? 'separate' : null);
   }
   function closeSeparation() { setSelected(null); setDecision(null); void load(); }
   async function finishDecision(id: string, separationRequested: boolean) {
     detailRequestVersion.current += 1;
     if (decision === 'refuse') {
-      setSuccess('Envio recusado. O remetente poderá consultar o motivo.'); setDecision(null); setSelected(null); void load(); return;
+      setSuccess({ message: 'Envio recusado. O remetente poderá consultar o motivo.', tourTarget: 'receipt-result' }); setDecision(null); setSelected(null); void load(); return;
     }
     try {
       const confirmed = await api.get<Shipment>(`/shipments/${id}`);
       if (canSeparate && confirmed.destinationSector === 'REVISAO' && confirmed.status === 'EM_SEPARACAO') {
         setSelected(confirmed); setDecision('separate'); setView('separation'); setPage(1);
-        setSuccess('Recebimento confirmado. Finalize a separação ou continue depois.');
+        setSuccess({ message: 'Recebimento confirmado. Finalize a separação ou continue depois.', tourTarget: 'receipt-result' });
         if (view === 'separation' && page === 1) void load();
-      } else { setSuccess('Recebimento atualizado com sucesso.'); setDecision(null); setSelected(null); void load(); }
+      } else { setSuccess({ message: 'Recebimento atualizado com sucesso.', tourTarget: 'receipt-result' }); setDecision(null); setSelected(null); void load(); }
     } catch {
       setDecision(null); setSelected(null);
-      setSuccess('Recebimento confirmado.');
+      setSuccess({ message: 'Recebimento confirmado.', tourTarget: 'receipt-result' });
       setError('Não foi possível abrir os detalhes atualizados. Use Separações em andamento para retomar ou consulte o Histórico.');
       if (separationRequested && canSeparate) { setView('separation'); setPage(1); }
     }
@@ -158,15 +159,15 @@ export function ShipmentsPage({ user, initialView = 'pending', initialCreating =
     ...(canSeparate ? [{ key: 'separation' as const, label: 'Separações em andamento' }] : []),
     { key: 'sent', label: 'Meus envios em aberto' },
   ];
-  if (creating) return <NewShipment sector={user.sector as ShipmentSector} onClose={() => setCreating(false)} onCreated={() => { setCreating(false); setSelected(null); setView('sent'); setPage(1); setSuccess('Envio criado. Aguardando confirmação do destinatário.'); void load(); }} />;
+  if (creating) return <NewShipment sector={user.sector as ShipmentSector} onClose={() => setCreating(false)} onCreated={() => { setCreating(false); setSelected(null); setView('sent'); setPage(1); setSuccess({ message: 'Envio criado. Aguardando confirmação do destinatário.', tourTarget: 'shipment-result' }); void load(); }} />;
   return <>
     {user.sector !== 'REVISAO' && <ShipmentHomeNotice onOpen={() => { setView('pending'); setPage(1); }} />}
-    <PageHeader eyebrow={sectorLabel[user.sector as ShipmentSector]} title={view === 'separation' ? 'Separações em andamento' : view === 'pending' && canDecide ? 'Receber produtos' : 'Envios e recebimentos'} description={view === 'separation' ? 'Recebimentos já aceitos que aguardam a definição do retorno. Continue a separação antes do prazo.' : 'Confira o que chegou ou acompanhe seus envios. Os registros concluídos ficam no Histórico.'} action={showCreateAction && canCreate && <button onClick={() => setCreating(true)}>{user.sector === 'REVISAO' ? 'Novo envio' : 'Novo envio para Revisão'}</button>} />
-    {success && <Notice kind="success" onClose={() => setSuccess('')}>{success}</Notice>}
-    <nav className="shipment-tabs" aria-label="Consultas de envios">{tabs.map(({key,label}) => <button key={key} className={view === key ? '' : 'secondary'} aria-pressed={view === key} onClick={() => { setView(key); setPage(1); setSelected(null); setDecision(null); }}>{label}</button>)}{onHistory && <button className="secondary" onClick={onHistory}>Abrir histórico completo</button>}</nav>
-    <label>Buscar pelo código da movimentação<input type="search" placeholder="ENT-000153" value={codeSearch} onChange={(event) => { setCodeSearch(event.target.value); setPage(1); }} /></label>
+    <PageHeader eyebrow={sectorLabel[user.sector as ShipmentSector]} title={view === 'separation' ? 'Separações em andamento' : view === 'pending' && canDecide ? 'Receber produtos' : 'Envios e recebimentos'} description={view === 'separation' ? 'Recebimentos já aceitos que aguardam a definição do retorno. Continue a separação antes do prazo.' : 'Confira o que chegou ou acompanhe seus envios. Os registros concluídos ficam no Histórico.'} action={showCreateAction && canCreate && <button data-tour="shipment-open" onClick={() => setCreating(true)}>{user.sector === 'REVISAO' ? 'Novo envio' : 'Novo envio para Revisão'}</button>} />
+    {success && <Notice kind="success" tourTarget={success.tourTarget} onClose={() => setSuccess(undefined)}>{success.message}</Notice>}
+    <nav className="shipment-tabs" aria-label="Consultas de envios">{tabs.map(({key,label}) => <button key={key} data-tour={key === "sent" ? undefined : "receipt-tab-" + key} className={view === key ? '' : 'secondary'} aria-pressed={view === key} onClick={() => { setView(key); setPage(1); setSelected(null); setDecision(null); }}>{label}</button>)}{onHistory && <button className="secondary" onClick={onHistory}>Abrir histórico completo</button>}</nav>
+    <label>Buscar pelo código da movimentação<input data-tour="receipt-search" type="search" placeholder="ENT-000153" value={codeSearch} onChange={(event) => { setCodeSearch(event.target.value); setPage(1); }} /></label>
     <label>Ordenar por<select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}><option value="RECENT">Mais recentes</option><option value="OLDEST">Mais antigos</option><option value="STATUS">Status</option></select></label>
-    {error ? <Notice kind="error">{error} <button className="secondary" onClick={() => void load()}>Tentar novamente</button></Notice> : loading ? <LoadingState label="Consultando envios" /> : !data?.items.length ? <EmptyState title={view === 'separation' ? 'Nenhuma separação para finalizar' : 'Nenhum envio nesta consulta'} description={view === 'separation' ? 'Ao receber da Expedição e escolher separar agora, o recebimento ficará disponível aqui.' : 'Novos recebimentos e decisões aparecerão aqui.'} /> : <>
+    {error ? <Notice kind="error">{error} <button className="secondary" onClick={() => void load()}>Tentar novamente</button></Notice> : loading ? <LoadingState label="Consultando envios" /> : !data?.items.length ? <EmptyState tourTarget="receipt-empty" title={view === 'separation' ? 'Nenhuma separação para finalizar' : 'Nenhum envio nesta consulta'} description={view === 'separation' ? 'Ao receber da Expedição e escolher separar agora, o recebimento ficará disponível aqui.' : 'Novos recebimentos e decisões aparecerão aqui.'} /> : <>
       <div className="shipment-list">{data.items.map((shipment) => <div className="shipment-list-entry" key={shipment.id}>
         <div className="shipment-record-lines">{shipment.items.map((item) => { const needsReceiving = shipment.status === 'AGUARDANDO_RECEBIMENTO' && shipment.destinationSector === user.sector && canDecide; const needsSeparation = shipment.status === 'EM_SEPARACAO' && shipment.destinationSector === 'REVISAO' && canSeparate; return <MovementRecordRow key={item.id}
           code={item.codigoRegistro ?? shipment.codigoMovimentacao} occurredAt={shipment.createdAt}
@@ -178,7 +179,7 @@ export function ShipmentsPage({ user, initialView = 'pending', initialCreating =
           origin={sectorLabel[shipment.originSector]} destination={sectorLabel[shipment.destinationSector]}
           sentBy={shipment.createdBy.username} receivedBy={shipment.decidedBy?.username ?? shipment.receivedBy?.username}
           pcpExecutedBy={null} receiptRequired pcpRequired={shipment.shipmentKind !== 'RETORNO_IMEDIATO'}
-          onOpen={() => openShipment(shipment)} action={(needsReceiving || needsSeparation) && <button type="button" className="secondary" onClick={() => openShipment(shipment, needsSeparation)}>{needsReceiving ? 'Abrir para receber' : 'Continuar separação'}</button>}
+          onOpen={() => openShipment(shipment)} action={(needsReceiving || needsSeparation) && <button data-tour={needsReceiving ? "receipt-open" : "separation-open"} type="button" className="secondary" onClick={() => openShipment(shipment, needsSeparation)}>{needsReceiving ? 'Abrir para receber' : 'Continuar separação'}</button>}
         />; })}</div>
         <article className="surface shipment-card clickable-card" tabIndex={0} role="button" onClick={() => { setSelected(shipment); setDecision(null); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(shipment); setDecision(null); } }}>
         <span className={`badge ${shipment.status === 'CONFIRMADO' ? 'active' : ['RECUSADO','CANCELADO'].includes(shipment.status) ? 'canceled' : ''}`}>{shipmentStatusLabel[shipment.status]}</span>
@@ -188,7 +189,7 @@ export function ShipmentsPage({ user, initialView = 'pending', initialCreating =
         {shipment.status === 'EM_SEPARACAO' && <p><strong>A Revisão está realizando a separação dos produtos recebidos.</strong></p>}
         {shipment.decidedAt && <p>{shipmentStatusLabel[shipment.status]} por {shipment.decidedBy?.username} em {formatDateTime(shipment.decidedAt)}</p>}
         {shipment.refusalReason && <Notice kind="info">{shipment.status === 'CANCELADO' ? 'Motivo do cancelamento' : 'Motivo da recusa'}: {shipment.refusalReason}</Notice>}
-        <button className="secondary button-wide" onClick={(event) => { event.stopPropagation(); openShipment(shipment, canSeparate && shipment.status === 'EM_SEPARACAO'); }}>{canSeparate && shipment.status === 'EM_SEPARACAO' ? 'Continuar separação' : 'Ver itens e detalhes'}</button>
+        <button data-tour={shipment.status === "AGUARDANDO_RECEBIMENTO" && shipment.destinationSector === user.sector && canDecide ? "receipt-open" : shipment.status === "EM_SEPARACAO" && canSeparate ? "separation-open" : undefined} className="secondary button-wide" onClick={(event) => { event.stopPropagation(); openShipment(shipment, canSeparate && shipment.status === 'EM_SEPARACAO'); }}>{canSeparate && shipment.status === 'EM_SEPARACAO' ? 'Continuar separação' : 'Ver itens e detalhes'}</button>
       </article></div>)}</div>
       <div className="shipment-pagination"><button className="secondary" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Anterior</button><span>Página {page} de {data.meta.totalPages} · {data.meta.total} envios</span><button className="secondary" disabled={page >= data.meta.totalPages} onClick={() => setPage((value) => value + 1)}>Próxima</button></div>
     </>}
@@ -200,15 +201,15 @@ export function ShipmentsPage({ user, initialView = 'pending', initialCreating =
           {isAdmin && auditShipmentId === selected.id && auditHistory.length > 0 && <section className="movement-detail-section" aria-labelledby="shipment-audit-title"><h3 id="shipment-audit-title">Auditoria</h3><ul className="pcp-audit-list">{auditHistory.map((event) => <li key={event.id}><strong title={event.action}>{auditActionLabel(event.action)}</strong><span>{event.user?.username ?? 'Sistema'} · {formatDateTime(event.createdAt)}</span></li>)}</ul></section>}
         </>}
         actions={<>
-          {canDecide && selected.status === 'AGUARDANDO_RECEBIMENTO' && selected.destinationSector === user.sector && <><button type="button" className="secondary" onClick={() => setDecision('refuse')}>Recusar envio</button><button type="button" onClick={() => setDecision('confirm')}>Confirmar recebimento</button></>}
+          {canDecide && selected.status === 'AGUARDANDO_RECEBIMENTO' && selected.destinationSector === user.sector && <><button data-tour="receipt-refuse" type="button" className="secondary" onClick={() => { setSuccess(undefined); setDecision('refuse'); }}>Recusar envio</button><button data-tour="receipt-confirm" type="button" onClick={() => { setSuccess(undefined); setDecision('confirm'); }}>Confirmar recebimento</button></>}
           {selected.status === 'AGUARDANDO_RECEBIMENTO' && selected.createdBy.id === user.id && <button type="button" className="danger" onClick={() => setDecision('cancel')}>Cancelar envio</button>}
-          {canDecide && selected.status === 'EM_SEPARACAO' && user.sector === 'REVISAO' && <button type="button" onClick={() => setDecision('separate')}>Continuar separação</button>}
+          {canDecide && selected.status === 'EM_SEPARACAO' && user.sector === 'REVISAO' && <button data-tour="separation-open" type="button" onClick={() => { setSuccess(undefined); setDecision('separate'); }}>Continuar separação</button>}
           {canCreate && selected.status === 'RECUSADO' && selected.createdBy.id === user.id && <button type="button" onClick={() => { setSelected(null); setCreating(true); }}>Criar novo envio</button>}
         </>} />
     </Modal>}
     {selected && (decision === 'confirm' || decision === 'refuse') && <ShipmentDecision key={`${selected.id}:${decision}`} shipment={selected} refuse={decision === 'refuse'} onClose={() => setDecision(null)} onDone={finishDecision} />}
-    {selected && decision === 'cancel' && <ShipmentCancellation shipment={selected} onClose={() => setDecision(null)} onDone={() => { setSuccess('Envio cancelado. O registro e o motivo foram preservados no histórico.'); setDecision(null); setSelected(null); void load(); }} />}
-    {selected && decision === 'separate' && <SeparationDialog key={selected.id} shipment={selected} onClose={closeSeparation} onDone={() => { setSuccess('Separação concluída e saldo líquido consolidado.'); setDecision(null); setSelected(null); void load(); }} />}
+    {selected && decision === 'cancel' && <ShipmentCancellation shipment={selected} onClose={() => setDecision(null)} onDone={() => { setSuccess({ message: 'Envio cancelado. O registro e o motivo foram preservados no histórico.' }); setDecision(null); setSelected(null); void load(); }} />}
+    {selected && decision === 'separate' && <SeparationDialog key={selected.id} shipment={selected} onClose={closeSeparation} onDone={() => { setSuccess({ message: 'Separação concluída e saldo líquido consolidado.', tourTarget: 'receipt-result' }); setDecision(null); setSelected(null); void load(); }} />}
   </>;
 }
 

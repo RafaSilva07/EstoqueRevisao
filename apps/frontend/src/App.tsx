@@ -41,6 +41,8 @@ import { HelpMenu } from './HelpMenu';
 type Navigate = (page: Page) => void;
 const messageFrom = (error: unknown) => error instanceof Error ? error.message : 'Ocorreu um erro inesperado.';
 
+const reviewSuccessMessage = 'Revisao realizada com sucesso.';
+
 function revealDetails() {
   if (!window.matchMedia('(max-width: 1399px)').matches) return;
   requestAnimationFrame(() => {
@@ -85,14 +87,14 @@ export function ProductsPage({ canWrite, canManageStatus, canReadConversions, ca
     }
   }, [page, limit, search]);
   useEffect(() => { const timeout = window.setTimeout(() => void load(), 250); return () => { requestVersion.current += 1; window.clearTimeout(timeout); }; }, [load]);
-  function openForm(product: Product | null) { setEditing(product); setShowForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  function openForm(product: Product | null) { setEditing(product); if (!product) setSuccess(''); setShowForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }
   async function save(payload: Record<string, unknown>) { if (busy) return; setBusy(true); try { const saved = editing ? await api.patch<Product>(`/products/${editing.id}`, payload) : await api.post<Product>('/products', payload); setSelected(saved); setSuccess(editing ? 'Produto atualizado com sucesso.' : 'Produto cadastrado com sucesso.'); setShowForm(false); setEditing(null); await load(); } catch (caught) { setError(messageFrom(caught)); } finally { setBusy(false); } }
   async function select(product: Product) { setSelected(product); revealDetails(); if (!canReadConversions) return; try { setConversions(await api.get(`/products/${product.id}/conversions`)); } catch (caught) { setError(messageFrom(caught)); } }
   async function addConversion(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!selected) return; setBusy(true); const form = new FormData(event.currentTarget); try { await api.post(`/products/${selected.id}/conversions`, { fromUnit: form.get('fromUnit'), toUnit: form.get('toUnit'), factor: Number(form.get('factor')) }); setConversions(await api.get(`/products/${selected.id}/conversions`)); event.currentTarget.reset(); setSuccess('Conversao adicionada com sucesso.'); } catch (caught) { setError(messageFrom(caught)); } finally { setBusy(false); } }
   async function toggle(product: Product) { setBusy(true); try { await api.patch(`/products/${product.id}/status`, { active: !product.active }); setSuccess(product.active ? 'Produto inativado com sucesso.' : 'Produto ativado com sucesso.'); setConfirming(null); await load(); } catch (caught) { setError(messageFrom(caught)); } finally { setBusy(false); } }
   return <>
-    <PageHeader eyebrow="Cadastro base" title="Produtos" description="Cadastre, edite ou exclua produtos. A exclusão inativa o cadastro sem apagar o histórico." action={canCreate && <button onClick={() => openForm(null)}>+ Novo produto</button>} />
-    {success && <Notice kind="success" onClose={() => setSuccess('')}>{success}</Notice>}
+    <PageHeader eyebrow="Cadastro base" title="Produtos" description="Cadastre, edite ou exclua produtos. A exclusão inativa o cadastro sem apagar o histórico." action={canCreate && <button data-tour="product-new" onClick={() => openForm(null)}>+ Novo produto</button>} />
+    {success && <Notice kind="success" tourTarget={success === 'Produto cadastrado com sucesso.' ? 'product-result' : undefined} onClose={() => setSuccess('')}>{success}</Notice>}
     {error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
     {showForm && <Modal labelledBy="product-form-title" busy={busy} onClose={() => setShowForm(false)}>
       <h2 id="product-form-title">{editing ? 'Editar produto' : 'Cadastrar produto'}</h2>
@@ -102,7 +104,7 @@ export function ProductsPage({ canWrite, canManageStatus, canReadConversions, ca
     <div className="content-grid">
       <section className="surface list-panel">
         <div className="toolbar products-toolbar">
-          <label className="search-field">Buscar produto<input type="search" placeholder="Código ou nome" maxLength={100} disabled={busy} value={search} onChange={(event) => { setLoading(true); setSearch(event.target.value); setPage(1); }} /></label>
+          <label className="search-field">Buscar produto<input data-tour="product-search" type="search" placeholder="Código ou nome" maxLength={100} disabled={busy} value={search} onChange={(event) => { setLoading(true); setSearch(event.target.value); setPage(1); }} /></label>
           <label>Produtos por página<select value={limit} disabled={busy} onChange={(event) => { setLoading(true); setLimit(Number(event.target.value)); setPage(1); }}>
             <option value={20}>20</option><option value={50}>50</option><option value={100}>100</option>
           </select></label>
@@ -360,7 +362,8 @@ function AppSession() {
       <div className="user-area">
         {switcher}<span className="user-name">{user.username} · {operationalModeLabel[activeMode]}</span>
         <button className="secondary desktop-logout" onClick={logout} disabled={loggingOut}>Sair</button>
-        <HelpMenu key={draftScope} user={activeUser} mode={activeMode} page={page} navigate={go} />
+        <HelpMenu key={draftScope} user={activeUser} mode={activeMode} page={page} navigate={go}
+          reviewCompleted={page === "history" && movementSuccess === reviewSuccessMessage} />
       </div>
     </header>
     <SidebarNavigation page={page} user={activeUser} modeLabel={operationalModeLabel[activeMode]} showOnlineUsers={presenceAdmin} expanded={sidebarExpanded} onToggle={() => setSidebarExpanded((value) => !value)} navigate={go} />
@@ -382,7 +385,7 @@ function AppSession() {
         {page === 'new-entry' && can('movements.external-entry') && <ExternalEntryPage onCreated={(id) => completeMovement(id, 'Entrada registrada com sucesso.')} onManageLocations={can('stocks.create') ? () => navigate('stocks') : undefined} />}
         {page === 'new-exit' && can('movements.external-exit') && <ExternalExitPage onCreated={(id) => completeMovement(id, 'Saida registrada com sucesso.')} />}
         {page === 'new-transfer' && can('movements.transfer') && <InternalTransferPage prefill={transferPrefill} onCreated={(id) => completeMovement(id, 'Transferencia realizada com sucesso.')} />}
-        {page === 'new-review' && can('movements.review') && <ReviewPage prefill={reviewPrefill} onCreated={(id) => completeMovement(id, 'Revisao realizada com sucesso.')} />}
+        {page === 'new-review' && can('movements.review') && <ReviewPage prefill={reviewPrefill} onCreated={(id) => completeMovement(id, reviewSuccessMessage)} />}
         {page === 'movements' && can('movements.read') && <MovementsPage initialId={selectedMovementId} success={movementSuccess} canCancel={can('movements.cancel')} />}
         {page === 'stocks' && can('stocks.read') && <StocksPage canManageStatus={can('stocks.manage-status')} canCreate={can('stocks.create')} canEdit={can('stocks.update')} />}
         {page === 'inventory' && can('stock-positions.read') && <StockReportsPage />}

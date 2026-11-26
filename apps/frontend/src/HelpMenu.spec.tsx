@@ -60,37 +60,30 @@ describe('menu de ajuda', () => {
     return button;
   }
 
-  it('navega, retoma o passo, move o foco e fecha com Escape', () => {
+  it('abre a operação escolhida e permite pausar e retomar pela Ajuda', () => {
     const navigate = vi.fn();
-    act(() => root.render(<HelpMenu user={reviewer} mode="REVISAO" page="home" navigate={navigate} />));
-
+    const render = (page: 'home' | 'products') => {
+      act(() => root.render(<HelpMenu user={reviewer} mode="REVISAO" page={page} navigate={navigate} />));
+    };
+    render('home');
     const trigger = clickButton('Ajuda');
-    expect(document.activeElement?.textContent).toBe('Ajuda');
     clickButton('Cadastrar produto');
-    expect(document.activeElement?.textContent).toBe('Abra o cadastro');
-    clickButton('Próximo passo');
-    expect(document.activeElement?.textContent).toBe('Preencha os dados do produto');
-    clickButton('Abrir Produtos');
     expect(navigate).toHaveBeenCalledExactlyOnceWith('products');
     expect(host.querySelector('[role="dialog"]')).toBeNull();
-
-    act(() => root.render(<HelpMenu user={reviewer} mode="REVISAO" page="products" navigate={navigate} />));
-    clickButton('Ajuda');
-    clickButton('Continuar tour de cadastrar produto');
-    expect(host.textContent).toContain('Passo 2 de 3');
-    clickButton('Voltar à operação');
-    expect(navigate).toHaveBeenCalledTimes(1);
-    clickButton('Ajuda');
-    clickButton('Continuar tour de cadastrar produto');
-    clickButton('Anterior');
-    expect(document.activeElement?.textContent).toBe('Abra o cadastro');
-    clickButton('Próximo passo');
-    clickButton('Próximo passo');
-    clickButton('Concluir tour');
-    expect(host.textContent).not.toContain('Continuar tour');
-    act(() => { document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
-    expect(host.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
+
+    render('products');
+    clickButton('Ajuda');
+    clickButton('Pausar tour');
+    expect(host.textContent).toContain('Continuar tour de cadastrar produto');
+    clickButton('Continuar tour de cadastrar produto');
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+
+    render('home');
+    clickButton('Ajuda');
+    clickButton('Continuar tour de cadastrar produto');
+    expect(navigate).toHaveBeenCalledTimes(2);
   });
 
   it('exibe o rascunho educacional e as fontes mesmo sem tours disponíveis', () => {

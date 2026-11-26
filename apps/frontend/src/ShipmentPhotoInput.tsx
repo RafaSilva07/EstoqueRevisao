@@ -6,7 +6,7 @@ import { PhotoAttachment } from './shipment-photo-state';
 
 const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
 
-export function ShipmentPhotoInput({ photos, limits, productName, remainingTotal, onAdd, onRemove, readOnly = false }: {
+export function ShipmentPhotoInput({ photos, limits, productName, remainingTotal, onAdd, onRemove, readOnly = false, tourTarget }: {
   photos: PhotoAttachment[];
   limits: ShipmentPhotoLimits;
   productName: string;
@@ -14,6 +14,7 @@ export function ShipmentPhotoInput({ photos, limits, productName, remainingTotal
   onAdd: (files: File[]) => void;
   onRemove: (index: number) => void;
   readOnly?: boolean;
+  tourTarget?: string;
 }) {
   const picker = useRef<HTMLInputElement>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -35,8 +36,8 @@ export function ShipmentPhotoInput({ photos, limits, productName, remainingTotal
       {!readOnly && <button type="button" className="secondary" onClick={() => onRemove(index)} aria-label={`Remover foto ${index + 1} de ${productName}`}>Remover foto</button>}
     </div>)}</div>}
     {!readOnly && <div className="row-actions">
-      <button type="button" disabled={available <= 0} onClick={() => setCameraOpen(true)}>Tirar foto</button>
-      <button type="button" className="secondary" disabled={available <= 0} onClick={() => picker.current?.click()}>Escolher fotos</button>
+      <button type="button" data-tour={tourTarget} disabled={available <= 0} onClick={() => setCameraOpen(true)}>Tirar foto</button>
+      <button type="button" data-tour={tourTarget} className="secondary" disabled={available <= 0} onClick={() => picker.current?.click()}>Escolher fotos</button>
       <input ref={picker} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={(event) => { add(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
     </div>}
     {error && <span className="photo-required" role="alert">{error}</span>}

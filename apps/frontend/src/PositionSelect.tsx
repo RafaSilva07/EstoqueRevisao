@@ -3,9 +3,9 @@ import { useId, useRef, useState } from 'react';
 interface Option { value: string; label: string }
 
 /** Lista no fluxo do formulário: não ultrapassa o modal nem cobre outros campos. */
-export function PositionSelect({ label, value, options, onChange, disabled = false, placeholder = 'Selecione' }: {
+export function PositionSelect({ label, value, options, onChange, disabled = false, placeholder = 'Selecione', tourTarget }: {
   label: string; value: string; options: Option[]; onChange: (value: string) => void;
-  disabled?: boolean; placeholder?: string;
+  disabled?: boolean; placeholder?: string; tourTarget?: string;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -22,7 +22,8 @@ export function PositionSelect({ label, value, options, onChange, disabled = fal
     if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
   }}>
     <span id={`${id}-label`} className="position-select-label">{label}</span>
-    <button ref={trigger} type="button" role="combobox" aria-labelledby={`${id}-label`}
+    <button ref={trigger} type="button" role="combobox" data-tour={tourTarget}
+      data-tour-ready={tourTarget ? Boolean(selected) : undefined} data-tour-options={tourTarget ? options.length : undefined} aria-labelledby={`${id}-label`}
       aria-required="true" aria-expanded={expanded} aria-controls={`${id}-list`}
       aria-activedescendant={expanded && options[active] ? `${id}-${active}` : undefined}
       disabled={disabled} className="position-select-trigger" onClick={() => {

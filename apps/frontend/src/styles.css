@@ -1041,3 +1041,29 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
 .help-terms li + li { margin-top: .35rem; }
 .help-terms a { color: var(--ink); text-decoration: underline; text-underline-offset: .15em; }
 .help-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .75rem; padding-top: .7rem; border-top: 1px solid var(--line); }
+
+/* The coach stays inside the active dialog's accessibility tree when a form is open. */
+.dialog:has(.tour-coach) { animation: none; }
+[data-tour-highlight] { outline: 3px solid var(--primary); outline-offset: 3px; }
+[data-tour-highlight]:focus-visible { outline: 3px solid #65bcd1; }
+.tour-coach {
+  position: fixed;
+  z-index: 48;
+  visibility: hidden;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: .75rem;
+  border: 1px solid var(--primary);
+  border-inline-start-width: 4px;
+  border-radius: .65rem;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 .45rem 1.2rem rgb(12 28 37 / 22%);
+}
+.tour-coach .tour-coach-label { margin: 0 0 .3rem; color: var(--primary-dark); font-size: .75rem; font-weight: 700; }
+.tour-coach h2 { margin: 0 0 .35rem; font-size: 1rem; }
+.tour-coach p { margin: 0; font-size: .875rem; line-height: 1.4; }
+.tour-coach-actions { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .5rem; }
+.tour-coach-actions button { padding: .35rem .55rem; font-size: .75rem; }
+.tour-resume { display: flex; justify-content: flex-end; margin-top: .6rem; }
+.tour-resume button { font-size: .8rem; }

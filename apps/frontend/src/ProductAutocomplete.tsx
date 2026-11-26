@@ -14,6 +14,7 @@ export function ProductAutocomplete({
   legend = 'Produto',
   draftQuery,
   onQueryChange,
+  tourTarget,
 }: {
   onChange: (product: Product | null) => void;
   defaultUnit?: 'UN';
@@ -23,6 +24,7 @@ export function ProductAutocomplete({
   legend?: string;
   draftQuery?: ProductQuery;
   onQueryChange?: (query: ProductQuery) => void;
+  tourTarget?: string;
 }) {
   const [code, setCode] = useState(initialProduct?.code ?? '');
   const [name, setName] = useState(initialProduct?.name ?? '');
@@ -158,13 +160,13 @@ export function ProductAutocomplete({
     <p className="muted">Pesquise pelo código ou por palavras do nome, em qualquer ordem, e escolha uma sugestão. O outro campo será preenchido automaticamente.</p>
     <div className="form-grid">
       <label>Código{required && ' *'}<span className="autocomplete-control">
-        <input value={shownCode} required={required} autoComplete="off" aria-autocomplete="list" aria-controls={listId} aria-expanded={field === 'code'} role="combobox"
+        <input data-tour={tourTarget} value={shownCode} required={required} autoComplete="off" aria-autocomplete="list" aria-controls={listId} aria-expanded={field === 'code'} role="combobox"
           onFocus={() => setField('code')} onChange={(event) => edit('code', event.target.value)} onKeyDown={keyDown} placeholder="Digite ou abra a lista" />
         <button type="button" className="autocomplete-toggle" aria-label="Abrir lista de códigos" onClick={() => browse('code')}><span className="dropdown-chevron" aria-hidden="true" /></button>
         {field === 'code' && list}
       </span></label>
       <label>Descrição{required && ' *'}<span className="autocomplete-control">
-        <input value={shownName} required={required} autoComplete="off" aria-autocomplete="list" aria-controls={listId} aria-expanded={field === 'name'} role="combobox"
+        <input data-tour={tourTarget} value={shownName} required={required} autoComplete="off" aria-autocomplete="list" aria-controls={listId} aria-expanded={field === 'name'} role="combobox"
           onFocus={() => setField('name')} onChange={(event) => edit('name', event.target.value)} onKeyDown={keyDown} placeholder="Digite o nome do produto" />
         <button type="button" className="autocomplete-toggle" aria-label="Abrir lista de descrições" onClick={() => browse('name')}><span className="dropdown-chevron" aria-hidden="true" /></button>
         {field === 'name' && list}

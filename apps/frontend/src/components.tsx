@@ -17,12 +17,13 @@ export function PageHeader({
   </div>;
 }
 
-export function Notice({ kind, children, onClose, title, className = '' }: {
+export function Notice({ kind, children, onClose, title, className = '', tourTarget }: {
   kind: 'error' | 'success' | 'info';
   children: ReactNode;
   onClose?: () => void;
   title?: ReactNode;
   className?: string;
+  tourTarget?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -32,7 +33,7 @@ export function Notice({ kind, children, onClose, title, className = '' }: {
       ref.current?.scrollIntoView({ block: 'center' });
     }
   }, [kind, children]);
-  return <div ref={ref} className={`notice notice-${kind} ${className}`} role={kind === 'error' ? 'alert' : 'status'}>
+  return <div ref={ref} className={`notice notice-${kind} ${className}`} data-tour={tourTarget} role={kind === 'error' ? 'alert' : 'status'}>
     <span><strong className="notice-title">{title ?? (kind === 'error' ? 'Não foi possível concluir' : kind === 'success' ? 'Concluído' : 'Atenção')}</strong>{children}</span>
     {onClose && <button type="button" className="notice-close" aria-label="Fechar mensagem" onClick={onClose}>Fechar</button>}
   </div>;
@@ -119,12 +120,13 @@ export function LoadingState({ label = 'Carregando...' }: { label?: string }) {
   return <div className="loading-state" role="status"><span className="spinner" aria-hidden="true" /><span>{label}</span></div>;
 }
 
-export function EmptyState({ title, description, action }: {
+export function EmptyState({ title, description, action, tourTarget }: {
   title: string;
   description: string;
   action?: ReactNode;
+  tourTarget?: string;
 }) {
-  return <div className="empty-state"><strong>{title}</strong><p>{description}</p>{action}</div>;
+  return <div className="empty-state" data-tour={tourTarget}><strong>{title}</strong><p>{description}</p>{action}</div>;
 }
 
 export function ConfirmDialog({

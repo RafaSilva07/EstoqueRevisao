@@ -218,7 +218,7 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
       {item.assembly && <span>Montagem: {item.assembly.sources.reduce((sum, source) => sum + source.quantity, 0)} UN de {item.product.code}. Origens: {item.assembly.sources.map((source) => `${source.position.stockLocation.name} / ${source.position.batch.code}: ${source.quantity} UN`).join('; ')}</span>}
       {item.observation && <span><strong>Observação do produto:</strong> {item.observation}</span>}
     </div>
-    {photoLimits && <ShipmentPhotoInput photos={item.photos} limits={photoLimits} productName={item.assembly?.packageProduct.name ?? item.product.name}
+    {photoLimits && <ShipmentPhotoInput tourTarget={!confirming && item.photos.length < photoLimits.minimum ? "shipment-photo" : undefined} photos={item.photos} limits={photoLimits} productName={item.assembly?.packageProduct.name ?? item.product.name}
       remainingTotal={100 - photoTotal} onAdd={(files) => attachPhotos(item.key, files)} onRemove={(index) => removePhoto(item.key, index)} readOnly={confirming} />}
     {!confirming && <button type="button" className="secondary" onClick={() => removeItem(item.key)}>Remover item</button>}
   </li>)}</ul>;
@@ -227,17 +227,17 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
     <PageHeader eyebrow="Envios entre setores" title={outgoing ? 'Novo envio' : 'Novo envio para Revisão'} action={<button className="secondary" onClick={() => draft.close(onClose)}>Voltar</button>} />
     <DraftActions draft={draft} />
     {error && !adding && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
-    <section className="surface form-panel"><h2>1. Destino</h2>{outgoing ? <label>Enviar para<select value={destination} disabled={items.length > 0} onChange={(event) => { setDestination(event.target.value as ShipmentSector); setAssemblyMode(false); }}><option value="PRODUCAO">Produção</option><option value="EXPEDICAO">Expedição</option></select></label> : <p>Revisão · entrada em A Revisar somente após confirmação.</p>}
-      {sector === 'EXPEDICAO' && <div className="form-grid"><label>Carregamento *<select required value={loadingStatus} onChange={(event) => { setLoadingStatus(event.target.value as ShipmentLoadingStatus | ''); setVehiclePlate(''); }}><option value="">Selecione</option><option value="CARREGADO">Carregado</option><option value="NAO_CARREGADO">Não carregado</option></select></label>
-        {loadingStatus === 'CARREGADO' && <label>Placa do veículo *<input required value={vehiclePlate} onChange={(event) => setVehiclePlate(event.target.value.toUpperCase())} maxLength={20} autoCapitalize="characters" placeholder="Informe a placa" /></label>}</div>}
-      {outgoing && destination === 'EXPEDICAO' && <label className="assembly-mixed-toggle"><input type="checkbox" checked={assemblyMode} disabled={items.length > 0} onChange={(event) => setAssemblyMode(event.target.checked)} /> Montar fardos/caixas com unidades disponíveis</label>}
+    <section className="surface form-panel"><h2>1. Destino</h2>{outgoing ? <label>Enviar para<select data-tour="shipment-destination" value={destination} disabled={items.length > 0} onChange={(event) => { setDestination(event.target.value as ShipmentSector); setAssemblyMode(false); }}><option value="PRODUCAO">Produção</option><option value="EXPEDICAO">Expedição</option></select></label> : <p>Revisão · entrada em A Revisar somente após confirmação.</p>}
+      {sector === 'EXPEDICAO' && <div className="form-grid"><label>Carregamento *<select data-tour="shipment-loading" required value={loadingStatus} onChange={(event) => { setLoadingStatus(event.target.value as ShipmentLoadingStatus | ''); setVehiclePlate(''); }}><option value="">Selecione</option><option value="CARREGADO">Carregado</option><option value="NAO_CARREGADO">Não carregado</option></select></label>
+        {loadingStatus === 'CARREGADO' && <label>Placa do veículo *<input data-tour="shipment-plate" required value={vehiclePlate} onChange={(event) => setVehiclePlate(event.target.value.toUpperCase())} maxLength={20} autoCapitalize="characters" placeholder="Informe a placa" /></label>}</div>}
+      {outgoing && destination === 'EXPEDICAO' && <label className="assembly-mixed-toggle"><input data-tour="shipment-assembly" type="checkbox" checked={assemblyMode} disabled={items.length > 0} onChange={(event) => setAssemblyMode(event.target.checked)} /> Montar fardos/caixas com unidades disponíveis</label>}
       {outgoing && <p className="muted">Ao enviar, a quantidade sai do disponível e fica em trânsito. Uma recusa devolve o saldo à posição original.</p>}</section>
     {adding && <Modal labelledBy="add-product-title" onClose={closeItem}><div className="panel-heading item-list-heading"><h2 id="add-product-title">Adicionar produto</h2><button type="button" className="secondary" onClick={closeItem}>Cancelar</button></div>
       <DraftActions draft={draft} />
       {error && <Notice kind="error">{error}</Notice>}
       {assemblyMode ? <AssemblyItemForm onAdd={addAssemblyItem} excludedPositions={items.flatMap((item) => item.assembly?.sources.map((source) => source.position) ?? [])} /> : <form className="form-grid" onSubmit={add}>
-        <ProductAutocomplete draftQuery={productQuery} onQueryChange={setProductQuery} key={productResetKey} initialProduct={product} onChange={changeProduct} />
-        {product && <div className="selected-product wide"><strong>Produto selecionado: {product.code}</strong><span>{product.name} · {product.defaultUnit}</span><button type="button" className="secondary" onClick={clearProduct}>Trocar produto</button></div>}
+        <ProductAutocomplete tourTarget="shipment-product" draftQuery={productQuery} onQueryChange={setProductQuery} key={productResetKey} initialProduct={product} onChange={changeProduct} />
+        {product && <div className="selected-product wide" data-tour="shipment-product-selected"><strong>Produto selecionado: {product.code}</strong><span>{product.name} · {product.defaultUnit}</span><button type="button" className="secondary" onClick={clearProduct}>Trocar produto</button></div>}
         {outgoing && product && <fieldset className="shipment-position-filter wide"><legend>Lote e posição disponível</legend>
           <p className="muted">Informe o lote ou a fabricação. Depois escolha a posição; Lata Boa aparece primeiro por ser a origem prioritária dos envios externos.</p>
           <div className="form-grid">
@@ -251,17 +251,17 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
           {canQueryPositions && positionPages > 1 && <div className="row-actions shipment-position-pagination"><button type="button" className="secondary" disabled={positionPage === 1 || isPositionLoading} onClick={() => { setPositionPage((value) => value - 1); setPositionId(''); }}>Posições anteriores</button><span>{positionPage}/{positionPages}</span><button type="button" className="secondary" disabled={positionPage >= positionPages || isPositionLoading} onClick={() => { setPositionPage((value) => value + 1); setPositionId(''); }}>Próximas posições</button></div>}
           {position && <p className="available-balance"><span>Posição escolhida: {position.stockLocation.name}</span><strong>{position.quantity} {product.defaultUnit} disponíveis</strong></p>}
         </fieldset>}
-        {!outgoing && product && <OperationalLotFields initiallyResolved={ready} key={`${product.id}:${lotKey}`} product={product} value={lot} onChange={setLot} onReady={setReady} resolvePath="/shipments/resolve-lot" />}
-        <label>Quantidade *<input required type="number" inputMode="numeric" min="1" step="1" max={position?.quantity} value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label>
+        {!outgoing && product && <OperationalLotFields guideShipment initiallyResolved={ready} key={`${product.id}:${lotKey}`} product={product} value={lot} onChange={setLot} onReady={setReady} resolvePath="/shipments/resolve-lot" />}
+        <label>Quantidade *<input data-tour="shipment-quantity" required type="number" inputMode="numeric" min="1" step="1" max={position?.quantity} value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label>
         <label className="wide">Observação deste produto (opcional)<textarea value={itemObservation} onChange={(event) => setItemObservation(event.target.value)} maxLength={1000} rows={2} /></label>
-        <div className="form-actions"><button disabled={!product || items.length >= 100 || (outgoing ? !position : !ready)}>Adicionar item</button></div>
+        <div className="form-actions"><button data-tour="shipment-add-item" disabled={!product || items.length >= 100 || (outgoing ? !position : !ready)}>Adicionar item</button></div>
       </form>}
     </Modal>}
-    <section className="surface form-panel"><div className="panel-heading item-list-heading"><h2>Produtos ({items.length})</h2><button type="button" onClick={() => { setError(''); setAdding(true); }}>Adicionar produto</button></div>{summary}
+    <section className="surface form-panel"><div className="panel-heading item-list-heading"><h2>Produtos ({items.length})</h2><button data-tour="shipment-add" type="button" onClick={() => { setError(''); setAdding(true); }}>Adicionar produto</button></div>{summary}
       <label>Observação geral do envio (opcional)<textarea value={observation} onChange={(event) => setObservation(event.target.value)} maxLength={1000} rows={3} /></label>
-      {!photoLimits && <p className="action-hint">Carregando os limites de fotos…</p>}
+      {!photoLimits && <p className="action-hint" data-tour={items.length > 0 ? "shipment-photo-loading" : undefined}>Carregando os limites de fotos…</p>}
       {!allPhotosReady && photoLimits && items.length > 0 && <p className="action-hint photo-required">Adicione de {photoLimits.minimum} a {photoLimits.maximum} foto(s) por produto, até 100 no envio.</p>}
-      <button disabled={!allPhotosReady || !loadingReady} onClick={() => { submission.resetConfirmation(); setConfirming(true); }}>Conferir e enviar</button></section>
+      <button data-tour="shipment-summary" disabled={!allPhotosReady || !loadingReady} onClick={() => { submission.resetConfirmation(); setConfirming(true); }}>Conferir e enviar</button></section>
     {confirming && <Modal labelledBy="shipment-summary-title" busy={submission.busy} onClose={() => draft.close(() => setConfirming(false))}>
       <h2 id="shipment-summary-title">{sectorLabel[sector]} → {sectorLabel[destination]}</h2>{summary}
       {sector === 'EXPEDICAO' && <p><strong>Carregamento:</strong> {loadingStatus === 'CARREGADO' ? `Carregado · placa ${vehiclePlate.trim().toUpperCase()}` : 'Não carregado'}</p>}
@@ -269,7 +269,7 @@ export function NewShipment({ sector, onCreated, onClose }: { sector: ShipmentSe
       <MovementConfirmationNotice conflict={submission.conflict} />
       {submission.error && <Notice kind="error">{submission.error}</Notice>}
       {observation.trim() && <p><strong>Observação geral:</strong> {observation.trim()}</p>}
-      <div className="dialog-actions"><button className="secondary" disabled={submission.busy} onClick={() => setConfirming(false)}>Voltar para conferir</button><button disabled={submission.busy || !allPhotosReady || !loadingReady} onClick={() => void submission.submit({ destinationSector: destination, observation: observation.trim() || undefined,
+      <div className="dialog-actions"><button className="secondary" disabled={submission.busy} onClick={() => setConfirming(false)}>Voltar para conferir</button><button data-tour="shipment-confirm" data-tour-choice={submission.conflict ? "conflict" : undefined} disabled={submission.busy || !allPhotosReady || !loadingReady} onClick={() => void submission.submit({ destinationSector: destination, observation: observation.trim() || undefined,
         ...(sector === 'EXPEDICAO' ? { loadingStatus, ...(loadingStatus === 'CARREGADO' ? { vehiclePlate: vehiclePlate.trim().toUpperCase() } : {}) } : {}),
         items: items.map((item) => ({ productId: item.product.id, quantity: item.quantity, observation: item.observation ?? undefined, photoCount: item.photos.length,
         ...(item.assembly ? { assembly: { packageProductId: item.assembly.packageProduct.id, mixedDates: item.assembly.mixedDates,

@@ -187,6 +187,7 @@ export function SeparationDialog({ shipment, onClose, onDone }: SeparationDialog
               <label>
                 Quantidade de retorno
                 <input
+                  data-tour="separation-amount"
                   type="number"
                   inputMode="numeric"
                   min="0"
@@ -200,7 +201,7 @@ export function SeparationDialog({ shipment, onClose, onDone }: SeparationDialog
                 />
               </label>
               {amount > 0 && photoLimits && (
-                <ShipmentPhotoInput
+                <ShipmentPhotoInput tourTarget={(photos[item.id]?.length ?? 0) < photoLimits.minimum ? "separation-photo" : undefined}
                   photos={photos[item.id] ?? []}
                   limits={photoLimits}
                   productName={item.productSnapshot.name}
@@ -215,10 +216,10 @@ export function SeparationDialog({ shipment, onClose, onDone }: SeparationDialog
       </div>
 
       <div className="dialog-actions">
-        <button type="button" className="secondary" onClick={() => void save()} disabled={busy || !valid}>
+        <button data-tour="separation-save" type="button" className="secondary" onClick={() => void save()} disabled={busy || !valid}>
           Salvar e sair
         </button>
-        <button type="button" onClick={() => void complete()} disabled={busy || !valid || !photosReady}>
+        <button data-tour="separation-confirm" type="button" onClick={() => void complete()} disabled={busy || !valid || !photosReady}>
           Concluir separação
         </button>
       </div>

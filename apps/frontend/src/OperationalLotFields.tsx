@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { api, Product } from './api';
 import { OperationalLot } from './operational-lot';
 
-export function OperationalLotFields({ product, value, onChange, onReady, initiallyResolved = true, resolvePath = '/movements/resolve-lot' }: {
+export function OperationalLotFields({ product, value, onChange, onReady, initiallyResolved = true, resolvePath = '/movements/resolve-lot', guideShipment = false }: {
+  guideShipment?: boolean;
   resolvePath?: string;
   product: Product;
   value: OperationalLot;
@@ -60,19 +61,19 @@ export function OperationalLotFields({ product, value, onChange, onReady, initia
     <p className="muted">Preencha o lote ou a fabricação. Ao sair do campo, completamos o outro.</p>
     <div className="form-grid">
       <label>Lote CONSERVADI
-        <input value={value.code} maxLength={6} autoCapitalize="characters" spellCheck={false}
+        <input data-tour={guideShipment ? "shipment-lot" : undefined} value={value.code} maxLength={6} autoCapitalize="characters" spellCheck={false}
           onChange={(event) => change('code', event.target.value)}
           onBlur={(event) => { if (event.target.value !== '' && !pending) void resolve('code', event.target.value); }}
           aria-invalid={Boolean(error)} />
       </label>
       <label>Fabricação
-        <input type="date" min="2000-01-01" max={today} value={value.manufacturingDate}
+        <input data-tour={guideShipment ? "shipment-lot" : undefined} type="date" min="2000-01-01" max={today} value={value.manufacturingDate}
           onChange={(event) => change('manufacturingDate', event.target.value)}
           onBlur={(event) => { if (event.target.value !== '' && !pending) void resolve('manufacturingDate', event.target.value); }}
           aria-invalid={Boolean(error)} />
       </label>
       <label>Validade <span className="required">*</span>
-        <input type="date" value={value.expirationDate} min={value.manufacturingDate || undefined} required disabled={pending}
+        <input data-tour={guideShipment ? "shipment-expiry" : undefined} type="date" value={value.expirationDate} min={value.manufacturingDate || undefined} required disabled={pending}
           onChange={(event) => onChange({ ...value, expirationDate: event.target.value })} />
         <small>{suggested && value.expirationDate === suggested ? 'Sugerida pelo prazo do produto. Você pode editar.' : 'Validade informada pelo operador.'}</small>
         {!product.shelfLifeYears && <small>Produto ainda sem prazo padrão. Informe a validade manualmente.</small>}
