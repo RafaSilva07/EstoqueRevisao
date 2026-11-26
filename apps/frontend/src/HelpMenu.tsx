@@ -1,6 +1,5 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { UserSession } from './api';
-import { Modal } from './components';
 import { availableHelpTours } from './help-tours';
 import { type Page, pageTitles } from './navigation-model';
 import { type OperationalMode, operationalModeLabel } from './operational-mode';
@@ -15,19 +14,36 @@ export function HelpMenu({ user, mode, page, navigate }: {
 }) {
   const [view, setView] = useState<'menu' | 'tour' | 'terms' | null>(null);
   const [progress, setProgress] = useState<TourProgress | null>(null);
+  const panelId = useId();
   const titleId = useId();
+  const container = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
+  const isOpen = view !== null;
   const stepNumber = progress?.step ?? 0;
   const tours = availableHelpTours(user, mode);
   const tour = tours.find(({ id }) => id === progress?.tourId);
   const step = view === 'tour' ? tour?.steps[stepNumber] : undefined;
 
-  useEffect(() => {
-    if (view) heading.current?.focus();
+  useLayoutEffect(() => {
+    if (!view) return;
+    if (panel.current) panel.current.scrollTop = 0;
+    heading.current?.focus({ preventScroll: true });
   }, [view, stepNumber]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    function dismissOutside(event: PointerEvent) {
+      if (event.target instanceof Node && !container.current?.contains(event.target)) setView(null);
+    }
+    document.addEventListener('pointerdown', dismissOutside, true);
+    return () => document.removeEventListener('pointerdown', dismissOutside, true);
+  }, [isOpen]);
 
   function close() {
     setView(null);
+    trigger.current?.focus({ preventScroll: true });
   }
 
   function start(tourId: string) {
@@ -49,9 +65,20 @@ export function HelpMenu({ user, mode, page, navigate }: {
     setView('menu');
   }
 
-  return <>
-    <button type="button" className="secondary help-trigger" aria-haspopup="dialog" onClick={() => setView('menu')}>Ajuda</button>
-    {view && <Modal labelledBy={titleId} className="help-dialog" onClose={close}>
+  return <div className="help-menu" ref={container} onBlur={(event) => {
+    if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) setView(null);
+  }} onKeyDown={(event) => {
+    if (isOpen && event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    }
+  }}>
+    <button ref={trigger} type="button" className="help-trigger" aria-haspopup="dialog" aria-expanded={isOpen}
+      aria-controls={isOpen ? panelId : undefined} onClick={() => isOpen ? close() : setView('menu')}>
+      Ajuda <span className="dropdown-chevron" aria-hidden="true" />
+    </button>
+    {view && <section ref={panel} id={panelId} className="help-panel" role="dialog" aria-labelledby={titleId}>
       {tour && step ? <>
         <p className="eyebrow" id={`${titleId}-progress`}>{tour.title} · Passo {stepNumber + 1} de {tour.steps.length}</p>
         <h2 ref={heading} id={titleId} tabIndex={-1} aria-describedby={`${titleId}-progress ${titleId}-step`}>{step.title}</h2>
@@ -60,7 +87,7 @@ export function HelpMenu({ user, mode, page, navigate }: {
           {page === tour.page ? 'Voltar à operação' : `Abrir ${pageTitles[tour.page]}`}
         </button>
         <p className="muted">Para retomar este passo, volte a Ajuda e selecione Continuar tour.</p>
-        <div className="dialog-actions">
+        <div className="help-actions">
           <button type="button" className="secondary" onClick={() => setView('menu')}>Todos os tours</button>
           <button type="button" className="secondary" disabled={stepNumber === 0} onClick={() => moveStep(-1)}>Anterior</button>
           {stepNumber + 1 < tour.steps.length
@@ -70,7 +97,7 @@ export function HelpMenu({ user, mode, page, navigate }: {
       </> : view === 'terms' ? <>
         <h2 ref={heading} id={titleId} tabIndex={-1}>Termos de uso</h2>
         <EducationalTerms />
-        <div className="dialog-actions">
+        <div className="help-actions">
           <button type="button" className="secondary" onClick={() => setView('menu')}>Voltar à ajuda</button>
           <button type="button" onClick={close}>Fechar ajuda</button>
         </div>
@@ -81,13 +108,13 @@ export function HelpMenu({ user, mode, page, navigate }: {
           <button type="button" className="secondary" onClick={() => start(item.id)}>{item.title}</button>
         </li>)}</ul> : <p>{mode === 'ADMIN' ? 'Selecione Revisão ou Expedição em Modo operacional para consultar os tours disponíveis para a sua conta.' : 'Não há tours disponíveis para este modo e as permissões da sua conta.'}</p>}
         {tour && <button type="button" onClick={() => setView('tour')}>Continuar tour de {tour.title.toLocaleLowerCase('pt-BR')}</button>}
-        <div className="dialog-actions">
+        <div className="help-actions">
           <button type="button" className="secondary" onClick={() => setView('terms')}>Termos de uso</button>
           <button type="button" className="secondary" onClick={close}>Fechar ajuda</button>
         </div>
       </>}
-    </Modal>}
-  </>;
+    </section>}
+  </div>;
 }
 
 const repository = 'https://github.com/RafaSilva07/EstoqueRevisao/blob/develop';

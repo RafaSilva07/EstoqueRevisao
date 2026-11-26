@@ -57,8 +57,8 @@
 @media (min-width: 1100px) { .section-menu { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
 * { box-sizing: border-box; }
-html { min-width: 320px; background: var(--app-bg); scroll-behavior: smooth; }
-body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--app-bg); }
+html { min-width: min(320px, 100%); background: var(--app-bg); scroll-behavior: smooth; }
+body { margin: 0; min-width: min(320px, 100%); min-height: 100vh; background: var(--app-bg); }
 button, input, select, textarea { font: inherit; }
 button { min-height: 44px; border: 0; border-radius: .5rem; background: var(--primary); color: #fff; cursor: pointer; padding: .7rem 1rem; font-weight: 650; transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease; }
 button:hover { background: var(--primary-hover); }
@@ -1010,11 +1010,34 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
   .dialog.navigation-drawer { animation: none; }
 }
 
-.help-trigger { flex: 0 0 auto; }
-.dialog.help-dialog { width: min(100%, 42rem); }
-.help-dialog h3 { margin-top: 1rem; }
-.help-tours { display: grid; gap: .5rem; padding: 0; list-style: none; }
-.help-tours button { width: 100%; text-align: left; white-space: normal; }
+.help-menu { position: relative; flex: 0 0 auto; }
+.help-trigger { display: inline-flex; align-items: center; gap: .45rem; padding: .4rem .65rem; border: 1px solid var(--line); background: var(--surface); color: var(--primary-dark); font-size: .85rem; }
+.help-trigger:hover, .help-trigger[aria-expanded="true"] { background: var(--primary-soft); }
+.help-trigger .dropdown-chevron { width: .45rem; height: .45rem; margin: -.15rem .1rem 0 0; border-width: 2px; }
+.help-trigger[aria-expanded="true"] .dropdown-chevron { margin-top: .2rem; transform: rotate(225deg); }
+.help-panel {
+  position: absolute;
+  inset-block-start: calc(100% + .375rem);
+  inset-inline-end: 0;
+  width: min(23rem, calc(100vw - 1.5rem));
+  max-height: calc(100dvh - 9rem - env(safe-area-inset-bottom));
+  overflow: auto;
+  overscroll-behavior-y: contain;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--line);
+  border-radius: .75rem;
+  padding: .9rem;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 .65rem 1.75rem rgb(15 46 60 / 18%);
+}
+@media (min-width: 1024px) { .help-panel { max-height: calc(100dvh - 5rem); } }
+.help-panel h2 { margin: 0 0 .65rem; }
+.help-panel h3 { margin: .85rem 0 .5rem; }
+.help-panel p { line-height: 1.5; }
+.help-panel button { padding: .55rem .7rem; font-size: .875rem; }
+.help-tours { display: grid; gap: .35rem; padding: 0; margin: 0 0 .7rem; list-style: none; }
+.help-tours button { width: 100%; text-align: left; }
 .help-terms li + li { margin-top: .35rem; }
 .help-terms a { color: var(--ink); text-decoration: underline; text-underline-offset: .15em; }
-.help-dialog .dialog-actions { flex-wrap: wrap; }
+.help-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .75rem; padding-top: .7rem; border-top: 1px solid var(--line); }

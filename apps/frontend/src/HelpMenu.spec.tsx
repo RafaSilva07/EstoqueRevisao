@@ -53,8 +53,10 @@ describe('menu de ajuda', () => {
   function clickButton(label: string) {
     const button = Array.from(host.querySelectorAll('button')).find((candidate) => candidate.textContent?.trim() === label);
     if (!button) throw new Error(`Botão ausente: ${label}`);
-    button.focus();
-    act(() => button.click());
+    act(() => {
+      button.focus();
+      button.click();
+    });
     return button;
   }
 
@@ -104,5 +106,34 @@ describe('menu de ajuda', () => {
     expect(host.textContent).toContain('Dúvidas pendentes');
     expect(host.querySelectorAll('.help-terms a')).toHaveLength(3);
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('vincula o painel ao botão e permite voltar à navegação da página', () => {
+    act(() => root.render(<>
+      <HelpMenu user={reviewer} mode="REVISAO" page="home" navigate={vi.fn()} />
+      <button type="button">Outro controle</button>
+    </>));
+
+    const trigger = clickButton('Ajuda');
+    const panel = host.querySelector('[role="dialog"]');
+    expect(panel?.id).toBe(trigger.getAttribute('aria-controls'));
+    expect(panel?.parentElement).toBe(trigger.parentElement);
+    expect(panel?.hasAttribute('aria-modal')).toBe(false);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+
+    clickButton('Ajuda');
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(trigger);
+
+    clickButton('Ajuda');
+    const outside = clickButton('Outro controle');
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(outside);
+
+    clickButton('Ajuda');
+    act(() => {
+      outside.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    });
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
   });
 });
