@@ -101,6 +101,83 @@ describe('menu de ajuda', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
+  it('consulta as etapas sem preencher campos e fecha somente o tour dentro do formulário', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
+    vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
+    const rect = { left: 20, top: 60, right: 240, bottom: 92, width: 220, height: 32 };
+    const clientRects = vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([rect] as unknown as DOMRectList);
+    const clientRect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(rect as DOMRect);
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => setTimeout(callback, 16));
+    vi.stubGlobal('cancelAnimationFrame', clearTimeout);
+    const scroll = vi.fn();
+    const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scroll });
+    try {
+      const save = vi.fn();
+      act(() => root.render(<>
+        <HelpMenu user={reviewer} mode="REVISAO" page="products" navigate={vi.fn()} />
+        <main id="main-content" />
+      </>));
+      clickButton('Ajuda');
+      clickButton('Cadastrar produto');
+      act(() => { vi.advanceTimersByTime(16); });
+      const clickCoach = (label: string) => {
+        const button = [...document.querySelectorAll<HTMLButtonElement>('.tour-coach button')]
+          .find((item) => (item.getAttribute('aria-label') ?? item.textContent) === label)!;
+        act(() => { button.focus(); button.click(); });
+        act(() => { vi.advanceTimersByTime(16); });
+      };
+      // The next step is available even when the operation provided no usable control.
+      clickCoach('Próximo passo');
+      expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Informe o código');
+      clickCoach('Passo anterior');
+      expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Abra o cadastro');
+      clickCoach('Acompanhar operação');
+
+      act(() => root.render(<>
+        <HelpMenu user={reviewer} mode="REVISAO" page="products" navigate={vi.fn()} />
+        <main id="main-content" />
+        <div className="dialog-backdrop">
+          <section role="dialog" aria-labelledby="product-form-title" tabIndex={-1}>
+            <h2 id="product-form-title">Novo produto</h2>
+            <form data-tour="product-form" onSubmit={save}>
+              <input data-tour="product-code" required />
+              <input data-tour="product-name" defaultValue="Rascunho" />
+              <button type="submit" data-tour="product-save">Salvar produto</button>
+            </form>
+          </section>
+        </div>
+      </>));
+      await act(async () => { await Promise.resolve(); vi.advanceTimersByTime(16); });
+      expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Informe o código');
+      clickCoach('Próximo passo');
+      expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Informe a descrição');
+      const dialog = host.querySelector('[role="dialog"]');
+      const code = host.querySelector<HTMLInputElement>('[data-tour="product-code"]');
+      const name = host.querySelector<HTMLInputElement>('[data-tour="product-name"]');
+      expect(dialog?.querySelector('.tour-coach')).toBeTruthy();
+      clickCoach('Acompanhar operação');
+      expect(document.activeElement).toBe(code);
+      clickCoach('Próximo passo');
+      clickCoach('Fechar tour');
+      expect(dialog?.querySelector('.tour-coach')).toBeNull();
+      expect(document.activeElement).toBe(dialog);
+      expect(code?.value).toBe('');
+      expect(name?.value).toBe('Rascunho');
+      expect(name?.hasAttribute('data-tour-highlight')).toBe(false);
+      expect(save).not.toHaveBeenCalled();
+      clickButton('Ajuda');
+      expect(host.textContent).not.toContain('Continuar tour');
+    } finally {
+      if (originalScroll) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalScroll);
+      else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+      clientRects.mockRestore();
+      clientRect.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it('vincula o painel ao botão e permite voltar à navegação da página', () => {
     act(() => root.render(<>
       <HelpMenu user={reviewer} mode="REVISAO" page="home" navigate={vi.fn()} />

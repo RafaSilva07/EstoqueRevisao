@@ -2,13 +2,14 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { HelpTour } from './help-tours';
 import { resolveTourHint, type TourHint } from './tour-hints';
+import { tourPreview } from './tour-preview';
 
 type Placement = {
   hint: TourHint;
   anchor: HTMLElement | null;
   dialog: HTMLElement | null;
   popup: HTMLElement | null;
-  fieldReady: boolean;
+  previewIndex: number | null;
   editingOther: boolean;
 };
 type ViewBounds = { left: number; top: number; right: number; bottom: number };
@@ -69,37 +70,42 @@ function anchorVisible(anchor: HTMLElement, dialog: HTMLElement | null, bounds: 
   return !clipping || fits(rect, clipping);
 }
 
-function reveal(anchor: HTMLElement, moveFocus = false) {
-  if (moveFocus && focusable(anchor)) anchor.focus({ preventScroll: true });
+function reveal(anchor: HTMLElement) {
   anchor.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
 }
 
 function samePlacement(previous: Placement | null, next: Placement | null) {
   if (!previous || !next) return previous === next;
   return previous.anchor === next.anchor && previous.dialog === next.dialog && previous.popup === next.popup
-    && previous.fieldReady === next.fieldReady && previous.editingOther === next.editingOther
+    && previous.previewIndex === next.previewIndex && previous.editingOther === next.editingOther
     && previous.hint.target === next.hint.target && previous.hint.title === next.hint.title
     && previous.hint.instruction === next.hint.instruction && previous.hint.canContinue === next.hint.canContinue
     && previous.hint.complete === next.hint.complete;
 }
 
-export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onResume, onComplete }: {
+export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onResume, onEnd }: {
   tour: HelpTour;
   hidden: boolean;
   paused: boolean;
   reviewCompleted: boolean;
   onPause: () => void;
   onResume: () => void;
-  onComplete: () => void;
+  onEnd: () => void;
 }) {
   const [placement, setPlacement] = useState<Placement | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const steps = tourPreview[tour.id];
+  const preview = previewIndex === null ? undefined : steps[previewIndex];
   const id = useId();
   const balloon = useRef<HTMLElement>(null);
+  const details = useRef<HTMLDivElement>(null);
+  const nextButton = useRef<HTMLButtonElement>(null);
+  const focusOperation = useRef(false);
   const manual = useRef(new WeakSet<HTMLElement>());
   const refresh = useRef<() => void>(() => undefined);
   const staleResults = useRef<Partial<Record<string, { element: HTMLElement; message: string }>> | null>(null);
   const lastRevealed = useRef<HTMLElement | null>(null);
-  const previousHint = useRef<{ title: string; anchor: HTMLElement | null; panel: HTMLElement } | null>(null);
+  const previousHint = useRef<{ title: string; previewIndex: number | null; anchor: HTMLElement | null; panel: HTMLElement } | null>(null);
   const positionHistory = useRef<{ panel: HTMLElement; left: number; top: number } | null>(null);
   const motion = useRef<Animation | null>(null);
 
@@ -134,24 +140,21 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
         const stale = staleResults.current?.[target];
         return stale && element === stale.element && element.textContent === stale.message ? undefined : element;
       }
-      const guide = resolveTourHint(tour.id, {
+      const guide = preview ?? resolveTourHint(tour.id, {
         find,
         focused: active instanceof HTMLElement ? active.dataset.tour : undefined,
         reviewed: (target) => candidates(target).some((element) => manual.current.has(element)),
         dialog: dialogTitle,
       });
-      const memo = guide ?? (!dialog ? {
+      const memo = guide ?? {
         target: 'status', title: 'Aguarde a tela da operação',
-        instruction: 'Os controles aparecem após o carregamento. Se houver erro ou se a tela estiver indisponível, pause o tour e verifique a operação.',
-      } : undefined);
-      const anchor = memo && (find(memo.target) ?? (memo.target === 'status' && dialog
-        ? document.getElementById(dialog.getAttribute('aria-labelledby') ?? '') : null));
-      const fieldReady = anchor === active && (anchor instanceof HTMLInputElement || anchor instanceof HTMLTextAreaElement)
-        && !anchor.matches('[role="combobox"], [type="checkbox"], [type="radio"], [type="search"]')
-        && Boolean(anchor.value.trim()) && anchor.validity.valid && anchor.getAttribute('aria-invalid') !== 'true';
+        instruction: 'Quando os controles da operação estiverem disponíveis, o tour volta a acompanhá-los. Use Próximo passo para consultar as etapas agora.',
+      };
+      const anchor = find(memo.target) ?? preview?.related?.map(find).find(Boolean) ?? (memo.target === 'status' && dialog
+        ? document.getElementById(dialog.getAttribute('aria-labelledby') ?? '') : null);
       const editingOther = active instanceof HTMLElement && active !== anchor && active.matches('input, textarea, select, [role="combobox"]');
       const popup = anchor?.getAttribute('aria-expanded') === 'true' ? document.getElementById(anchor.getAttribute('aria-controls') ?? '') : null;
-      const next = memo ? { hint: memo, anchor: anchor ?? null, dialog, popup, fieldReady, editingOther } : null;
+      const next = { hint: memo, anchor: anchor ?? null, dialog, popup, previewIndex, editingOther };
       setPlacement((previous) => samePlacement(previous, next) ? previous : next);
     };
     function schedule() { if (!frame) frame = requestAnimationFrame(scan); }
@@ -186,7 +189,7 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       document.removeEventListener('click', markAction, true);
       window.removeEventListener('resize', schedule);
     };
-  }, [reviewCompleted, tour.id]);
+  }, [preview, previewIndex, reviewCompleted, tour.id]);
 
   useLayoutEffect(() => {
     const panel = balloon.current;
@@ -203,7 +206,6 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
     let frame = 0;
     function stopMotion() {
       motion.current?.cancel();
-      if (panel) panel.style.pointerEvents = '';
     }
 
     function onMotionChange() {
@@ -215,7 +217,7 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       if (!panel) return;
       const bounds = viewport(dialog);
       const width = Math.min(320, bounds.right - bounds.left);
-      if (width <= 0 || bounds.bottom - bounds.top < 40) { panel.style.visibility = 'hidden'; return; }
+      if (width <= 0 || bounds.bottom <= bounds.top) { panel.style.visibility = 'hidden'; return; }
 
       panel.style.width = `${width}px`;
       const visible = Boolean(anchor && anchorVisible(anchor, dialog, bounds));
@@ -223,7 +225,8 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       const gap = 8;
       let left = bounds.right - width;
       let top = bounds.bottom;
-      let maxHeight = Math.min(250, bounds.bottom - bounds.top);
+      const availableHeight = Math.min(280, bounds.bottom - bounds.top);
+      let maxHeight = availableHeight;
       let alignEnd = true;
       if (rect) {
         const rightSpace = bounds.right - rect.right - gap;
@@ -238,12 +241,20 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
           const below = bounds.bottom - Math.max(rect.bottom, popupRect?.bottom ?? rect.bottom) - gap;
           const preferBelow = below >= Math.min(178, maxHeight) || below >= above;
           left = Math.max(bounds.left, Math.min(rect.left, bounds.right - width));
-          maxHeight = Math.max(0, Math.min(maxHeight, preferBelow ? below : above));
-          top = preferBelow ? Math.max(rect.bottom, popupRect?.bottom ?? rect.bottom) + gap : Math.min(rect.top, popupRect?.top ?? rect.top) - gap;
-          alignEnd = !preferBelow;
+          const room = preferBelow ? below : above;
+          const controlsHeight = (panel.querySelector('header')?.getBoundingClientRect().height ?? 0)
+            + (panel.querySelector('footer')?.getBoundingClientRect().height ?? 0);
+          if (room >= Math.min(availableHeight, controlsHeight + 64)) {
+            maxHeight = Math.min(maxHeight, room);
+            top = preferBelow ? Math.max(rect.bottom, popupRect?.bottom ?? rect.bottom) + gap : Math.min(rect.top, popupRect?.top ?? rect.top) - gap;
+            alignEnd = !preferBelow;
+          } else if (rect.top - bounds.top > bounds.bottom - rect.bottom) {
+            top = bounds.top;
+            alignEnd = false;
+          }
         }
       }
-      panel.style.visibility = maxHeight >= 48 ? 'visible' : 'hidden';
+      panel.style.visibility = 'visible';
       panel.style.maxHeight = `${maxHeight}px`;
       const height = panel.getBoundingClientRect().height;
       top = Math.max(bounds.top, Math.min(alignEnd ? top - height : top, bounds.bottom - height));
@@ -256,14 +267,13 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       positionHistory.current = { panel, left, top };
       if (moved || transition) {
         stopMotion();
-        if (transition && maxHeight >= 48 && !reducedMotion.matches && typeof panel.animate === 'function') {
-          const offset = origin ? `translate(${origin.left - left}px, ${origin.top - top}px)` : 'translateY(5px)';
-          const animation = panel.animate([{ transform: offset, opacity: origin ? 0.88 : 0 }, { transform: 'none', opacity: 1 }], {
+        if (transition && !reducedMotion.matches && typeof panel.animate === 'function') {
+          const startLeft = Math.max(bounds.left, Math.min(origin?.left ?? left, bounds.right - width));
+          const startTop = Math.max(bounds.top, Math.min(origin?.top ?? top + 5, bounds.bottom - height));
+          const offset = `translate(${startLeft - left}px, ${startTop - top}px)`;
+          motion.current = panel.animate([{ transform: offset, opacity: origin ? 0.88 : 0 }, { transform: 'none', opacity: 1 }], {
             duration: 230, easing: 'cubic-bezier(.2,.75,.25,1)',
           });
-          motion.current = animation;
-          if (moved) panel.style.pointerEvents = 'none';
-          animation.onfinish = () => { panel.style.pointerEvents = ''; };
         }
       }
     }
@@ -273,9 +283,19 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       if (!anchorVisible(anchor, dialog, viewport(dialog))) reveal(anchor);
       lastRevealed.current = anchor;
     }
+    if (focusOperation.current && placement.previewIndex === null) {
+      focusOperation.current = false;
+      if (anchor && focusable(anchor)) {
+        anchor.focus({ preventScroll: true });
+        if (!anchorVisible(anchor, dialog, viewport(dialog))) reveal(anchor);
+      }
+    }
     const previous = previousHint.current;
-    position(previous?.panel !== panel || previous?.anchor !== anchor || previous?.title !== placement.hint.title);
-    previousHint.current = { panel, anchor, title: placement.hint.title };
+    const stepChanged = previous?.panel !== panel || previous?.anchor !== anchor || previous?.title !== placement.hint.title
+      || previous?.previewIndex !== placement.previewIndex;
+    if (stepChanged && details.current) details.current.scrollTop = 0;
+    position(stepChanged);
+    previousHint.current = { panel, anchor, title: placement.hint.title, previewIndex: placement.previewIndex };
     const resize = new ResizeObserver(schedule);
     if (anchor) resize.observe(anchor);
     resize.observe(panel);
@@ -304,45 +324,68 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
   }, [hidden, id, paused, placement]);
 
   if (!placement || hidden) return null;
-  const { anchor, dialog, hint, fieldReady } = placement;
-  if (paused) return dialog ? createPortal(<div className="tour-resume"><button type="button" className="secondary"
-    onKeyDown={(event) => {
-      if (event.key !== 'Tab' || event.shiftKey) return;
-      const first = [...dialog.querySelectorAll<HTMLElement>(tabStops)].find((element) => focusable(element) && shown(element));
-      if (first) { event.preventDefault(); first.focus(); }
-    }} onClick={() => { dialog.focus({ preventScroll: true }); onResume(); }}>Retomar tour</button></div>, dialog) : null;
+  const { anchor, dialog, hint, previewIndex: displayedStep } = placement;
+  function wrapTab(event: React.KeyboardEvent<HTMLElement>) {
+    // Portal events reach HelpMenu, so wrap the physical modal's tab order here.
+    if (event.key !== 'Tab' || event.shiftKey || !dialog
+      || event.target !== [...event.currentTarget.querySelectorAll('button:not(:disabled)')].at(-1)) return;
+    const first = [...dialog.querySelectorAll<HTMLElement>(tabStops)].find((element) => focusable(element) && shown(element));
+    if (first) { event.preventDefault(); first.focus(); }
+  }
+
+  function advance() {
+    if (displayedStep === steps.length - 1) { onEnd(); return; }
+    if (displayedStep !== null) { setPreviewIndex(displayedStep + 1); return; }
+    if (hint.complete) { onEnd(); return; }
+    const current = steps.findIndex((step) => step.target === hint.target || step.related?.includes(hint.target));
+    setPreviewIndex(Math.min(current + 1, steps.length - 1));
+  }
+
+  const closeButton = <button type="button" className="secondary tour-coach-close" aria-label="Fechar tour" onClick={onEnd}>
+    <span aria-hidden="true">×</span>
+  </button>;
+  if (paused) return dialog ? createPortal(<div className="tour-resume" onKeyDown={wrapTab}>
+    {closeButton}
+    <button type="button" className="secondary" onClick={() => { dialog.focus({ preventScroll: true }); onResume(); }}>Retomar tour</button>
+  </div>, dialog) : null;
+
+  const complete = displayedStep === null ? hint.complete : displayedStep === steps.length - 1;
   return createPortal(
     <aside ref={balloon} className="tour-coach" aria-label={tour.title} onKeyDown={(event) => {
       if (event.key === 'Escape') {
+        event.preventDefault();
         event.stopPropagation();
         onPause();
       }
-      if (event.key === 'Tab' && !event.shiftKey && dialog && event.target === event.currentTarget.querySelector('button:last-child')) {
-        // The portal is physically inside the modal, but its React events bubble through HelpMenu.
-        const first = [...dialog.querySelectorAll<HTMLElement>(tabStops)].find((element) => focusable(element) && shown(element));
-        if (first) { event.preventDefault(); first.focus(); }
-      }
+      wrapTab(event);
     }}>
-      <p className="tour-coach-label">{tour.title}</p>
-      <div id={id} role="status" aria-atomic="true">
-        <h2>{hint.title}</h2>
-        <p>{hint.instruction}</p>
+      <header><p className="tour-coach-label">{tour.title}</p>{closeButton}</header>
+      <div ref={details} className="tour-coach-details" tabIndex={0} aria-label="Instruções do tour">
+        <div id={id} role="status" aria-atomic="true">
+          {displayedStep !== null && <p className="tour-coach-label">Prévia · etapa {displayedStep + 1} de {steps.length}</p>}
+          <h2>{hint.title}</h2>
+          <p>{hint.instruction}</p>
+        </div>
       </div>
-      <div className="tour-coach-actions">
-        {hint.canContinue && anchor && <button type="button" className="secondary" onClick={() => {
+      <footer className="tour-coach-actions">
+        {displayedStep !== null && <>
+          <button type="button" className="secondary" onClick={() => {
+            nextButton.current?.focus({ preventScroll: true });
+            focusOperation.current = true;
+            setPreviewIndex(null);
+          }}>Acompanhar operação</button>
+          <button type="button" className="secondary" aria-disabled={displayedStep === 0} onClick={() => {
+            if (displayedStep > 0) setPreviewIndex(displayedStep - 1);
+          }}>Passo anterior</button>
+        </>}
+        {displayedStep === null && hint.canContinue && anchor && <button type="button" className="secondary" onClick={() => {
           manual.current.add(anchor);
+          nextButton.current?.focus({ preventScroll: true });
           refresh.current();
         }}>Já conferi</button>}
-        {anchor && !hint.complete && (fieldReady && !hint.canContinue
-          ? <button type="button" className="secondary" onPointerDown={(event) => event.preventDefault()} onClick={() => {
-            anchor.blur();
-            refresh.current();
-          }}>Próximo campo</button>
-          : <button type="button" className="secondary" onClick={() => reveal(anchor, true)}>Localizar controle</button>)}
-        <button type="button" className={hint.complete ? undefined : 'secondary'} onClick={hint.complete ? onComplete : onPause}>
-          {hint.complete ? 'Concluir tour' : 'Pausar tour'}
-        </button>
-      </div>
+        {displayedStep === null && !hint.complete && <button type="button" className="secondary" onClick={onPause}>Pausar tour</button>}
+        <button ref={nextButton} type="button" onClick={advance}>{complete ? 'Concluir tour' : 'Próximo passo'}</button>
+      </footer>
     </aside>,
     dialog ?? document.body,
   );

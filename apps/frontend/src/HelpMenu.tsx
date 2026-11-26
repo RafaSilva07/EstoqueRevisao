@@ -61,12 +61,12 @@ export function HelpMenu({ user, mode, page, navigate, reviewCompleted = false }
 
   function pause() {
     setRunning(false);
-    const dialog = document.querySelector<HTMLElement>('.dialog-backdrop > [role="dialog"]:has(.tour-coach)');
+    const dialog = document.querySelector<HTMLElement>('.dialog-backdrop > [role="dialog"]:has(.tour-coach, .tour-resume)');
     if (dialog) dialog.focus({ preventScroll: true });
     else close();
   }
 
-  function complete() {
+  function end() {
     setSelected(null);
     pause();
   }
@@ -99,9 +99,12 @@ export function HelpMenu({ user, mode, page, navigate, reviewCompleted = false }
           {tours.length ? <ul className="help-tours">{tours.map((item) => <li key={item.id}>
             <button type="button" className="secondary" onClick={() => start(item)}>{item.title}</button>
           </li>)}</ul> : <p>{mode === 'ADMIN' ? 'Selecione Revisão ou Expedição em Modo operacional para consultar os tours disponíveis para a sua conta.' : 'Não há tours disponíveis para este modo e as permissões da sua conta.'}</p>}
-          {tour && (running && onTourPage
-            ? <button type="button" className="secondary" onClick={() => { setRunning(false); heading.current?.focus(); }}>Pausar tour</button>
-            : <button type="button" onClick={() => start(tour)}>Continuar tour de {tour.title.toLocaleLowerCase('pt-BR')}</button>)}
+          {tour && <div className="help-actions">
+            {running && onTourPage
+              ? <button type="button" className="secondary" onClick={() => { setRunning(false); heading.current?.focus(); }}>Pausar tour</button>
+              : <button type="button" onClick={() => start(tour)}>Continuar tour de {tour.title.toLocaleLowerCase('pt-BR')}</button>}
+            <button type="button" className="secondary" onClick={end}>Fechar tour</button>
+          </div>}
           <div className="help-actions">
             <button type="button" className="secondary" onClick={() => setView('terms')}>Termos de uso</button>
             <button type="button" className="secondary" onClick={close}>Fechar ajuda</button>
@@ -110,7 +113,7 @@ export function HelpMenu({ user, mode, page, navigate, reviewCompleted = false }
       </section>}
     </div>
     {tour && onTourPage && <TourCoach key={tour.id} tour={tour} hidden={isOpen} paused={!running} reviewCompleted={atCompletion}
-      onPause={pause} onResume={() => setRunning(true)} onComplete={complete} />}
+      onPause={pause} onResume={() => setRunning(true)} onEnd={end} />}
   </>;
 }
 

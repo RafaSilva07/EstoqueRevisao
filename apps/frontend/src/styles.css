@@ -1050,6 +1050,8 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
   position: fixed;
   z-index: 48;
   visibility: hidden;
+  display: flex;
+  flex-direction: column;
   overflow: auto;
   overscroll-behavior: contain;
   padding: .75rem;
@@ -1060,10 +1062,14 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
   color: var(--ink);
   box-shadow: 0 .45rem 1.2rem rgb(12 28 37 / 22%);
 }
+.tour-coach > header { display: flex; align-items: center; justify-content: space-between; gap: .4rem; flex-shrink: 0; margin-bottom: .35rem; }
 .tour-coach .tour-coach-label { margin: 0 0 .3rem; color: var(--primary-dark); font-size: .75rem; font-weight: 700; }
 .tour-coach h2 { margin: 0 0 .35rem; font-size: 1rem; }
 .tour-coach p { margin: 0; font-size: .875rem; line-height: 1.4; }
-.tour-coach-actions { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .5rem; }
-.tour-coach-actions button { padding: .35rem .55rem; font-size: .75rem; }
-.tour-resume { display: flex; justify-content: flex-end; margin-top: .6rem; }
+.tour-coach-details { min-height: min(3rem, 18dvh); overflow: auto; overscroll-behavior: contain; }
+.tour-coach-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .35rem; flex-shrink: 0; margin-top: .5rem; }
+.tour-coach-actions button { min-height: 2rem; padding: .35rem .55rem; font-size: .75rem; }
+.tour-coach-actions button[aria-disabled="true"] { opacity: .6; cursor: default; }
+.tour-coach-close.secondary { flex: 0 0 auto; width: 2rem; height: 2rem; padding: 0; font-size: 1.25rem; line-height: 1; }
+.tour-resume { display: flex; justify-content: flex-end; gap: .35rem; margin-top: .6rem; }
 .tour-resume button { font-size: .8rem; }
