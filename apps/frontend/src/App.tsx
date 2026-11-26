@@ -37,6 +37,7 @@ import { OperationalMode, allowedOperationalModes, operationalModeLabel, userFor
 import { OperationalHomePage } from './OperationalHomePage';
 import { HistoryPage } from './HistoryPage';
 import { HelpMenu } from './HelpMenu';
+import { TermsPage } from './TermsPage';
 
 type Navigate = (page: Page) => void;
 const messageFrom = (error: unknown) => error instanceof Error ? error.message : 'Ocorreu um erro inesperado.';
@@ -370,6 +371,7 @@ function AppSession() {
     <main className="workspace" id="main-content" tabIndex={-1} key={operationRevision}>
       {activeMode === 'PCP' && <PcpOnlineNotice users={presence.pcpUsers} error={presence.error} />}
       <NavigationTrail page={page} user={activeUser} navigate={go} />
+      {page === 'terms' && <TermsPage />}
       {page === 'home' && <OperationalHomePage key={activeMode} user={activeUser} navigate={go} onOpenRecord={(destination, id, recordId) => { navigate(destination === 'movements' ? 'history' : destination); setSelectedRecordId(recordId ?? id); setSelectedMovementId(id); setMovementSuccess(undefined); }} />}
       {page !== 'home' && menus.includes(page) && <SectionMenu page={page} user={activeUser} showOnlineUsers={presenceAdmin} navigate={go} />}
       {page === 'more' && <section className="surface account-card"><h2>{user.username}</h2><p className="muted">{operationalModeLabel[activeMode]}</p><button className="secondary" onClick={logout} disabled={loggingOut}>{loggingOut ? 'Saindo…' : 'Sair do sistema'}</button></section>}

@@ -87,19 +87,15 @@ describe('menu de ajuda', () => {
     expect(navigate).toHaveBeenCalledTimes(2);
   });
 
-  it('exibe o rascunho educacional e as fontes mesmo sem tours disponíveis', () => {
+  it('abre a página de termos e fecha o menu mesmo sem tours disponíveis', () => {
     const navigate = vi.fn();
     act(() => root.render(<HelpMenu user={{ ...reviewer, sector: 'PCP' }} mode="PCP" page="home" navigate={navigate} />));
-    clickButton('Ajuda');
+    const trigger = clickButton('Ajuda');
     expect(host.textContent).toContain('Não há tours disponíveis');
     clickButton('Termos de uso');
-    expect(document.activeElement?.textContent).toBe('Termos de uso');
-    expect(host.textContent).toContain('Rascunho educacional · versão 0.1');
-    expect(host.textContent).toContain('Elaboração: Rafael Silva e João Victor Fernandes');
-    expect(host.textContent).toContain('Responsável pela revisão');
-    expect(host.textContent).toContain('Dúvidas pendentes');
-    expect(host.querySelectorAll('.help-terms a')).toHaveLength(3);
-    expect(navigate).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(trigger);
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(navigate).toHaveBeenCalledExactlyOnceWith('terms');
   });
 
   it.each([{ reduced: true }, { reduced: false }])('avança e fecha o tour preservando o formulário (movimento reduzido: $reduced)', async ({ reduced }) => {

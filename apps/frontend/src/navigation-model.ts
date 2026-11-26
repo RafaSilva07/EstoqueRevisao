@@ -1,6 +1,6 @@
 import { UserSession } from './api';
 
-export type Page = 'home' | 'operations' | 'pcp' | 'pcp-all' | 'pcp-executed' | 'users' | 'settings' | 'preferences' | 'online-users' | 'shipments' | 'shipment-new' | 'shipment-sent' | 'shipment-separation' | 'new-entry' | 'new-exit' | 'new-transfer' | 'new-review' | 'movements' | 'history' | 'inventory' | 'reports' | 'reports-reviews' | 'products' | 'stocks' | 'more' | 'logs' | 'data-quality';
+export type Page = 'home' | 'operations' | 'pcp' | 'pcp-all' | 'pcp-executed' | 'users' | 'settings' | 'preferences' | 'online-users' | 'shipments' | 'shipment-new' | 'shipment-sent' | 'shipment-separation' | 'new-entry' | 'new-exit' | 'new-transfer' | 'new-review' | 'movements' | 'history' | 'inventory' | 'reports' | 'reports-reviews' | 'products' | 'stocks' | 'more' | 'logs' | 'data-quality' | 'terms';
 export type MenuAction = { page: Page; title: string; description: string };
 export type NavigationGroup = { title: string; actions: MenuAction[] };
 
@@ -16,6 +16,7 @@ export const pageTitles: Record<Page, string> = {
   products: 'Produtos', stocks: 'Estoques e locais', more: 'Menu',
   logs: 'Logs e Monitoramento',
   'data-quality': 'Qualidade dos Dados',
+  terms: 'Termos de uso',
 };
 
 export function parentPage(page: Page, user?: UserSession): Page {
