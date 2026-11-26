@@ -13,6 +13,7 @@ type Placement = {
   editingOther: boolean;
 };
 type ViewBounds = { left: number; top: number; right: number; bottom: number };
+type AnchorSide = 'above' | 'below' | 'left' | 'right';
 
 const resultTargets = ['product-result', 'receipt-result', 'shipment-result'];
 const reviewableTargets = ['product-unit', 'receipt-separation', 'separation-amount', 'assembly-mixed', 'shipment-expiry'];
@@ -57,6 +58,10 @@ function viewport(dialog: HTMLElement | null): ViewBounds {
   return { left: left + 8, top: ceiling + 8, right: right - 8, bottom: bottom - 8 };
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(value, max));
+}
+
 function fits(rect: DOMRect, bounds: ViewBounds) {
   const centerX = rect.left + rect.width / 2;
   const centerY = rect.top + rect.height / 2;
@@ -98,7 +103,12 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
   const preview = previewIndex === null ? undefined : steps[previewIndex];
   const id = useId();
   const balloon = useRef<HTMLElement>(null);
+  const card = useRef<HTMLDivElement>(null);
   const details = useRef<HTMLDivElement>(null);
+  const resumeButton = useRef<HTMLButtonElement>(null);
+  const initialFocus = useRef(true);
+  const focusAfterPause = useRef(false);
+  const focusAfterResume = useRef(false);
   const nextButton = useRef<HTMLButtonElement>(null);
   const focusOperation = useRef(false);
   const manual = useRef(new WeakSet<HTMLElement>());
@@ -193,97 +203,116 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
 
   useLayoutEffect(() => {
     const panel = balloon.current;
-    if (!placement || hidden || paused || !panel) return;
+    const content = card.current;
+    if (!placement || hidden || !panel || !content) return;
     const { anchor, dialog, popup } = placement;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const highlight = anchor && !placement.hint.complete;
+    const highlight = paused || placement.hint.complete ? null : anchor;
     if (highlight) {
-      anchor.setAttribute('data-tour-highlight', '');
-      const descriptions = anchor.getAttribute('aria-describedby')?.split(/\s+/).filter(Boolean) ?? [];
-      anchor.setAttribute('aria-describedby', [...descriptions, id].join(' '));
+      highlight.setAttribute('data-tour-highlight', '');
+      const descriptions = highlight.getAttribute('aria-describedby')?.split(/\s+/).filter(Boolean) ?? [];
+      highlight.setAttribute('aria-describedby', [...descriptions, id].join(' '));
     }
 
     let frame = 0;
-    function stopMotion() {
-      motion.current?.cancel();
-    }
-
     function onMotionChange() {
-      if (reducedMotion.matches) stopMotion();
+      if (reducedMotion.matches) motion.current?.cancel();
     }
 
     function position(transition = false) {
       frame = 0;
-      if (!panel) return;
+      if (!panel || !content) return;
       const bounds = viewport(dialog);
-      const width = Math.min(320, bounds.right - bounds.left);
-      if (width <= 0 || bounds.bottom <= bounds.top) { panel.style.visibility = 'hidden'; return; }
+      const width = Math.min(352, bounds.right - bounds.left);
+      const availableHeight = Math.min(320, bounds.bottom - bounds.top);
+      if (width <= 0 || availableHeight <= 0) { panel.style.visibility = 'hidden'; return; }
 
       panel.style.width = `${width}px`;
-      const visible = Boolean(anchor && anchorVisible(anchor, dialog, bounds));
-      const rect = visible && anchor ? anchorBox(anchor) : null;
-      const gap = 8;
-      let left = bounds.right - width;
-      let top = bounds.bottom;
-      const availableHeight = Math.min(280, bounds.bottom - bounds.top);
+      const detail = details.current;
+      const chromeHeight = content.scrollHeight - (detail?.offsetHeight ?? 0);
+      const desiredHeight = Math.min(availableHeight, chromeHeight + (detail?.scrollHeight ?? 0));
+      const usableHeight = Math.min(desiredHeight, chromeHeight + 56);
+      const rect = highlight && anchorVisible(highlight, dialog, bounds) ? anchorBox(highlight) : null;
+      const active = document.activeElement;
+      const focused = placement?.editingOther && active instanceof HTMLElement && (!dialog || dialog.contains(active))
+        && anchorVisible(active, dialog, bounds) ? active.getBoundingClientRect() : null;
+      const popupRect = rect && popup?.getBoundingClientRect();
+      // Keep suggestions and the field being edited clear whenever space permits.
+      const obstacles = [rect, popupRect, focused].filter((box) => box !== null && box !== undefined);
+      const gap = 12;
+      const previous = positionHistory.current;
+      let left = previous?.left ?? bounds.right - width;
+      let top = previous?.top ?? bounds.bottom;
       let maxHeight = availableHeight;
-      let alignEnd = true;
-      if (rect) {
-        const rightSpace = bounds.right - rect.right - gap;
-        const leftSpace = rect.left - bounds.left - gap;
-        const popupRect = popup?.getBoundingClientRect();
-        if (!popupRect && Math.max(rightSpace, leftSpace) >= width) {
-          left = rightSpace >= width ? rect.right + gap : rect.left - width - gap;
-          top = Math.min(Math.max(bounds.top, rect.top), bounds.bottom - maxHeight);
+      let side: AnchorSide | undefined;
+      let alignEnd = !previous;
+      if (obstacles.length) {
+        const above = Math.min(...obstacles.map((box) => box.top)) - bounds.top - gap;
+        const below = bounds.bottom - Math.max(...obstacles.map((box) => box.bottom)) - gap;
+        const toLeft = Math.min(...obstacles.map((box) => box.left)) - bounds.left - gap;
+        const toRight = bounds.right - Math.max(...obstacles.map((box) => box.right)) - gap;
+        if (Math.max(toLeft, toRight) >= width) {
+          side = toRight >= width ? 'right' : 'left';
+          left = side === 'right' ? bounds.right - toRight : bounds.left + toLeft - width;
+          top = (rect ?? focused)?.top ?? bounds.top;
           alignEnd = false;
         } else {
-          const above = Math.min(rect.top, popupRect?.top ?? rect.top) - bounds.top - gap;
-          const below = bounds.bottom - Math.max(rect.bottom, popupRect?.bottom ?? rect.bottom) - gap;
-          const preferBelow = below >= Math.min(178, maxHeight) || below >= above;
-          left = Math.max(bounds.left, Math.min(rect.left, bounds.right - width));
+          const preferBelow = below >= desiredHeight || below >= above;
           const room = preferBelow ? below : above;
-          const controlsHeight = (panel.querySelector('header')?.getBoundingClientRect().height ?? 0)
-            + (panel.querySelector('footer')?.getBoundingClientRect().height ?? 0);
-          if (room >= Math.min(availableHeight, controlsHeight + 64)) {
+          const hasRoom = room >= usableHeight;
+          left = rect?.left ?? focused?.left ?? left;
+          alignEnd = hasRoom ? !preferBelow : preferBelow;
+          top = hasRoom
+            ? (preferBelow ? bounds.bottom - below : bounds.top + above)
+            : (preferBelow ? bounds.bottom : bounds.top);
+          if (hasRoom) {
             maxHeight = Math.min(maxHeight, room);
-            top = preferBelow ? Math.max(rect.bottom, popupRect?.bottom ?? rect.bottom) + gap : Math.min(rect.top, popupRect?.top ?? rect.top) - gap;
-            alignEnd = !preferBelow;
-          } else if (rect.top - bounds.top > bounds.bottom - rect.bottom) {
-            top = bounds.top;
-            alignEnd = false;
+            side = preferBelow ? 'below' : 'above';
           }
         }
       }
-      panel.style.visibility = 'visible';
+
       panel.style.maxHeight = `${maxHeight}px`;
-      const height = panel.getBoundingClientRect().height;
-      top = Math.max(bounds.top, Math.min(alignEnd ? top - height : top, bounds.bottom - height));
-      const previous = positionHistory.current;
-      const moved = !previous || previous.panel !== panel || previous.left !== left || previous.top !== top;
+      const height = panel.offsetHeight;
+      left = clamp(left, bounds.left, bounds.right - width);
+      top = clamp(alignEnd ? top - height : top, bounds.top, bounds.bottom - height);
+      if (rect && side && !popupRect && !focused) {
+        const horizontal = side === 'above' || side === 'below';
+        const offset = horizontal
+          ? clamp(rect.left + rect.width / 2 - left, 16, width - 16)
+          : clamp(rect.top + rect.height / 2 - top, 16, height - 16);
+        panel.dataset.anchorSide = side;
+        panel.style.setProperty('--tour-pointer', `${offset}px`);
+      } else {
+        delete panel.dataset.anchorSide;
+      }
+
+      const moved = previous?.panel !== panel || previous.left !== left || previous.top !== top;
       const origin = previous?.panel === panel && motion.current?.playState === 'running'
         ? panel.getBoundingClientRect() : previous;
       panel.style.left = `${left}px`;
       panel.style.top = `${top}px`;
+      panel.style.visibility = 'visible';
       positionHistory.current = { panel, left, top };
       if (moved || transition) {
-        stopMotion();
+        motion.current?.cancel();
         if (transition && !reducedMotion.matches && typeof panel.animate === 'function') {
-          const startLeft = Math.max(bounds.left, Math.min(origin?.left ?? left, bounds.right - width));
-          const startTop = Math.max(bounds.top, Math.min(origin?.top ?? top + 5, bounds.bottom - height));
+          const startLeft = clamp(origin?.left ?? left, bounds.left, bounds.right - width);
+          const startTop = clamp(origin?.top ?? top + 6, bounds.top, bounds.bottom - height);
           const offset = `translate(${startLeft - left}px, ${startTop - top}px)`;
-          motion.current = panel.animate([{ transform: offset, opacity: origin ? 0.88 : 0 }, { transform: 'none', opacity: 1 }], {
-            duration: 230, easing: 'cubic-bezier(.2,.75,.25,1)',
+          motion.current = panel.animate([{ transform: offset, opacity: origin ? 0.92 : 0 }, { transform: 'none', opacity: 1 }], {
+            duration: 240, easing: 'cubic-bezier(.2,.75,.25,1)',
           });
         }
       }
     }
 
     function schedule() { if (!frame) frame = requestAnimationFrame(() => position()); }
-    if (anchor && anchor !== lastRevealed.current && !placement.editingOther) {
-      if (!anchorVisible(anchor, dialog, viewport(dialog))) reveal(anchor);
-      lastRevealed.current = anchor;
+    if (highlight !== lastRevealed.current && !placement.editingOther) {
+      if (highlight && !anchorVisible(highlight, dialog, viewport(dialog))) reveal(highlight);
+      lastRevealed.current = highlight;
     }
-    if (focusOperation.current && placement.previewIndex === null) {
+    if (focusOperation.current && placement.previewIndex === null && !paused) {
       focusOperation.current = false;
       if (anchor && focusable(anchor)) {
         anchor.focus({ preventScroll: true });
@@ -295,6 +324,21 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       || previous?.previewIndex !== placement.previewIndex;
     if (stepChanged && details.current) details.current.scrollTop = 0;
     position(stepChanged);
+    if (initialFocus.current && !paused && panel.style.visibility === 'visible') {
+      initialFocus.current = false;
+      const current = document.activeElement;
+      if (current?.matches('.help-trigger, #main-content') || current === dialog) {
+        details.current?.focus({ preventScroll: true });
+      }
+    }
+    if (paused && focusAfterPause.current) {
+      focusAfterPause.current = false;
+      resumeButton.current?.focus({ preventScroll: true });
+    }
+    if (!paused && focusAfterResume.current) {
+      focusAfterResume.current = false;
+      nextButton.current?.focus({ preventScroll: true });
+    }
     previousHint.current = { panel, anchor, title: placement.hint.title, previewIndex: placement.previewIndex };
     const resize = new ResizeObserver(schedule);
     if (anchor) resize.observe(anchor);
@@ -315,10 +359,10 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       window.visualViewport?.removeEventListener('scroll', schedule);
       reducedMotion.removeEventListener('change', onMotionChange);
       if (highlight) {
-        anchor.removeAttribute('data-tour-highlight');
-        const remaining = anchor.getAttribute('aria-describedby')?.split(/\s+/).filter((part) => part && part !== id);
-        if (remaining?.length) anchor.setAttribute('aria-describedby', remaining.join(' '));
-        else anchor.removeAttribute('aria-describedby');
+        highlight.removeAttribute('data-tour-highlight');
+        const remaining = highlight.getAttribute('aria-describedby')?.split(/\s+/).filter((part) => part && part !== id);
+        if (remaining?.length) highlight.setAttribute('aria-describedby', remaining.join(' '));
+        else highlight.removeAttribute('aria-describedby');
       }
     };
   }, [hidden, id, paused, placement]);
@@ -341,51 +385,75 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
     setPreviewIndex(Math.min(current + 1, steps.length - 1));
   }
 
-  const closeButton = <button type="button" className="secondary tour-coach-close" aria-label="Fechar tour" onClick={onEnd}>
-    <span aria-hidden="true">×</span>
-  </button>;
-  if (paused) return dialog ? createPortal(<div className="tour-resume" onKeyDown={wrapTab}>
-    {closeButton}
-    <button type="button" className="secondary" onClick={() => { dialog.focus({ preventScroll: true }); onResume(); }}>Retomar tour</button>
-  </div>, dialog) : null;
+  function pause() {
+    focusAfterPause.current = Boolean(dialog);
+    onPause();
+  }
 
   const complete = displayedStep === null ? hint.complete : displayedStep === steps.length - 1;
+  const stepIndex = displayedStep ?? steps.findIndex((step) => step.target === hint.target || step.related?.includes(hint.target));
+  const mode = displayedStep === null ? 'Modo guiado' : 'Prévia';
+  const stage = stepIndex >= 0 ? `${mode} · Etapa ${stepIndex + 1} de ${steps.length}` : mode;
+  if (paused && !dialog) return null;
+
   return createPortal(
     <aside ref={balloon} className="tour-coach" aria-label={tour.title} onKeyDown={(event) => {
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
-        onPause();
+        if (!paused) pause();
       }
       wrapTab(event);
     }}>
-      <header><p className="tour-coach-label">{tour.title}</p>{closeButton}</header>
-      <div ref={details} className="tour-coach-details" tabIndex={0} aria-label="Instruções do tour">
-        <div id={id} role="status" aria-atomic="true">
-          {displayedStep !== null && <p className="tour-coach-label">Prévia · etapa {displayedStep + 1} de {steps.length}</p>}
-          <h2>{hint.title}</h2>
-          <p>{hint.instruction}</p>
-        </div>
-      </div>
-      <footer className="tour-coach-actions">
-        {displayedStep !== null && <>
-          <button type="button" className="secondary" onClick={() => {
-            nextButton.current?.focus({ preventScroll: true });
-            focusOperation.current = true;
-            setPreviewIndex(null);
-          }}>Acompanhar operação</button>
-          <button type="button" className="secondary" aria-disabled={displayedStep === 0} onClick={() => {
-            if (displayedStep > 0) setPreviewIndex(displayedStep - 1);
-          }}>Passo anterior</button>
+      <div ref={card} className="tour-coach-card">
+        <header>
+          <div>
+            <p className="tour-coach-label">{tour.title}</p>
+            <p className="tour-coach-stage" aria-hidden={!paused}>{paused ? 'Tour pausado' : stage}</p>
+          </div>
+          <button type="button" className="secondary tour-coach-close" aria-label="Fechar tour" onClick={onEnd}>
+            <span aria-hidden="true">×</span>
+          </button>
+        </header>
+        {paused ? <footer className="tour-coach-actions">
+          <button ref={resumeButton} type="button" onClick={() => {
+            focusAfterResume.current = true;
+            onResume();
+          }}>Retomar tour</button>
+        </footer> : <>
+          <div ref={details} className="tour-coach-details" tabIndex={0} aria-label="Instruções do tour">
+            <div role="status" aria-atomic="true">
+              <span className="tour-coach-announcement">{stage}</span>
+              {stepIndex >= 0 && <div className="tour-coach-progress" aria-hidden="true">
+                {steps.map((step, index) => <span key={step.target} data-reached={index < stepIndex} data-current={index === stepIndex} />)}
+              </div>}
+              <h2>{hint.title}</h2>
+              <p id={id} className="tour-coach-instruction">{hint.instruction}</p>
+              {displayedStep !== null && !anchor && <p className="tour-coach-context">Controle indisponível nesta tela</p>}
+            </div>
+          </div>
+          <footer className="tour-coach-actions" data-preview={displayedStep !== null}>
+            {displayedStep !== null && <button type="button" className="secondary tour-coach-follow" onClick={() => {
+              nextButton.current?.focus({ preventScroll: true });
+              focusOperation.current = true;
+              setPreviewIndex(null);
+            }}>Acompanhar operação</button>}
+            {displayedStep !== null && <button type="button" className="secondary" aria-disabled={displayedStep === 0} onClick={() => {
+              if (displayedStep > 0) setPreviewIndex(displayedStep - 1);
+            }}>Passo anterior</button>}
+            {displayedStep === null && hint.canContinue && anchor && <button type="button" className="secondary" onClick={() => {
+              manual.current.add(anchor);
+              nextButton.current?.focus({ preventScroll: true });
+              refresh.current();
+            }}>Já conferi</button>}
+            {displayedStep === null && !hint.complete && <button type="button" className="secondary" onClick={pause}>Pausar tour</button>}
+            <button ref={nextButton} type="button" onClick={advance}>
+              {complete ? 'Concluir tour' : 'Próximo passo'}
+              <span className="tour-coach-next-icon" aria-hidden="true" data-complete={Boolean(complete)} />
+            </button>
+          </footer>
         </>}
-        {displayedStep === null && hint.canContinue && anchor && <button type="button" className="secondary" onClick={() => {
-          manual.current.add(anchor);
-          nextButton.current?.focus({ preventScroll: true });
-          refresh.current();
-        }}>Já conferi</button>}
-        {displayedStep === null && !hint.complete && <button type="button" className="secondary" onClick={onPause}>Pausar tour</button>}
-        <button ref={nextButton} type="button" onClick={advance}>{complete ? 'Concluir tour' : 'Próximo passo'}</button>
-      </footer>
+      </div>
     </aside>,
     dialog ?? document.body,
   );

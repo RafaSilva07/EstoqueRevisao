@@ -61,7 +61,7 @@ export function HelpMenu({ user, mode, page, navigate, reviewCompleted = false }
 
   function pause() {
     setRunning(false);
-    const dialog = document.querySelector<HTMLElement>('.dialog-backdrop > [role="dialog"]:has(.tour-coach, .tour-resume)');
+    const dialog = document.querySelector<HTMLElement>('.dialog-backdrop > [role="dialog"]:has(.tour-coach)');
     if (dialog) dialog.focus({ preventScroll: true });
     else close();
   }

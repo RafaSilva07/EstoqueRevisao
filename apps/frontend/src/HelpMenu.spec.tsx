@@ -153,6 +153,14 @@ describe('menu de ajuda', () => {
       expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Informe o código');
       clickCoach('Próximo passo');
       expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Informe a descrição');
+      expect(document.querySelector('.tour-coach-stage')?.textContent).toBe('Prévia · Etapa 3 de 10');
+      act(() => {
+        document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      });
+      expect(document.activeElement?.textContent).toBe('Retomar tour');
+      clickCoach('Retomar tour');
+      expect(document.activeElement?.textContent).toBe('Próximo passo');
+      expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Informe a descrição');
       const dialog = host.querySelector('[role="dialog"]');
       const code = host.querySelector<HTMLInputElement>('[data-tour="product-code"]');
       const name = host.querySelector<HTMLInputElement>('[data-tour="product-name"]');
