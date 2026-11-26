@@ -1044,6 +1044,7 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
 
 /* The coach stays inside the active dialog's accessibility tree when a form is open. */
 .dialog:has(.tour-coach) { animation: none; }
+.dialog:has(.tour-coach[data-attached]) { position: relative; }
 [data-tour-highlight] {
   outline: 2px solid var(--primary-dark);
   outline-offset: 3px;
@@ -1057,6 +1058,7 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
   visibility: hidden;
   color: var(--ink);
 }
+.tour-coach[data-attached] { position: absolute; z-index: 19; }
 .tour-coach[data-anchor-side]::before {
   content: '';
   position: absolute;
@@ -1147,9 +1149,9 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
 }
 .tour-coach-actions button.tour-coach-follow:hover { background: var(--primary-soft); }
 .tour-coach[data-compact] .tour-coach-details { min-height: min(1.5rem, 22dvh); }
-.tour-coach[data-compact] .tour-coach-actions[data-preview="true"] { grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(0, 1fr)); }
+.tour-coach[data-compact] .tour-coach-actions[data-preview="true"] { grid-template-columns: minmax(min-content, 1.35fr) repeat(2, minmax(0, 1fr)); }
 .tour-coach[data-compact] .tour-coach-actions[data-preview="true"] button { padding-inline: .2rem; font-size: .75rem; line-height: 1.2; }
-.tour-coach[data-compact] .tour-coach-follow { grid-column: auto; }
+.tour-coach[data-compact] .tour-coach-follow { grid-column: auto; overflow-wrap: normal; }
 .tour-coach[data-compact] .tour-coach-actions[data-preview="true"] .tour-coach-next-icon { display: none; }
 .tour-coach-close.secondary {
   flex: 0 0 44px;

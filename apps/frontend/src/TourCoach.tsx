@@ -56,7 +56,7 @@ function viewport(dialog: HTMLElement | null): ViewBounds {
     if (header && header.height > 0 && header.top <= top) ceiling = Math.max(top, header.bottom);
     if (navigation && navigation.height > 0 && navigation.bottom >= bottom - 1) bottom = Math.min(bottom, navigation.top);
   }
-  return { left: left + 8, top: ceiling + 8, right: right - 8, bottom: bottom - 8 };
+  return { left, top: ceiling, right, bottom };
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -73,6 +73,31 @@ function intersection(first: ViewBounds, second: ViewBounds): ViewBounds {
 function visibleBox(rect: ViewBounds, bounds: ViewBounds) {
   const box = intersection(rect, bounds);
   return box.right > box.left && box.bottom > box.top ? box : null;
+}
+
+function clientBox(element: HTMLElement): ViewBounds {
+  const rect = element.getBoundingClientRect();
+  const left = rect.left + element.clientLeft;
+  const top = rect.top + element.clientTop;
+  return { left, top, right: left + element.clientWidth, bottom: top + element.clientHeight };
+}
+
+function scrollArea(anchor: HTMLElement, dialog: HTMLElement | null, bounds: ViewBounds) {
+  let area = bounds;
+  for (let parent = anchor.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
+    const style = getComputedStyle(parent);
+    const clipsX = parent === dialog || /^(auto|scroll|hidden|clip)$/.test(style.overflowX);
+    const clipsY = parent === dialog || /^(auto|scroll|hidden|clip)$/.test(style.overflowY);
+    if (clipsX || clipsY) {
+      const rect = clientBox(parent);
+      area = intersection(area, {
+        left: clipsX ? rect.left : area.left, right: clipsX ? rect.right : area.right,
+        top: clipsY ? rect.top : area.top, bottom: clipsY ? rect.bottom : area.bottom,
+      });
+    }
+    if (parent === dialog) break;
+  }
+  return area;
 }
 
 function reveal(anchor: HTMLElement, dialog: HTMLElement | null, area: ViewBounds, bounds: ViewBounds, cardWidth: number, cardHeight: number) {
@@ -235,7 +260,8 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
     if (!placement || hidden || !panel || !content) return;
     const { anchor, dialog, popup } = placement;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const highlight = paused || placement.hint.complete ? null : anchor;
+    const control = paused || anchor?.id === 'main-content' ? null : anchor;
+    const highlight = placement.hint.complete ? null : control;
     if (highlight) {
       highlight.setAttribute('data-tour-highlight', '');
       const descriptions = highlight.getAttribute('aria-describedby')?.split(/\s+/).filter(Boolean) ?? [];
@@ -243,14 +269,49 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
     }
 
     let frame = 0;
+    let layoutPending = false;
+    let attachment: { left: number; top: number } | null = null;
     function onMotionChange() {
       if (reducedMotion.matches) motion.current?.cancel();
     }
 
+    function place(left: number, top: number, attached: boolean) {
+      if (!panel) return;
+      let x = left;
+      let y = top;
+      if (attached && dialog) {
+        const rect = dialog.getBoundingClientRect();
+        x += dialog.scrollLeft - rect.left - dialog.clientLeft;
+        y += dialog.scrollTop - rect.top - dialog.clientTop;
+      } else if (attached) {
+        x += window.scrollX;
+        y += window.scrollY;
+      }
+      panel.toggleAttribute('data-attached', attached);
+      panel.style.left = `${x}px`;
+      panel.style.top = `${y}px`;
+      positionHistory.current = { panel, left, top };
+    }
+
+    function followScroll() {
+      if (!panel || !control || !attachment) return;
+      // Keep the side and gap from the current layout as the control scrolls.
+      const rect = anchorBox(control);
+      const area = scrollArea(control, dialog, viewport(dialog));
+      const visible = visibleBox(control.getBoundingClientRect(), area);
+      const left = rect.left + attachment.left;
+      const top = rect.top + attachment.top;
+      const previous = positionHistory.current;
+      if (!visible || previous?.left !== left || previous.top !== top) motion.current?.cancel();
+      place(left, top, true);
+      panel.style.visibility = visible ? 'visible' : 'hidden';
+    }
+
     function position(transition = false, centerAnchor = false) {
-      frame = 0;
       if (!panel || !content) return;
-      const bounds = viewport(dialog);
+      const view = viewport(dialog);
+      const room = dialog && control ? intersection(view, clientBox(dialog)) : view;
+      const bounds = { left: room.left + 8, top: room.top + 8, right: room.right - 8, bottom: room.bottom - 8 };
       const width = Math.min(352, bounds.right - bounds.left);
       const availableHeight = Math.min(320, bounds.bottom - bounds.top);
       if (width <= 0 || availableHeight <= 0) { panel.style.visibility = 'hidden'; return; }
@@ -261,11 +322,12 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       const chromeHeight = content.scrollHeight - (detail?.offsetHeight ?? 0) + content.offsetHeight - content.clientHeight;
       const desiredHeight = Math.min(availableHeight, chromeHeight + (detail?.scrollHeight ?? 0));
       const usableHeight = Math.min(desiredHeight, chromeHeight + 64);
-      const area = dialog ? intersection(bounds, dialog.getBoundingClientRect()) : bounds;
-      if (highlight && centerAnchor) reveal(highlight, dialog, area, bounds, width, usableHeight);
-      const anchorRect = highlight?.getBoundingClientRect();
+      const area = control ? scrollArea(control, dialog, view) : room;
+      if (control && centerAnchor) reveal(control, dialog, area, bounds, width, usableHeight);
+      const anchorRect = control?.getBoundingClientRect();
       const visibleAnchor = anchorRect && visibleBox(anchorRect, area);
-      const rect = highlight && visibleAnchor ? visibleBox(anchorBox(highlight), area) ?? visibleAnchor : null;
+      if (control && !visibleAnchor && attachment) { followScroll(); return; }
+      const rect = control ? anchorBox(control) : null;
       const active = document.activeElement;
       const focused = placement?.editingOther && active instanceof HTMLElement && (!dialog || dialog.contains(active))
         ? visibleBox(active.getBoundingClientRect(), area) : null;
@@ -279,7 +341,7 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       const box = rect ?? focused;
       if (box) {
         const avoid = [box, ...(popupRect ? [popupRect] : []), ...(rect && focused ? [focused] : [])];
-        const preferBelow = Boolean(highlight?.matches('input, select, textarea'));
+        const preferBelow = Boolean(control?.matches('input, select, textarea'));
         const best = anchoredPosition(box, avoid, bounds, width, desiredHeight, usableHeight, preferBelow)
           ?? anchoredPosition(box, [box], bounds, width, desiredHeight, 1, preferBelow);
         if (best) {
@@ -291,11 +353,6 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
           alignEnd = (box.top + box.bottom) / 2 < (bounds.top + bounds.bottom) / 2;
           top = alignEnd ? bounds.bottom : bounds.top;
         }
-      } else if (anchorRect) {
-        // Manual scrolling can move the control out of view. Keep the actions near that edge.
-        left = anchorRect.left;
-        alignEnd = anchorRect.bottom > area.top;
-        top = alignEnd ? bounds.bottom : bounds.top;
       }
 
       panel.style.maxHeight = `${maxHeight}px`;
@@ -316,13 +373,12 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       const moved = previous?.panel !== panel || previous.left !== left || previous.top !== top;
       const origin = previous?.panel === panel && motion.current?.playState === 'running'
         ? panel.getBoundingClientRect() : previous;
-      panel.style.left = `${left}px`;
-      panel.style.top = `${top}px`;
-      panel.style.visibility = 'visible';
-      positionHistory.current = { panel, left, top };
+      attachment = rect ? { left: left - rect.left, top: top - rect.top } : null;
+      place(left, top, Boolean(attachment));
+      panel.style.visibility = !control || visibleAnchor ? 'visible' : 'hidden';
       if (moved || transition) {
         motion.current?.cancel();
-        if (transition && !reducedMotion.matches && typeof panel.animate === 'function') {
+        if (transition && panel.style.visibility === 'visible' && !reducedMotion.matches && typeof panel.animate === 'function') {
           const startLeft = clamp(origin?.left ?? left, bounds.left, bounds.right - width);
           const startTop = clamp(origin?.top ?? top + 6, bounds.top, bounds.bottom - height);
           const offset = `translate(${startLeft - left}px, ${startTop - top}px)`;
@@ -333,11 +389,21 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       }
     }
 
-    function schedule() { if (!frame) frame = requestAnimationFrame(() => position()); }
+    function schedule() {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (layoutPending || !attachment) {
+          layoutPending = false;
+          position();
+        } else followScroll();
+      });
+    }
+    function scheduleLayout() { layoutPending = true; schedule(); }
     const previous = previousHint.current;
     const stepChanged = previous?.panel !== panel || previous?.anchor !== anchor || previous?.title !== placement.hint.title
       || previous?.previewIndex !== placement.previewIndex || previous.paused !== paused;
-    if (stepChanged) revealPending.current = Boolean(highlight);
+    if (stepChanged) revealPending.current = Boolean(control);
     const follow = focusOperation.current && placement.previewIndex === null && !paused;
     if (follow) {
       focusOperation.current = false;
@@ -365,22 +431,32 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       nextButton.current?.focus({ preventScroll: true });
     }
     previousHint.current = { panel, anchor, title: placement.hint.title, previewIndex: placement.previewIndex, paused };
-    const resize = new ResizeObserver(schedule);
-    if (anchor) resize.observe(anchor);
-    resize.observe(panel);
-    resize.observe(dialog ?? document.getElementById('main-content') ?? document.body);
-    if (popup) resize.observe(popup);
+    const observed = [anchor, dialog ?? document.getElementById('main-content') ?? document.body, popup]
+      .filter((element): element is HTMLElement => element !== null);
+    const sizes = new Map(observed.map((element) => [element, { width: element.clientWidth, height: element.clientHeight }]));
+    const resize = new ResizeObserver((entries) => {
+      for (const { target } of entries) {
+        if (!(target instanceof HTMLElement)) continue;
+        const previousSize = sizes.get(target);
+        const width = target.clientWidth;
+        const height = target.clientHeight;
+        if (previousSize?.width === width && previousSize.height === height) continue;
+        sizes.set(target, { width, height });
+        scheduleLayout();
+      }
+    });
+    observed.forEach((element) => resize.observe(element));
     document.addEventListener('scroll', schedule, true);
-    window.addEventListener('resize', schedule);
-    window.visualViewport?.addEventListener('resize', schedule);
+    window.addEventListener('resize', scheduleLayout);
+    window.visualViewport?.addEventListener('resize', scheduleLayout);
     window.visualViewport?.addEventListener('scroll', schedule);
     reducedMotion.addEventListener('change', onMotionChange);
     return () => {
       cancelAnimationFrame(frame);
       resize.disconnect();
       document.removeEventListener('scroll', schedule, true);
-      window.removeEventListener('resize', schedule);
-      window.visualViewport?.removeEventListener('resize', schedule);
+      window.removeEventListener('resize', scheduleLayout);
+      window.visualViewport?.removeEventListener('resize', scheduleLayout);
       window.visualViewport?.removeEventListener('scroll', schedule);
       reducedMotion.removeEventListener('change', onMotionChange);
       if (highlight) {

@@ -108,6 +108,12 @@ describe('menu de ajuda', () => {
     vi.stubGlobal('visualViewport', { width: 320, height: 460, offsetTop: 0, offsetLeft: 0, addEventListener() {}, removeEventListener() {} });
     const field = (top: number) => new DOMRect(20, top, 280, 48);
     const clientRects = vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([field(60)] as unknown as DOMRectList);
+    const clientWidth = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function(this: HTMLElement) {
+      return this.getAttribute('role') === 'dialog' ? 304 : 0;
+    });
+    const clientHeight = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function(this: HTMLElement) {
+      return this.getAttribute('role') === 'dialog' ? 444 : 0;
+    });
     let scrollTop = 0;
     const clientRect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function(this: HTMLElement) {
       if (this.getAttribute('role') === 'dialog') return new DOMRect(8, 8, 304, 444);
@@ -117,7 +123,9 @@ describe('menu de ajuda', () => {
     });
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => setTimeout(callback, 16));
     vi.stubGlobal('cancelAnimationFrame', clearTimeout);
-    const scroll = vi.fn(({ top }: ScrollToOptions) => { scrollTop = Math.max(0, scrollTop + (top ?? 0)); });
+    const scroll = vi.fn(function(this: HTMLElement, { top }: ScrollToOptions) {
+      this.scrollTop = scrollTop = Math.max(0, scrollTop + (top ?? 0));
+    });
     const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollBy');
     Object.defineProperty(HTMLElement.prototype, 'scrollBy', { configurable: true, value: scroll });
     try {
@@ -158,30 +166,40 @@ describe('menu de ajuda', () => {
       </>));
       await act(async () => { await Promise.resolve(); vi.advanceTimersByTime(16); });
       expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Informe o código');
-      const dialog = host.querySelector('[role="dialog"]')!;
+      const dialog = host.querySelector<HTMLElement>('[role="dialog"]')!;
       const coach = dialog.querySelector<HTMLElement>('.tour-coach')!;
       const manualScroll = (offset: number) => {
-        scrollTop = offset;
+        dialog.scrollTop = scrollTop = offset;
         act(() => {
           dialog.dispatchEvent(new Event('scroll'));
           vi.advanceTimersByTime(16);
         });
       };
-      expect(coach.style.top).toBe('160px');
+      expect(coach.hasAttribute('data-attached')).toBe(true);
+      expect(coach.style.top).toBe('152px');
       scroll.mockClear();
       manualScroll(40);
-      expect(coach.style.top).toBe('120px');
+      expect(coach.style.top).toBe('152px');
       manualScroll(180);
-      expect(coach.style.top).toBe('8px');
-      expect(coach.hasAttribute('data-anchor-side')).toBe(false);
+      expect(coach.style.top).toBe('152px');
+      expect(coach.style.visibility).toBe('hidden');
       manualScroll(0);
       expect(coach.dataset.anchorSide).toBe('below');
-      expect(coach.style.top).toBe('160px');
+      expect(coach.style.visibility).toBe('visible');
       expect(scroll).not.toHaveBeenCalled();
       clickCoach('Próximo passo');
       expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Informe a descrição');
       expect(scroll).toHaveBeenCalledExactlyOnceWith({ top: 144, behavior: 'instant' });
       expect(document.querySelector('.tour-coach-stage')?.textContent).toBe('Prévia · Etapa 3 de 10');
+      expect(coach.dataset.anchorSide).toBe('below');
+      expect(coach.style.top).toBe('402px');
+      manualScroll(210);
+      expect(coach.style.top).toBe('402px');
+      expect(coach.dataset.anchorSide).toBe('below');
+      manualScroll(400);
+      expect(coach.style.visibility).toBe('hidden');
+      manualScroll(144);
+      expect(coach.style.visibility).toBe('visible');
       act(() => {
         document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       });
@@ -209,6 +227,8 @@ describe('menu de ajuda', () => {
       else Reflect.deleteProperty(HTMLElement.prototype, 'scrollBy');
       clientRects.mockRestore();
       clientRect.mockRestore();
+      clientWidth.mockRestore();
+      clientHeight.mockRestore();
       vi.useRealTimers();
     }
   });

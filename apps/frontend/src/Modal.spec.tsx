@@ -19,6 +19,32 @@ describe('modal no celular', () => {
     document.body.style.overflow = '';
   });
 
+  it('mantém o foco entre os controles visíveis quando o tour sai de vista', () => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+    const rects = vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([new DOMRect(0, 0, 50, 44)] as unknown as DOMRectList);
+    const host = document.createElement('div'); document.body.append(host); const root = createRoot(host);
+    try {
+      act(() => root.render(<Modal labelledBy="form-title" onClose={() => undefined}>
+        <h2 id="form-title">Formulário</h2><button>Voltar</button><button>Salvar</button>
+        <aside style={{ visibility: 'hidden' }}><button>Fechar tour</button></aside>
+      </Modal>));
+      const [first, last] = host.querySelectorAll('button');
+      const backwards = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+      act(() => {
+        first.focus();
+        first.dispatchEvent(backwards);
+      });
+      expect(backwards.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(last);
+      act(() => { last.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })); });
+      expect(document.activeElement).toBe(first);
+    } finally {
+      act(() => root.unmount());
+      host.remove();
+      rects.mockRestore();
+    }
+  });
+
   it('mantém a página rolável e acompanha a área visível quando o teclado abre', () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true }));

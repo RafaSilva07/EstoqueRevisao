@@ -95,7 +95,8 @@ export function Modal({ children, labelledBy, busy = false, className = '', onCl
     <section ref={ref} className={`dialog confirmation-dialog ${className}`.trim()} role="dialog" aria-modal="true" aria-labelledby={labelledBy} aria-busy={busy} tabIndex={-1} onKeyDown={(event) => {
       if (event.key === 'Escape') { event.stopPropagation(); if (!busy) onClose(); }
       if (event.key !== 'Tab') return;
-      const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]')).filter((node) => node.getClientRects().length > 0);
+      const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]'))
+        .filter((node) => node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden');
       const first = controls[0];
       const last = controls[controls.length - 1];
       if (!first) { event.preventDefault(); return; }
