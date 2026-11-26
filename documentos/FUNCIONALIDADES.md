@@ -16,7 +16,7 @@ Todas as entradas, saídas, transferências e distribuições de revisão aceita
 
 O botão **Ajuda**, no topo da área autenticada, oferece tours selecionáveis por modo operacional e pelas permissões efetivas da conta. Na **Revisão**, os tours cobrem cadastro de produto, recebimento, revisão e envio com montagem para a Expedição. Na **Expedição**, cobrem envio para a Revisão e recebimento. O cadastro exige as permissões de consulta e criação de produtos. No modo **Admin geral**, o menu orienta a seleção de um modo operacional com tours.
 
-Os tours têm navegação por passos, podem ser usados pelo teclado e abrem a tela inicial de cada fluxo pela navegação normal do sistema. O passo pode ser retomado pela Ajuda enquanto a conta e o modo atuais estiverem ativos. O tour não preenche campos nem executa operações. **Termos de uso** está disponível a todas as contas autenticadas como rascunho educacional informativo, sem aceite.
+Ao escolher um tour, o sistema abre a operação pela navegação normal e mostra um balão junto ao controle real. A orientação acompanha os campos, escolhas e validações da tela. **Localizar controle** leva ao campo ou botão indicado. **Pausar tour** permite continuar pela **Ajuda** ou pelo botão **Retomar tour** se um formulário ainda estiver aberto. A retomada segue o estado do formulário e as permissões do modo atual. O tour respeita a preferência por movimento reduzido e não preenche campos nem executa operações de estoque. **Termos de uso** está disponível a todas as contas autenticadas como rascunho educacional informativo, sem aceite.
 
 ## Rascunhos de formulários
 
