@@ -316,7 +316,7 @@ function AppSession() {
     if (destination === 'shipment-new' && !can('shipments.create')) return;
     setPage(destination);
     window.scrollTo({ top: 0, behavior: 'instant' });
-    requestAnimationFrame(() => document.getElementById('main-content')?.focus({ preventScroll: true }));
+    if (destination !== 'terms') requestAnimationFrame(() => document.getElementById('main-content')?.focus({ preventScroll: true }));
   });
   const openTransfer = (prefill?: TransferPrefill) => {
     setTransferPrefill(prefill);
@@ -368,7 +368,7 @@ function AppSession() {
       </div>
     </header>
     <SidebarNavigation page={page} user={activeUser} modeLabel={operationalModeLabel[activeMode]} showOnlineUsers={presenceAdmin} expanded={sidebarExpanded} onToggle={() => setSidebarExpanded((value) => !value)} navigate={go} />
-    <main className="workspace" id="main-content" tabIndex={-1} key={operationRevision}>
+    <main className={`workspace${page === 'terms' ? ' workspace-terms' : ''}`} id="main-content" tabIndex={-1} key={operationRevision}>
       {activeMode === 'PCP' && <PcpOnlineNotice users={presence.pcpUsers} error={presence.error} />}
       <NavigationTrail page={page} user={activeUser} navigate={go} />
       {page === 'terms' && <TermsPage />}
