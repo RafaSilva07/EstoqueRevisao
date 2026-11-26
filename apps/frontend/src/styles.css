@@ -1059,7 +1059,12 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
   color: var(--ink);
 }
 .tour-coach[data-attached] { position: absolute; z-index: 19; }
-.tour-coach[data-moving]::before { visibility: hidden; }
+.tour-coach[data-inline] { position: relative; z-index: 1; }
+[data-tour-inline]:empty { display: none; }
+[data-tour-inline]:not(:empty) { margin-inline: -.65rem; }
+[data-tour-inline]:not(:empty) ~ .dialog-actions { position: static; }
+.settings-options:has(+ [data-tour-inline]:not(:empty)) { margin-bottom: .75rem; }
+.tour-coach[data-moving]:not([data-inline])::before { visibility: hidden; }
 .tour-coach[data-anchor-side]::before {
   content: '';
   position: absolute;
@@ -1159,6 +1164,7 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
 .tour-coach[data-compact] .tour-coach-actions button { padding-inline: .2rem; font-size: .75rem; line-height: 1.2; }
 .tour-coach[data-compact] .tour-coach-follow { grid-column: auto; overflow-wrap: normal; }
 .tour-coach[data-compact] .tour-coach-next-icon { display: none; }
+.tour-coach[data-inline][data-compact] .tour-coach-label { display: none; }
 .tour-coach-close.secondary {
   flex: 0 0 44px;
   width: 44px;
