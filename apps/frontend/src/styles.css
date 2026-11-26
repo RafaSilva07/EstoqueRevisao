@@ -1009,3 +1009,12 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
 @media (prefers-reduced-motion: reduce) {
   .dialog.navigation-drawer { animation: none; }
 }
+
+.help-trigger { flex: 0 0 auto; }
+.dialog.help-dialog { width: min(100%, 42rem); }
+.help-dialog h3 { margin-top: 1rem; }
+.help-tours { display: grid; gap: .5rem; padding: 0; list-style: none; }
+.help-tours button { width: 100%; text-align: left; white-space: normal; }
+.help-terms li + li { margin-top: .35rem; }
+.help-terms a { color: var(--ink); text-decoration: underline; text-underline-offset: .15em; }
+.help-dialog .dialog-actions { flex-wrap: wrap; }

@@ -36,6 +36,7 @@ import { MovementDetailModal } from './MovementDetailModal';
 import { OperationalMode, allowedOperationalModes, operationalModeLabel, userForOperationalMode } from './operational-mode';
 import { OperationalHomePage } from './OperationalHomePage';
 import { HistoryPage } from './HistoryPage';
+import { HelpMenu } from './HelpMenu';
 
 type Navigate = (page: Page) => void;
 const messageFrom = (error: unknown) => error instanceof Error ? error.message : 'Ocorreu um erro inesperado.';
@@ -354,7 +355,7 @@ function AppSession() {
     else navigate(destination);
   };
   return <OperationalActionsContext.Provider value={{ review: reviewSector && can('movements.review') ? openReview : undefined, adminRoles: can('shipments.read') ? user.roles : [], changed: () => { setSelectedMovementId(undefined); setSelectedRecordId(undefined); setOperationRevision((value) => value + 1); } }}><div className={`app-shell${sidebarExpanded ? ' sidebar-is-expanded' : ''}`}><a className="skip-link" href="#main-content">Ir para o conteúdo</a>
-    <header className="topbar"><div className="topbar-navigation"><MobileMenuButton open={mobileMenuOpen} onOpen={() => setMobileMenuOpen(true)} /><button className="brand" onClick={() => go('home')} aria-label="Ir para o início"><span>ER</span><strong>Estoque Revisão</strong></button></div><div className="user-area">{switcher}<span className="user-name">{user.username} · {operationalModeLabel[activeMode]}</span><button className="secondary desktop-logout" onClick={logout} disabled={loggingOut}>Sair</button></div></header>
+    <header className="topbar"><div className="topbar-navigation"><MobileMenuButton open={mobileMenuOpen} onOpen={() => setMobileMenuOpen(true)} /><button className="brand" onClick={() => go('home')} aria-label="Ir para o início"><span>ER</span><strong>Estoque Revisão</strong></button></div><div className="user-area"><HelpMenu key={draftScope} user={activeUser} mode={activeMode} page={page} navigate={go} />{switcher}<span className="user-name">{user.username} · {operationalModeLabel[activeMode]}</span><button className="secondary desktop-logout" onClick={logout} disabled={loggingOut}>Sair</button></div></header>
     <SidebarNavigation page={page} user={activeUser} modeLabel={operationalModeLabel[activeMode]} showOnlineUsers={presenceAdmin} expanded={sidebarExpanded} onToggle={() => setSidebarExpanded((value) => !value)} navigate={go} />
     <main className="workspace" id="main-content" tabIndex={-1} key={operationRevision}>
       {activeMode === 'PCP' && <PcpOnlineNotice users={presence.pcpUsers} error={presence.error} />}
