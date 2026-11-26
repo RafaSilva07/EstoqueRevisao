@@ -105,14 +105,21 @@ describe('menu de ajuda', () => {
     vi.useFakeTimers();
     vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
     vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
-    const rect = { left: 20, top: 60, right: 240, bottom: 92, width: 220, height: 32 };
-    const clientRects = vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([rect] as unknown as DOMRectList);
-    const clientRect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(rect as DOMRect);
+    vi.stubGlobal('visualViewport', { width: 320, height: 460, offsetTop: 0, offsetLeft: 0, addEventListener() {}, removeEventListener() {} });
+    const field = (top: number) => new DOMRect(20, top, 280, 48);
+    const clientRects = vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([field(60)] as unknown as DOMRectList);
+    let scrollTop = 0;
+    const clientRect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function(this: HTMLElement) {
+      if (this.getAttribute('role') === 'dialog') return new DOMRect(8, 8, 304, 444);
+      if (this.dataset.tour === 'product-code') return field(100 - scrollTop);
+      if (this.dataset.tour === 'product-name') return field(350 - scrollTop);
+      return field(60);
+    });
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => setTimeout(callback, 16));
     vi.stubGlobal('cancelAnimationFrame', clearTimeout);
-    const scroll = vi.fn();
-    const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
-    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scroll });
+    const scroll = vi.fn(({ top }: ScrollToOptions) => { scrollTop = Math.max(0, scrollTop + (top ?? 0)); });
+    const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollBy');
+    Object.defineProperty(HTMLElement.prototype, 'scrollBy', { configurable: true, value: scroll });
     try {
       const save = vi.fn();
       act(() => root.render(<>
@@ -151,8 +158,29 @@ describe('menu de ajuda', () => {
       </>));
       await act(async () => { await Promise.resolve(); vi.advanceTimersByTime(16); });
       expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Informe o código');
+      const dialog = host.querySelector('[role="dialog"]')!;
+      const coach = dialog.querySelector<HTMLElement>('.tour-coach')!;
+      const manualScroll = (offset: number) => {
+        scrollTop = offset;
+        act(() => {
+          dialog.dispatchEvent(new Event('scroll'));
+          vi.advanceTimersByTime(16);
+        });
+      };
+      expect(coach.style.top).toBe('160px');
+      scroll.mockClear();
+      manualScroll(40);
+      expect(coach.style.top).toBe('120px');
+      manualScroll(180);
+      expect(coach.style.top).toBe('8px');
+      expect(coach.hasAttribute('data-anchor-side')).toBe(false);
+      manualScroll(0);
+      expect(coach.dataset.anchorSide).toBe('below');
+      expect(coach.style.top).toBe('160px');
+      expect(scroll).not.toHaveBeenCalled();
       clickCoach('Próximo passo');
       expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Informe a descrição');
+      expect(scroll).toHaveBeenCalledExactlyOnceWith({ top: 144, behavior: 'instant' });
       expect(document.querySelector('.tour-coach-stage')?.textContent).toBe('Prévia · Etapa 3 de 10');
       act(() => {
         document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -161,7 +189,6 @@ describe('menu de ajuda', () => {
       clickCoach('Retomar tour');
       expect(document.activeElement?.textContent).toBe('Próximo passo');
       expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Informe a descrição');
-      const dialog = host.querySelector('[role="dialog"]');
       const code = host.querySelector<HTMLInputElement>('[data-tour="product-code"]');
       const name = host.querySelector<HTMLInputElement>('[data-tour="product-name"]');
       expect(dialog?.querySelector('.tour-coach')).toBeTruthy();
@@ -178,8 +205,8 @@ describe('menu de ajuda', () => {
       clickButton('Ajuda');
       expect(host.textContent).not.toContain('Continuar tour');
     } finally {
-      if (originalScroll) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalScroll);
-      else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+      if (originalScroll) Object.defineProperty(HTMLElement.prototype, 'scrollBy', originalScroll);
+      else Reflect.deleteProperty(HTMLElement.prototype, 'scrollBy');
       clientRects.mockRestore();
       clientRect.mockRestore();
       vi.useRealTimers();

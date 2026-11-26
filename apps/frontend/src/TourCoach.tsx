@@ -18,6 +18,7 @@ type AnchorSide = 'above' | 'below' | 'left' | 'right';
 const resultTargets = ['product-result', 'receipt-result', 'shipment-result'];
 const reviewableTargets = ['product-unit', 'receipt-separation', 'separation-amount', 'assembly-mixed', 'shipment-expiry'];
 const tabStops = 'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]';
+const anchorGap = 12;
 
 function shown(element: HTMLElement) {
   return element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden';
@@ -62,21 +63,48 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, max));
 }
 
-function fits(rect: DOMRect, bounds: ViewBounds) {
-  const centerX = rect.left + rect.width / 2;
-  const centerY = rect.top + rect.height / 2;
-  return centerY > bounds.top && centerY < bounds.bottom && centerX > bounds.left && centerX < bounds.right;
+function intersection(first: ViewBounds, second: ViewBounds): ViewBounds {
+  return {
+    left: Math.max(first.left, second.left), top: Math.max(first.top, second.top),
+    right: Math.min(first.right, second.right), bottom: Math.min(first.bottom, second.bottom),
+  };
 }
 
-function anchorVisible(anchor: HTMLElement, dialog: HTMLElement | null, bounds: ViewBounds) {
+function visibleBox(rect: ViewBounds, bounds: ViewBounds) {
+  const box = intersection(rect, bounds);
+  return box.right > box.left && box.bottom > box.top ? box : null;
+}
+
+function reveal(anchor: HTMLElement, dialog: HTMLElement | null, area: ViewBounds, bounds: ViewBounds, cardWidth: number, cardHeight: number) {
   const rect = anchor.getBoundingClientRect();
-  if (!fits(rect, bounds)) return false;
-  const clipping = dialog?.getBoundingClientRect();
-  return !clipping || fits(rect, clipping);
+  const center = (area.top + area.bottom) / 2;
+  const sideRoom = Math.max(rect.left - bounds.left, bounds.right - rect.right);
+  // For a short, narrow viewport, leave room for the actions below the field.
+  const latest = Math.max(area.top + rect.height / 2, bounds.bottom - anchorGap - cardHeight - rect.height / 2);
+  const target = sideRoom >= cardWidth + anchorGap ? center : Math.min(center, latest);
+  const top = rect.top + rect.height / 2 - target;
+  if (Math.abs(top) > 1) (dialog ?? window).scrollBy({ top, behavior: 'instant' });
 }
 
-function reveal(anchor: HTMLElement) {
-  anchor.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+function anchoredPosition(box: ViewBounds, obstacles: ViewBounds[], bounds: ViewBounds, width: number, height: number, minHeight: number, preferBelow: boolean) {
+  const above = Math.min(...obstacles.map(({ top }) => top)) - anchorGap;
+  const below = Math.max(...obstacles.map(({ bottom }) => bottom)) + anchorGap;
+  const left = Math.min(...obstacles.map(({ left }) => left)) - anchorGap;
+  const right = Math.max(...obstacles.map(({ right }) => right)) + anchorGap;
+  const roomBelow = bounds.bottom - below;
+  const roomAbove = above - bounds.top;
+  const roomOnRight = bounds.right - right;
+  const roomOnLeft = left - bounds.left;
+  const vertical = (side: 'below' | 'above', room: number) => ({
+    left: box.left, top: side === 'below' ? below : above, side, maxHeight: room,
+  });
+  if (preferBelow && roomBelow >= height) return vertical('below', roomBelow);
+  if (roomOnRight >= width) return { left: right, top: box.top, side: 'right' as const, maxHeight: height };
+  if (roomOnLeft >= width) return { left: left - width, top: box.top, side: 'left' as const, maxHeight: height };
+  if (roomBelow >= height) return vertical('below', roomBelow);
+  if (roomAbove >= height) return vertical('above', roomAbove);
+  if (Math.max(roomBelow, roomAbove) < minHeight) return null;
+  return roomBelow >= roomAbove ? vertical('below', roomBelow) : vertical('above', roomAbove);
 }
 
 function samePlacement(previous: Placement | null, next: Placement | null) {
@@ -114,8 +142,8 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
   const manual = useRef(new WeakSet<HTMLElement>());
   const refresh = useRef<() => void>(() => undefined);
   const staleResults = useRef<Partial<Record<string, { element: HTMLElement; message: string }>> | null>(null);
-  const lastRevealed = useRef<HTMLElement | null>(null);
-  const previousHint = useRef<{ title: string; previewIndex: number | null; anchor: HTMLElement | null; panel: HTMLElement } | null>(null);
+  const revealPending = useRef(false);
+  const previousHint = useRef<{ title: string; previewIndex: number | null; anchor: HTMLElement | null; panel: HTMLElement; paused: boolean } | null>(null);
   const positionHistory = useRef<{ panel: HTMLElement; left: number; top: number } | null>(null);
   const motion = useRef<Animation | null>(null);
 
@@ -219,7 +247,7 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       if (reducedMotion.matches) motion.current?.cancel();
     }
 
-    function position(transition = false) {
+    function position(transition = false, centerAnchor = false) {
       frame = 0;
       if (!panel || !content) return;
       const bounds = viewport(dialog);
@@ -228,59 +256,57 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       if (width <= 0 || availableHeight <= 0) { panel.style.visibility = 'hidden'; return; }
 
       panel.style.width = `${width}px`;
+      panel.toggleAttribute('data-compact', bounds.bottom - bounds.top < 480);
       const detail = details.current;
-      const chromeHeight = content.scrollHeight - (detail?.offsetHeight ?? 0);
+      const chromeHeight = content.scrollHeight - (detail?.offsetHeight ?? 0) + content.offsetHeight - content.clientHeight;
       const desiredHeight = Math.min(availableHeight, chromeHeight + (detail?.scrollHeight ?? 0));
-      const usableHeight = Math.min(desiredHeight, chromeHeight + 56);
-      const rect = highlight && anchorVisible(highlight, dialog, bounds) ? anchorBox(highlight) : null;
+      const usableHeight = Math.min(desiredHeight, chromeHeight + 64);
+      const area = dialog ? intersection(bounds, dialog.getBoundingClientRect()) : bounds;
+      if (highlight && centerAnchor) reveal(highlight, dialog, area, bounds, width, usableHeight);
+      const anchorRect = highlight?.getBoundingClientRect();
+      const visibleAnchor = anchorRect && visibleBox(anchorRect, area);
+      const rect = highlight && visibleAnchor ? visibleBox(anchorBox(highlight), area) ?? visibleAnchor : null;
       const active = document.activeElement;
       const focused = placement?.editingOther && active instanceof HTMLElement && (!dialog || dialog.contains(active))
-        && anchorVisible(active, dialog, bounds) ? active.getBoundingClientRect() : null;
-      const popupRect = rect && popup?.getBoundingClientRect();
-      // Keep suggestions and the field being edited clear whenever space permits.
-      const obstacles = [rect, popupRect, focused].filter((box) => box !== null && box !== undefined);
-      const gap = 12;
+        ? visibleBox(active.getBoundingClientRect(), area) : null;
+      const popupRect = rect && popup && visibleBox(popup.getBoundingClientRect(), area);
       const previous = positionHistory.current;
       let left = previous?.left ?? bounds.right - width;
       let top = previous?.top ?? bounds.bottom;
       let maxHeight = availableHeight;
       let side: AnchorSide | undefined;
       let alignEnd = !previous;
-      if (obstacles.length) {
-        const above = Math.min(...obstacles.map((box) => box.top)) - bounds.top - gap;
-        const below = bounds.bottom - Math.max(...obstacles.map((box) => box.bottom)) - gap;
-        const toLeft = Math.min(...obstacles.map((box) => box.left)) - bounds.left - gap;
-        const toRight = bounds.right - Math.max(...obstacles.map((box) => box.right)) - gap;
-        if (Math.max(toLeft, toRight) >= width) {
-          side = toRight >= width ? 'right' : 'left';
-          left = side === 'right' ? bounds.right - toRight : bounds.left + toLeft - width;
-          top = (rect ?? focused)?.top ?? bounds.top;
-          alignEnd = false;
+      const box = rect ?? focused;
+      if (box) {
+        const avoid = [box, ...(popupRect ? [popupRect] : []), ...(rect && focused ? [focused] : [])];
+        const preferBelow = Boolean(highlight?.matches('input, select, textarea'));
+        const best = anchoredPosition(box, avoid, bounds, width, desiredHeight, usableHeight, preferBelow)
+          ?? anchoredPosition(box, [box], bounds, width, desiredHeight, 1, preferBelow);
+        if (best) {
+          ({ left, top, side } = best);
+          maxHeight = Math.min(availableHeight, Math.max(Math.min(desiredHeight, chromeHeight + 24), best.maxHeight));
+          alignEnd = side === 'above';
         } else {
-          const preferBelow = below >= desiredHeight || below >= above;
-          const room = preferBelow ? below : above;
-          const hasRoom = room >= usableHeight;
-          left = rect?.left ?? focused?.left ?? left;
-          alignEnd = hasRoom ? !preferBelow : preferBelow;
-          top = hasRoom
-            ? (preferBelow ? bounds.bottom - below : bounds.top + above)
-            : (preferBelow ? bounds.bottom : bounds.top);
-          if (hasRoom) {
-            maxHeight = Math.min(maxHeight, room);
-            side = preferBelow ? 'below' : 'above';
-          }
+          left = box.left;
+          alignEnd = (box.top + box.bottom) / 2 < (bounds.top + bounds.bottom) / 2;
+          top = alignEnd ? bounds.bottom : bounds.top;
         }
+      } else if (anchorRect) {
+        // Manual scrolling can move the control out of view. Keep the actions near that edge.
+        left = anchorRect.left;
+        alignEnd = anchorRect.bottom > area.top;
+        top = alignEnd ? bounds.bottom : bounds.top;
       }
 
       panel.style.maxHeight = `${maxHeight}px`;
       const height = panel.offsetHeight;
       left = clamp(left, bounds.left, bounds.right - width);
       top = clamp(alignEnd ? top - height : top, bounds.top, bounds.bottom - height);
-      if (rect && side && !popupRect && !focused) {
+      if (rect && side && !popupRect && !focused && !visibleBox(rect, { left, top, right: left + width, bottom: top + height })) {
         const horizontal = side === 'above' || side === 'below';
         const offset = horizontal
-          ? clamp(rect.left + rect.width / 2 - left, 16, width - 16)
-          : clamp(rect.top + rect.height / 2 - top, 16, height - 16);
+          ? clamp((rect.left + rect.right) / 2 - left, 16, width - 16)
+          : clamp((rect.top + rect.bottom) / 2 - top, 16, height - 16);
         panel.dataset.anchorSide = side;
         panel.style.setProperty('--tour-pointer', `${offset}px`);
       } else {
@@ -308,22 +334,21 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
     }
 
     function schedule() { if (!frame) frame = requestAnimationFrame(() => position()); }
-    if (highlight !== lastRevealed.current && !placement.editingOther) {
-      if (highlight && !anchorVisible(highlight, dialog, viewport(dialog))) reveal(highlight);
-      lastRevealed.current = highlight;
-    }
-    if (focusOperation.current && placement.previewIndex === null && !paused) {
+    const previous = previousHint.current;
+    const stepChanged = previous?.panel !== panel || previous?.anchor !== anchor || previous?.title !== placement.hint.title
+      || previous?.previewIndex !== placement.previewIndex || previous.paused !== paused;
+    if (stepChanged) revealPending.current = Boolean(highlight);
+    const follow = focusOperation.current && placement.previewIndex === null && !paused;
+    if (follow) {
       focusOperation.current = false;
       if (anchor && focusable(anchor)) {
         anchor.focus({ preventScroll: true });
-        if (!anchorVisible(anchor, dialog, viewport(dialog))) reveal(anchor);
       }
     }
-    const previous = previousHint.current;
-    const stepChanged = previous?.panel !== panel || previous?.anchor !== anchor || previous?.title !== placement.hint.title
-      || previous?.previewIndex !== placement.previewIndex;
     if (stepChanged && details.current) details.current.scrollTop = 0;
-    position(stepChanged);
+    const shouldReveal = follow || (revealPending.current && !placement.editingOther);
+    if (shouldReveal) revealPending.current = false;
+    position(stepChanged, shouldReveal);
     if (initialFocus.current && !paused && panel.style.visibility === 'visible') {
       initialFocus.current = false;
       const current = document.activeElement;
@@ -339,11 +364,11 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       focusAfterResume.current = false;
       nextButton.current?.focus({ preventScroll: true });
     }
-    previousHint.current = { panel, anchor, title: placement.hint.title, previewIndex: placement.previewIndex };
+    previousHint.current = { panel, anchor, title: placement.hint.title, previewIndex: placement.previewIndex, paused };
     const resize = new ResizeObserver(schedule);
     if (anchor) resize.observe(anchor);
     resize.observe(panel);
-    if (dialog) resize.observe(dialog);
+    resize.observe(dialog ?? document.getElementById('main-content') ?? document.body);
     if (popup) resize.observe(popup);
     document.addEventListener('scroll', schedule, true);
     window.addEventListener('resize', schedule);
@@ -379,6 +404,7 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
 
   function advance() {
     if (displayedStep === steps.length - 1) { onEnd(); return; }
+    nextButton.current?.focus({ preventScroll: true });
     if (displayedStep !== null) { setPreviewIndex(displayedStep + 1); return; }
     if (hint.complete) { onEnd(); return; }
     const current = steps.findIndex((step) => step.target === hint.target || step.related?.includes(hint.target));
