@@ -279,7 +279,9 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
     document.addEventListener('change', markAction, true);
     document.addEventListener('click', markAction, true);
     window.addEventListener('resize', schedule);
-    schedule();
+    // Resolve a preview step before waiting for the next animation frame.
+    if (preview) scan();
+    else schedule();
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
@@ -318,6 +320,23 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       return dialog && control ? intersection(view, clientBox(dialog)) : view;
     }
 
+    function focusAdvance(room: ViewBounds) {
+      if (focusAfterAdvance.current === null || focusAfterAdvance.current !== placement?.previewIndex) return;
+      const next = nextButton.current;
+      if (!next || panel?.inert) return;
+      const active = document.activeElement;
+      if (active !== dialog && active !== document.body) {
+        focusAfterAdvance.current = null;
+        return;
+      }
+      const button = next.getBoundingClientRect();
+      if (button.top >= room.top - 1 && button.bottom <= room.bottom + 1
+        && button.left >= room.left - 1 && button.right <= room.right + 1) {
+        next.focus({ preventScroll: true });
+        if (document.activeElement === next) focusAfterAdvance.current = null;
+      }
+    }
+
     function place(left: number, top: number, attached: boolean) {
       if (!panel) return;
       let x = left;
@@ -339,14 +358,7 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       if (panel.hasAttribute('data-moving')) return;
       const room = availableRoom();
       panel.inert = attached && !visibleBox({ left, top, right: left + panel.offsetWidth, bottom: top + panel.offsetHeight }, room);
-      const next = nextButton.current;
-      const button = next?.getBoundingClientRect();
-      if (focusAfterAdvance.current !== null && focusAfterAdvance.current === placement?.previewIndex && next && button && !panel.inert
-        && button.top >= room.top - 1 && button.bottom <= room.bottom + 1
-        && button.left >= room.left - 1 && button.right <= room.right + 1) {
-        next.focus({ preventScroll: true });
-        if (document.activeElement === next) focusAfterAdvance.current = null;
-      }
+      focusAdvance(room);
     }
 
     function attachedPosition() {
@@ -371,6 +383,8 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       if (width <= 0 || availableHeight <= 0) { panel.style.visibility = 'hidden'; return; }
 
       panel.style.width = `${width}px`;
+      // Measure without the height limit from the previous step or loading screen.
+      panel.style.maxHeight = `${availableHeight}px`;
       panel.toggleAttribute('data-compact', bounds.bottom - bounds.top < 480);
       const detail = details.current;
       function measure(body: HTMLDivElement) {
@@ -429,6 +443,11 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       }
 
       panel.style.maxHeight = `${maxHeight}px`;
+      // A scrollbar can narrow the card and wrap its header or actions.
+      const clippedHeight = content.scrollHeight - content.clientHeight;
+      if (clippedHeight > 0) {
+        panel.style.maxHeight = `${Math.min(maxHeight + clippedHeight, availableHeight)}px`;
+      }
       const height = panel.offsetHeight;
       if (side !== 'left' && side !== 'right') left = clamp(left, bounds.left, bounds.right - width);
       if (alignEnd) top -= height;
@@ -512,6 +531,8 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
         }
       }
       draw(0);
+      // The first frame already fits the card within the visible room.
+      focusAdvance(availableRoom());
       transitionFrame = requestAnimationFrame(tick);
     }
 

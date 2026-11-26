@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserSession } from './api';
 import { HelpMenu } from './HelpMenu';
+import { Modal } from './components';
 import { availableHelpTours } from './help-tours';
 import { userForOperationalMode } from './operational-mode';
 
@@ -152,8 +153,10 @@ describe('menu de ajuda', () => {
         const button = [...document.querySelectorAll<HTMLButtonElement>('.tour-coach button')]
           .find((item) => (item.getAttribute('aria-label') ?? item.textContent) === label)!;
         act(() => { button.focus(); button.click(); });
-        act(() => { vi.advanceTimersByTime(16); });
-        if (finish) finishMotion();
+        if (finish) {
+          act(() => { vi.advanceTimersByTime(16); });
+          finishMotion();
+        }
       };
       // The next step is available even when the operation provided no usable control.
       clickCoach('Próximo passo');
@@ -167,16 +170,14 @@ describe('menu de ajuda', () => {
         root.render(<>
           <HelpMenu user={reviewer} mode="REVISAO" page="products" navigate={vi.fn()} />
           <main id="main-content"><button data-tour="product-new" onClick={open}>+ Novo produto</button></main>
-          {showForm && <div className="dialog-backdrop">
-            <section role="dialog" aria-labelledby="product-form-title" tabIndex={-1}>
-              <h2 id="product-form-title">Novo produto</h2>
-              <form data-tour="product-form" onSubmit={save}>
-                <input data-tour="product-code" required />
-                <input data-tour="product-name" defaultValue="Rascunho" />
-                <button type="submit" data-tour="product-save">Salvar produto</button>
-              </form>
-            </section>
-          </div>}
+          {showForm && <Modal labelledBy="product-form-title" onClose={() => renderProduct(false)}>
+            <h2 id="product-form-title">Novo produto</h2>
+            <form data-tour="product-form" onSubmit={save}>
+              <input data-tour="product-code" required />
+              <input data-tour="product-name" defaultValue="Rascunho" />
+              <button type="submit" data-tour="product-save">Salvar produto</button>
+            </form>
+          </Modal>}
         </>);
       }
       act(() => renderProduct(false));
@@ -184,13 +185,15 @@ describe('menu de ajuda', () => {
       finishMotion();
       expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Abra o cadastro');
       expect(open).not.toHaveBeenCalled();
-      clickCoach('Próximo passo');
+      clickCoach('Próximo passo', false);
       expect(open).toHaveBeenCalledTimes(1);
       expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Informe o código');
       expect(host.querySelector('[data-tour="product-code"]')?.hasAttribute('data-tour-highlight')).toBe(true);
       const dialog = host.querySelector<HTMLElement>('[role="dialog"]')!;
       const coach = dialog.querySelector<HTMLElement>('.tour-coach')!;
+      expect(coach.hasAttribute('data-moving')).toBe(!reduced);
       expect(document.activeElement).toBe(coach.querySelector('footer button:last-child'));
+      finishMotion();
       const manualScroll = (offset: number) => {
         dialog.scrollTop = scrollTop = offset;
         act(() => {
