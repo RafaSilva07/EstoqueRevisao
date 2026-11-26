@@ -1070,7 +1070,10 @@ html:has(.workspace-terms) { scroll-padding-block: 5rem calc(5rem + env(safe-are
 .terms-body { max-inline-size: 62ch; }
 .terms-body section + section { margin-block-start: 1.2rem; padding-block-start: 1.2rem; border-block-start: 1px solid var(--line); }
 .terms-content h2 { margin-block-end: .5rem; color: var(--ink); font-size: 1.2rem; }
-.terms-body p { margin: 0; line-height: 1.65; }
+.terms-body p, .terms-body ul { margin: 0; line-height: 1.65; }
+.terms-body p + p, .terms-body p + ul { margin-block-start: .65rem; }
+.terms-body ul { padding-inline-start: 1.25rem; }
+.terms-body a { color: var(--primary-dark); text-underline-offset: .16em; }
 .terms-sources { align-self: start; border: 1px solid var(--line); border-radius: .65rem; padding: 1rem; background: var(--surface-muted); }
 .terms-sources p { margin: 0 0 .6rem; color: var(--muted); font-size: .875rem; line-height: 1.5; }
 .terms-sources ul { margin: 0; padding: 0; list-style: none; }
@@ -1092,7 +1095,7 @@ html:has(.workspace-terms) { scroll-padding-block: 5rem calc(5rem + env(safe-are
 }
 .terms-sources a:hover { background: var(--primary-soft); }
 .terms-sources a:hover span:first-child { text-decoration-thickness: .12em; }
-.terms-header h1:focus-visible, .terms-sources a:focus-visible { outline: 3px solid var(--primary-dark); outline-offset: 2px; }
+.terms-header h1:focus-visible, .terms-content a:focus-visible { outline: 3px solid var(--primary-dark); outline-offset: 2px; }
 @container (min-width: 48rem) {
   .terms-content { grid-template-columns: minmax(0, 1fr) minmax(14rem, 18rem); gap: clamp(1.5rem, 3vw, 3rem); }
 }
