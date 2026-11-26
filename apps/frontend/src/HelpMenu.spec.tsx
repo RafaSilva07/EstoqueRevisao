@@ -101,9 +101,9 @@ describe('menu de ajuda', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it('consulta as etapas sem preencher campos e fecha somente o tour dentro do formulário', async () => {
-    vi.useFakeTimers();
-    vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
+  it.each([{ reduced: true }, { reduced: false }])('avança e fecha o tour preservando o formulário (movimento reduzido: $reduced)', async ({ reduced }) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    vi.stubGlobal('matchMedia', () => ({ matches: reduced, addEventListener() {}, removeEventListener() {} }));
     vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
     vi.stubGlobal('visualViewport', { width: 320, height: 460, offsetTop: 0, offsetLeft: 0, addEventListener() {}, removeEventListener() {} });
     const field = (top: number) => new DOMRect(20, top, 280, 48);
@@ -130,7 +130,7 @@ describe('menu de ajuda', () => {
       if (this.dataset.tour === 'product-name') return field(350 - scrollTop);
       return field(60);
     });
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => setTimeout(callback, 16));
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => setTimeout(() => callback(performance.now()), 16));
     vi.stubGlobal('cancelAnimationFrame', clearTimeout);
     const scroll = vi.fn(function(this: HTMLElement, { top }: ScrollToOptions) {
       this.scrollTop = scrollTop = Math.max(0, scrollTop + (top ?? 0));
@@ -145,12 +145,15 @@ describe('menu de ajuda', () => {
       </>));
       clickButton('Ajuda');
       clickButton('Cadastrar produto');
+      const finishMotion = () => act(() => { vi.advanceTimersByTime(320); });
       act(() => { vi.advanceTimersByTime(16); });
-      const clickCoach = (label: string) => {
+      finishMotion();
+      const clickCoach = (label: string, finish = true) => {
         const button = [...document.querySelectorAll<HTMLButtonElement>('.tour-coach button')]
           .find((item) => (item.getAttribute('aria-label') ?? item.textContent) === label)!;
         act(() => { button.focus(); button.click(); });
         act(() => { vi.advanceTimersByTime(16); });
+        if (finish) finishMotion();
       };
       // The next step is available even when the operation provided no usable control.
       clickCoach('Próximo passo');
@@ -178,6 +181,7 @@ describe('menu de ajuda', () => {
       }
       act(() => renderProduct(false));
       await act(async () => { await Promise.resolve(); vi.advanceTimersByTime(16); });
+      finishMotion();
       expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Abra o cadastro');
       expect(open).not.toHaveBeenCalled();
       clickCoach('Próximo passo');
@@ -186,6 +190,7 @@ describe('menu de ajuda', () => {
       expect(host.querySelector('[data-tour="product-code"]')?.hasAttribute('data-tour-highlight')).toBe(true);
       const dialog = host.querySelector<HTMLElement>('[role="dialog"]')!;
       const coach = dialog.querySelector<HTMLElement>('.tour-coach')!;
+      expect(document.activeElement).toBe(coach.querySelector('footer button:last-child'));
       const manualScroll = (offset: number) => {
         dialog.scrollTop = scrollTop = offset;
         act(() => {
@@ -208,9 +213,24 @@ describe('menu de ajuda', () => {
       expect(coach.dataset.anchorSide).toBe('below');
       expect(coach.style.visibility).toBe('visible');
       expect(scroll).not.toHaveBeenCalled();
-      clickCoach('Próximo passo');
+      clickCoach('Próximo passo', false);
       expect(document.querySelector('.tour-coach h2')?.textContent).toBe('Informe a descrição');
-      expect(scroll).toHaveBeenCalledExactlyOnceWith({ top: 288.72, behavior: 'instant' });
+      if (reduced) {
+        expect(scroll).toHaveBeenCalledExactlyOnceWith({ top: 288.72, behavior: 'instant' });
+      } else {
+        const initialTransform = coach.style.transform;
+        expect(coach.hasAttribute('data-moving')).toBe(true);
+        expect(initialTransform).toMatch(/^translate\(/);
+        expect(scrollTop).toBe(0);
+        act(() => { vi.advanceTimersByTime(96); });
+        expect(coach.style.transform).not.toBe(initialTransform);
+        expect(scrollTop).toBeGreaterThan(0);
+        expect(scrollTop).toBeLessThan(288.72);
+        finishMotion();
+        expect(scrollTop).toBeCloseTo(288.72, 0);
+      }
+      expect(coach.hasAttribute('data-moving')).toBe(false);
+      expect(coach.style.transform).toBe('');
       expect(document.querySelector('.tour-coach-stage')?.textContent).toBe('Prévia · Etapa 3 de 10');
       expect(coach.dataset.anchorSide).toBe('below');
       expect(coach.style.top).toBe('402px');

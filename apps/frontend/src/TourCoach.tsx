@@ -15,11 +15,13 @@ type Placement = {
 };
 type ViewBounds = { left: number; top: number; right: number; bottom: number };
 type AnchorSide = 'above' | 'below' | 'left' | 'right';
+type ScrollMove = { container: HTMLElement; from: number; to: number };
 
 const resultTargets = ['product-result', 'receipt-result', 'shipment-result'];
 const reviewableTargets = ['product-unit', 'receipt-separation', 'separation-amount', 'assembly-mixed', 'shipment-expiry'];
 const tabStops = 'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]';
 const anchorGap = 12;
+const transitionDuration = 280;
 
 function shown(element: HTMLElement) {
   return element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden';
@@ -101,29 +103,37 @@ function scrollArea(anchor: HTMLElement, dialog: HTMLElement | null, bounds: Vie
   return area;
 }
 
-function reveal(anchor: HTMLElement, dialog: HTMLElement | null, view: ViewBounds, reducedMotion: boolean) {
-  const top = anchor.getBoundingClientRect().top;
+function revealPlan(anchor: HTMLElement, dialog: HTMLElement | null, view: ViewBounds) {
+  const top = anchorBox(anchor).top;
   const root = document.scrollingElement;
-  const behavior = reducedMotion ? 'instant' : 'smooth';
+  const moves: ScrollMove[] = [];
   let shift = 0;
   function scroll(container: HTMLElement, area: ViewBounds) {
     if (typeof container.scrollBy !== 'function') return;
     const available = container.scrollHeight - container.clientHeight;
     if (available <= 0) return;
-    const target = area.top + clamp((area.bottom - area.top) * .12, 16, 64);
+    const height = area.bottom - area.top;
+    const target = area.top + (height < 240 ? 8 : clamp(height * .12, 16, 64));
     const delta = clamp(top + shift - target, -container.scrollTop, available - container.scrollTop);
     if (Math.abs(delta) <= 1) return;
-    container.scrollBy({ top: delta, behavior });
+    moves.push({ container, from: container.scrollTop, to: container.scrollTop + delta });
     shift -= delta;
   }
   for (let parent = anchor.parentElement; parent && parent !== root; parent = parent.parentElement) {
     const style = getComputedStyle(parent);
-    if (style.position === 'sticky') return reducedMotion ? 0 : shift;
+    if (style.position === 'sticky') return { moves, shift };
     if (parent === dialog || /^(auto|scroll)$/.test(style.overflowY)) scroll(parent, intersection(view, clientBox(parent)));
     if (parent === dialog) break;
   }
   if (!dialog && root instanceof HTMLElement) scroll(root, view);
-  return reducedMotion ? 0 : shift;
+  return { moves, shift };
+}
+
+function moveScroll(moves: ScrollMove[], progress: number) {
+  for (const { container, from, to } of moves) {
+    const difference = from + (to - from) * progress - container.scrollTop;
+    if (container.isConnected && Math.abs(difference) > .5) container.scrollBy({ top: difference, behavior: 'instant' });
+  }
 }
 
 function anchoredPosition(box: ViewBounds, obstacles: ViewBounds[], bounds: ViewBounds, width: number, height: number, minHeight: number, preferBelow: boolean) {
@@ -177,7 +187,7 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
   const initialFocus = useRef(true);
   const focusAfterPause = useRef(false);
   const focusAfterResume = useRef(false);
-  const focusAfterAdvance = useRef(false);
+  const focusAfterAdvance = useRef<number | null>(null);
   const nextButton = useRef<HTMLButtonElement>(null);
   const focusOperation = useRef(false);
   const manual = useRef(new WeakSet<HTMLElement>());
@@ -187,7 +197,6 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
   const revealPending = useRef(false);
   const previousHint = useRef<{ title: string; previewIndex: number | null; anchor: HTMLElement | null; panel: HTMLElement; paused: boolean } | null>(null);
   const positionHistory = useRef<{ panel: HTMLElement; left: number; top: number } | null>(null);
-  const motion = useRef<Animation | null>(null);
 
   useEffect(() => {
     const main = document.getElementById('main-content');
@@ -299,11 +308,10 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
     }
 
     let frame = 0;
+    let transitionFrame = 0;
     let layoutPending = false;
     let attachment: { left: number; top: number } | null = null;
-    function onMotionChange() {
-      if (reducedMotion.matches) motion.current?.cancel();
-    }
+    let travel: ScrollMove[] = [];
 
     function availableRoom() {
       const view = viewport(dialog);
@@ -326,26 +334,34 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       panel.style.left = `${x}px`;
       panel.style.top = `${y}px`;
       panel.style.visibility = 'visible';
+      const displayed = panel.getBoundingClientRect();
+      positionHistory.current = { panel, left: displayed.left, top: displayed.top };
+      if (panel.hasAttribute('data-moving')) return;
       const room = availableRoom();
       panel.inert = attached && !visibleBox({ left, top, right: left + panel.offsetWidth, bottom: top + panel.offsetHeight }, room);
       const next = nextButton.current;
-      if (focusAfterAdvance.current && next && !panel.inert && visibleBox(next.getBoundingClientRect(), room)) {
-        focusAfterAdvance.current = false;
+      const button = next?.getBoundingClientRect();
+      if (focusAfterAdvance.current !== null && focusAfterAdvance.current === placement?.previewIndex && next && button && !panel.inert
+        && button.top >= room.top - 1 && button.bottom <= room.bottom + 1
+        && button.left >= room.left - 1 && button.right <= room.right + 1) {
         next.focus({ preventScroll: true });
+        if (document.activeElement === next) focusAfterAdvance.current = null;
       }
-      positionHistory.current = { panel, left, top };
+    }
+
+    function attachedPosition() {
+      if (!control?.isConnected || !attachment) return;
+      const rect = anchorBox(control);
+      return { left: rect.left + attachment.left, top: rect.top + attachment.top };
     }
 
     function followScroll() {
-      if (!panel || !control?.isConnected || !attachment) return;
       // Keep the side and gap from the current layout as the control scrolls.
-      const rect = anchorBox(control);
-      const left = rect.left + attachment.left;
-      const top = rect.top + attachment.top;
-      place(left, top, true);
+      const next = attachedPosition();
+      if (next) place(next.left, next.top, true);
     }
 
-    function position(transition = false, centerAnchor = false) {
+    function position(shift = 0) {
       if (!panel || !content) return;
       const view = viewport(dialog);
       const room = availableRoom();
@@ -358,14 +374,19 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       panel.toggleAttribute('data-compact', bounds.bottom - bounds.top < 480);
       const detail = details.current;
       function measure(body: HTMLDivElement) {
-        const chrome = body.scrollHeight - (detail?.offsetHeight ?? 0) + body.offsetHeight - body.clientHeight;
+        const header = body.querySelector('header');
+        const footer = body.querySelector('footer');
+        const padding = getComputedStyle(body);
+        const footerGap = footer ? Number.parseFloat(getComputedStyle(footer).marginTop) || 0 : 0;
+        const chrome = (header?.offsetHeight ?? 0) + (footer?.offsetHeight ?? 0) + footerGap
+          + (Number.parseFloat(padding.paddingTop) || 0) + (Number.parseFloat(padding.paddingBottom) || 0)
+          + body.offsetHeight - body.clientHeight;
         const desired = Math.min(availableHeight, chrome + (detail?.scrollHeight ?? 0));
         return { chrome, desired, usable: Math.min(desired, chrome + 64) };
       }
       let size = measure(content);
       const area = control ? scrollArea(control, dialog, view) : room;
       // Fit at the scroll destination and keep that offset from the live control.
-      const shift = control && centerAnchor ? reveal(control, dialog, view, reducedMotion.matches) : 0;
       const anchorRect = control ? anchorBox(control) : null;
       const rect = anchorRect && { left: anchorRect.left, right: anchorRect.right, top: anchorRect.top + shift, bottom: anchorRect.bottom + shift };
       const active = document.activeElement;
@@ -392,7 +413,8 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
         }
         if (best) {
           ({ left, top, side } = best);
-          maxHeight = Math.min(availableHeight, Math.max(Math.min(size.desired, size.chrome + 16), best.maxHeight));
+          const detailMinimum = panel.hasAttribute('data-compact') ? 16 : 24;
+          maxHeight = Math.min(availableHeight, Math.max(Math.min(size.desired, size.chrome + detailMinimum), best.maxHeight));
           alignEnd = side === 'above';
         } else if (rect) {
           left = rect.left;
@@ -410,8 +432,8 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       const height = panel.offsetHeight;
       if (side !== 'left' && side !== 'right') left = clamp(left, bounds.left, bounds.right - width);
       if (alignEnd) top -= height;
-      if (!rect || side === 'left' || side === 'right') top = clamp(top, bounds.top, bounds.bottom - height);
-      if (rect && side) {
+      top = clamp(top, bounds.top, bounds.bottom - height);
+      if (rect && side && !visibleBox(rect, { left, top, right: left + width, bottom: top + height })) {
         const horizontal = side === 'above' || side === 'below';
         const offset = horizontal
           ? clamp((rect.left + rect.right) / 2 - left, 16, width - 16)
@@ -424,18 +446,77 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
 
       attachment = rect ? { left: left - rect.left, top: top - rect.top } : null;
       place(left, top - shift, Boolean(attachment));
-      if (transition) {
-        motion.current?.cancel();
-        if (!reducedMotion.matches && typeof panel.animate === 'function') {
-          motion.current = panel.animate([{ opacity: .35 }, { opacity: 1 }], {
-            duration: 240, easing: 'cubic-bezier(.2,.75,.25,1)',
-          });
+      return { left, top: top - shift };
+    }
+
+    function stopTransition() {
+      cancelAnimationFrame(transitionFrame);
+      transitionFrame = 0;
+      travel = [];
+      panel?.removeAttribute('data-moving');
+      panel?.style.removeProperty('transform');
+    }
+
+    function interruptTransition() {
+      if (!transitionFrame) return;
+      stopTransition();
+      if (attachment) followScroll();
+      else position();
+    }
+
+    function onMotionChange() {
+      if (!reducedMotion.matches || !transitionFrame) return;
+      moveScroll(travel, 1);
+      stopTransition();
+      position();
+    }
+
+    function animateStep(plan: { moves: ScrollMove[]; shift: number }) {
+      if (!panel) return;
+      const origin = positionHistory.current;
+      panel.setAttribute('data-moving', '');
+      panel.inert = false;
+      const base = position(plan.shift);
+      if (!base) { stopTransition(); return; }
+
+      const room = availableRoom();
+      const dx = clamp(origin?.left ?? base.left, room.left + 8, room.right - panel.offsetWidth - 8) - base.left;
+      const dy = clamp(origin?.top ?? base.top + 6, room.top + 8, room.bottom - panel.offsetHeight - 8) - base.top;
+      if (!plan.moves.length && Math.abs(dx) + Math.abs(dy) < 1) {
+        stopTransition();
+        position();
+        return;
+      }
+      travel = plan.moves;
+      const started = performance.now();
+      function draw(progress: number) {
+        moveScroll(travel, progress);
+        if (!panel || !base) return;
+        const next = attachedPosition() ?? base;
+        const visible = availableRoom();
+        // A concurrent layout or scroll change can invalidate the projected destination.
+        const x = clamp(next.left + dx * (1 - progress), visible.left + 8, visible.right - panel.offsetWidth - 8);
+        const y = clamp(next.top + dy * (1 - progress), visible.top + 8, visible.bottom - panel.offsetHeight - 8);
+        panel.style.transform = `translate(${x - next.left}px, ${y - next.top}px)`;
+        place(next.left, next.top, Boolean(attachment));
+      }
+      function tick(now: number) {
+        const elapsed = clamp((now - started) / transitionDuration, 0, 1);
+        draw(1 - (1 - elapsed) ** 3);
+        if (elapsed < 1) transitionFrame = requestAnimationFrame(tick);
+        else {
+          stopTransition();
+          layoutPending = false;
+          // The scroll range can change while content loads. Fit against the actual result.
+          position();
         }
       }
+      draw(0);
+      transitionFrame = requestAnimationFrame(tick);
     }
 
     function schedule() {
-      if (frame) return;
+      if (frame || transitionFrame) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
         if (layoutPending || !attachment) {
@@ -457,9 +538,13 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       }
     }
     if (stepChanged && details.current) details.current.scrollTop = 0;
-    const shouldReveal = follow || (revealPending.current && (!placement.editingOther || focusAfterAdvance.current));
+    const shouldReveal = follow || (revealPending.current && (!placement.editingOther || focusAfterAdvance.current !== null));
     if (shouldReveal) revealPending.current = false;
-    position(stepChanged, shouldReveal);
+    const plan = control && shouldReveal ? revealPlan(control, dialog, viewport(dialog)) : { moves: [], shift: 0 };
+    if (reducedMotion.matches || (!stepChanged && plan.moves.length === 0)) {
+      moveScroll(plan.moves, 1);
+      position();
+    } else animateStep(plan);
     if (initialFocus.current && !paused && panel.style.visibility === 'visible') {
       initialFocus.current = false;
       const current = document.activeElement;
@@ -493,15 +578,21 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
     refreshPosition.current = schedule;
     observed.forEach((element) => resize.observe(element));
     document.addEventListener('scroll', schedule, true);
+    document.addEventListener('wheel', interruptTransition, { capture: true, passive: true });
+    document.addEventListener('touchmove', interruptTransition, { capture: true, passive: true });
     window.addEventListener('resize', scheduleLayout);
     window.visualViewport?.addEventListener('resize', scheduleLayout);
     window.visualViewport?.addEventListener('scroll', schedule);
     reducedMotion.addEventListener('change', onMotionChange);
     return () => {
       cancelAnimationFrame(frame);
+      if (transitionFrame && travel.length) revealPending.current = true;
+      stopTransition();
       refreshPosition.current = () => undefined;
       resize.disconnect();
       document.removeEventListener('scroll', schedule, true);
+      document.removeEventListener('wheel', interruptTransition, true);
+      document.removeEventListener('touchmove', interruptTransition, true);
       window.removeEventListener('resize', scheduleLayout);
       window.visualViewport?.removeEventListener('resize', scheduleLayout);
       window.visualViewport?.removeEventListener('scroll', schedule);
@@ -534,7 +625,7 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
     const scope = dialog ?? document.getElementById('main-content');
     const targetExists = [...scope?.querySelectorAll<HTMLElement>(`[data-tour="${next.target}"]`) ?? []].some(shown);
     const prerequisite = opener?.checked && scope?.querySelector<HTMLInputElement>(`input[data-tour="${opener.checked}"]`);
-    focusAfterAdvance.current = true;
+    focusAfterAdvance.current = nextIndex;
     // These buttons only open the next screen. Previewing never confirms an operation.
     if (opener && !targetExists && anchor instanceof HTMLButtonElement && !anchor.disabled && anchor.dataset.tour === opener.target
       && (!opener.checked || (prerequisite && prerequisite.checked))) {

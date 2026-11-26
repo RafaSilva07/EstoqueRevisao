@@ -1059,6 +1059,7 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
   color: var(--ink);
 }
 .tour-coach[data-attached] { position: absolute; z-index: 19; }
+.tour-coach[data-moving]::before { visibility: hidden; }
 .tour-coach[data-anchor-side]::before {
   content: '';
   position: absolute;
@@ -1148,7 +1149,10 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
   color: var(--primary-dark);
 }
 .tour-coach-actions button.tour-coach-follow:hover { background: var(--primary-soft); }
-.tour-coach[data-compact] .tour-coach-details { min-height: min(1.5rem, 22dvh); }
+.tour-coach[data-compact] .tour-coach-card { padding-block: .3rem .4rem; }
+.tour-coach[data-compact] .tour-coach-card > header { padding-bottom: .125rem; }
+.tour-coach[data-compact] .tour-coach-details { min-height: min(1rem, 22dvh); }
+.tour-coach[data-compact] .tour-coach-actions { margin-top: .25rem; }
 .tour-coach[data-compact] .tour-coach-actions[data-preview="false"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .tour-coach[data-compact] .tour-coach-actions[data-preview="false"]:has(button:nth-child(3)) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .tour-coach[data-compact] .tour-coach-actions[data-preview="true"] { grid-template-columns: minmax(min-content, 1.35fr) repeat(2, minmax(0, 1fr)); }
