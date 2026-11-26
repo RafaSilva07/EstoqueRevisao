@@ -1064,6 +1064,22 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
 [data-tour-inline]:not(:empty) { margin-inline: -.65rem; }
 [data-tour-inline]:not(:empty) ~ .dialog-actions { position: static; }
 .settings-options:has(+ [data-tour-inline]:not(:empty)) { margin-bottom: .75rem; }
+.settings-options:has(+ [data-tour-inline] > .tour-coach[data-compact]) {
+  gap: .125rem;
+  padding: .25rem .45rem;
+  margin-inline: -.65rem;
+}
+.settings-options:has(+ [data-tour-inline] > .tour-coach[data-compact]) legend {
+  font-size: .9375rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+.settings-options:has(+ [data-tour-inline] > .tour-coach[data-compact]) input {
+  min-height: 0;
+  height: 1.2rem;
+  margin: 0;
+  padding: 0;
+}
 .tour-coach[data-moving]:not([data-inline])::before { visibility: hidden; }
 .tour-coach[data-anchor-side]::before {
   content: '';
@@ -1164,7 +1180,24 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
 .tour-coach[data-compact] .tour-coach-actions button { padding-inline: .2rem; font-size: .75rem; line-height: 1.2; }
 .tour-coach[data-compact] .tour-coach-follow { grid-column: auto; overflow-wrap: normal; }
 .tour-coach[data-compact] .tour-coach-next-icon { display: none; }
+.tour-coach[data-inline] :is(.tour-coach-card, .tour-coach-details) { overflow: visible; }
 .tour-coach[data-inline][data-compact] .tour-coach-label { display: none; }
+.tour-coach[data-inline][data-compact] .tour-coach-close {
+  position: absolute;
+  inset-block-start: .125rem;
+  inset-inline-end: .3rem;
+}
+.tour-coach[data-inline][data-compact] .tour-coach-stage,
+.tour-coach[data-inline][data-compact] h2 { padding-inline-end: 2.75rem; }
+.tour-coach[data-inline][data-compact] .tour-coach-details { padding-block: 0; }
+.tour-coach[data-inline][data-compact] .tour-coach-progress {
+  margin-block: .05rem .2rem;
+  margin-inline-end: 2.75rem;
+}
+.tour-coach[data-inline][data-compact] h2 {
+  margin-block: 0 .2rem;
+  font-size: 1rem;
+}
 .tour-coach-close.secondary {
   flex: 0 0 44px;
   width: 44px;

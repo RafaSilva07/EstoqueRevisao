@@ -40,7 +40,7 @@ export const tourPreview: Record<TourId, readonly PreviewStep[]> = {
   ],
   'review-receive': [
     ...receiptStart,
-    { target: 'receipt-separation', prerequisite: { target: 'receipt-submit', message: 'A opção de separação depende do envio e da permissão da conta.' }, opensWith: { target: 'receipt-confirm' }, title: 'Escolha como receber', instruction: 'Quando a opção aparecer, decida se vai receber todo o volume ou iniciar a separação imediata.' },
+    { target: 'receipt-separation', prerequisite: { target: 'receipt-submit', message: 'A opção de separação depende do envio e da permissão da conta.' }, opensWith: { target: 'receipt-confirm' }, title: 'Como receber', instruction: 'Receba todo o volume ou inicie a separação.' },
     ...receiptEnd,
     { target: 'separation-open', related: ['receipt-tab-separation'], title: 'Se for separar, confira o prazo', instruction: 'Abra a separação após o recebimento ou retome pelo código em Separações em andamento.' },
     { target: 'separation-amount', title: 'Informe as quantidades de retorno', instruction: 'Indique o que voltará à Expedição. Use zero nos itens sem retorno.' },

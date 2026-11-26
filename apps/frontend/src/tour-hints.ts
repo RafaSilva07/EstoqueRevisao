@@ -144,7 +144,7 @@ function receipt(ui: TourView): TourHint | undefined {
   const confirmation = ui.find('receipt-submit');
   if (!confirmation) return pending('Preparando o recebimento', 'Aguarde o carregamento dos itens e da decisão.');
   if (confirmation.dataset.tourChoice === 'conflict') return hint('receipt-submit', 'Confira a diferença de validade', 'Leia o aviso e compare as datas. Volte se precisar corrigir ou confirme explicitamente se a divergência for aceitável.');
-  if (ui.find('receipt-separation') && !ui.reviewed('receipt-separation')) return hint('receipt-separation', 'Escolha se vai separar agora', 'Você pode receber todo o volume ou iniciar a separação agora. Se separar, será preciso informar o retorno dentro do prazo.', { canContinue: true });
+  if (ui.find('receipt-separation') && !ui.reviewed('receipt-separation')) return hint('receipt-separation', 'Como receber', 'Se separar agora, informe o retorno no prazo.', { canContinue: true });
   return hint('receipt-submit', 'Confirme sua decisão', confirmation.dataset.tourChoice === 'separate'
     ? 'Use Receber e iniciar separação se essa for sua escolha. Depois, informe os itens de retorno e confira o prazo.'
     : 'Revise os dados e use Confirmar recebimento se estiver tudo certo.');

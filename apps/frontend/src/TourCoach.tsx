@@ -116,7 +116,11 @@ function revealPlan(anchor: HTMLElement, dialog: HTMLElement | null, view: ViewB
     if (available <= 0) return;
     const height = area.bottom - area.top;
     const target = area.top + (height < 240 ? 8 : clamp(height * .12, 16, 64));
-    const reveal = Math.max(top - target, bottom === undefined ? -Infinity : bottom - area.bottom + 8);
+    // Show the whole section when it fits. On shorter screens, start at the question.
+    const reveal = bottom === undefined ? top - target : Math.min(
+      top - area.top - 8,
+      Math.max(top - target, bottom - area.bottom + 8),
+    );
     const delta = clamp(reveal + shift, -container.scrollTop, available - container.scrollTop);
     if (Math.abs(delta) <= 1) return;
     moves.push({ container, from: container.scrollTop, to: container.scrollTop + delta });
@@ -400,9 +404,20 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       if (width <= 0 || availableHeight <= 0) { panel.style.visibility = 'hidden'; return; }
 
       panel.style.width = `${width}px`;
+      panel.toggleAttribute('data-compact', bounds.bottom - bounds.top < 480);
+      const anchorRect = control ? anchorBox(control) : null;
+      if (inlineHost && anchorRect) {
+        // The question, choices and full card scroll together in the dialog.
+        panel.style.removeProperty('max-height');
+        const { left, top } = panel.getBoundingClientRect();
+        panel.dataset.anchorSide = 'below';
+        panel.style.setProperty('--tour-pointer', `${clamp((anchorRect.left + anchorRect.right) / 2 - left, 16, width - 16)}px`);
+        place(left, top, true);
+        return { left, top };
+      }
+
       // Measure without the height limit from the previous step or loading screen.
       panel.style.maxHeight = `${availableHeight}px`;
-      panel.toggleAttribute('data-compact', bounds.bottom - bounds.top < 480);
       const detail = details.current;
       function measure(body: HTMLDivElement) {
         const header = body.querySelector('header');
@@ -425,18 +440,6 @@ export function TourCoach({ tour, hidden, paused, reviewCompleted, onPause, onRe
       let size = measure(content);
       const area = control ? scrollArea(control, dialog, view) : room;
       // Fit at the scroll destination and keep that offset from the live control.
-      const anchorRect = control ? anchorBox(control) : null;
-      if (inlineHost && anchorRect) {
-        const { left, top } = panel.getBoundingClientRect();
-        const firstChoice = inlineGroup?.querySelector('label')?.getBoundingClientRect();
-        const remaining = bounds.bottom - bounds.top - (top - (firstChoice?.top ?? anchorRect.top));
-        const minimum = Math.min(size.desired, size.chrome + 16);
-        limitHeight(content, Math.min(availableHeight, Math.max(remaining, minimum)));
-        panel.dataset.anchorSide = 'below';
-        panel.style.setProperty('--tour-pointer', `${clamp((anchorRect.left + anchorRect.right) / 2 - left, 16, width - 16)}px`);
-        place(left, top, true);
-        return { left, top };
-      }
       const rect = anchorRect && { left: anchorRect.left, right: anchorRect.right, top: anchorRect.top + shift, bottom: anchorRect.bottom + shift };
       const active = document.activeElement;
       const focused = placement?.editingOther && active instanceof HTMLElement && (!dialog || dialog.contains(active))
