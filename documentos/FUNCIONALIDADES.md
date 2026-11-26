@@ -12,6 +12,12 @@ O preset inicial `Revisão operacional` (`REVISAO`) oferece solicitações, revi
 
 Todas as entradas, saídas, transferências e distribuições de revisão aceitam somente quantidades inteiras positivas. O frontend orienta o preenchimento e o backend aplica a validação definitiva antes de alterar saldos.
 
+## Ajuda e termos de uso
+
+O botão **Ajuda**, no topo da área autenticada, oferece tours selecionáveis por modo operacional e pelas permissões efetivas da conta. Na **Revisão**, os tours cobrem cadastro de produto, recebimento, revisão e envio com montagem para a Expedição. Na **Expedição**, cobrem envio para a Revisão e recebimento. O cadastro exige as permissões de consulta e criação de produtos. No modo **Admin geral**, o menu orienta a seleção de um modo operacional com tours.
+
+Os tours têm navegação por passos, podem ser usados pelo teclado e abrem a tela inicial de cada fluxo pela navegação normal do sistema. O passo pode ser retomado pela Ajuda enquanto a conta e o modo atuais estiverem ativos. O tour não preenche campos nem executa operações. **Termos de uso** está disponível a todas as contas autenticadas como rascunho educacional informativo, sem aceite.
+
 ## Rascunhos de formulários
 
 Os formulários operacionais e administrativos possuem salvamento automático e botão **Salvar rascunho**, com recuperação ao reabrir o mesmo fluxo, inclusive em outro computador/celular com a mesma conta, ambiente e modo. Itens, campos incompletos e fotos são sincronizados na conta; o navegador mantém uma cópia de segurança para falhas de conexão. Sair oferece **Salvar rascunho e sair**, **Descartar e sair** ou **Continuar preenchendo**; navegar, trocar modo e sair da conta usam a mesma proteção. Conflitos entre dispositivos não sobrescrevem o preenchimento local: **Carregar versão da conta** exige confirmação. CRUD de produtos e consultas permanecem sem rascunhos. Senhas devem ser digitadas novamente. Limitações e efeito sobre separação em [REGRAS_NEGOCIO.md](./REGRAS_NEGOCIO.md#rascunhos-de-preenchimento).
